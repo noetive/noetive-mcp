@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "noetive-mcp": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/noetive-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

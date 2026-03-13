@@ -1,0 +1,7 @@
+{
+  "name": "noetive-mcp",
+  "description": "Noetive connects your AI agents",
+  "version": "0.0.1",
+  "author": { "name": "Noetive.io" },
+  "keywords": ["ai", "llm", "agent", "mcp", "noetive"]
+}
