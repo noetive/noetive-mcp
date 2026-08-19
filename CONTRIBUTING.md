@@ -76,10 +76,14 @@ The pipeline is tag → GitHub Release → npm → a smoke install on three oper
 systems → the MCP registry. Each stage gates the next, so a broken npm publish
 never reaches the registry entry that advertises it.
 
-A prerelease tag (`v1.4.0-rc.1`) is carried through the whole pipeline, but
-published where nothing picks it up by default: npm gets the `next` dist-tag
-rather than `latest`, and the GitHub Release is marked as a prerelease. Install
-one explicitly with `npm i -g @noetive/mcp-server@next`.
+A prerelease tag (`v1.4.0-rc.1`) runs every stage except the last, and publishes
+where nothing picks it up by default: npm gets the `next` dist-tag rather than
+`latest`, and the GitHub Release is marked as a prerelease. Install one
+explicitly with `npm i -g @noetive/mcp-server@next`.
+
+The MCP registry is skipped for prereleases. It is the one publish that cannot
+be undone, so it waits for a release tag; everything an RC is worth cutting for
+happens before it.
 
 ## Mutation testing
 

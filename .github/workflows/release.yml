@@ -304,6 +304,11 @@ jobs:
   # Running before either publishes fails on an artifact that is not there yet.
   registry:
     needs: [release, smoke, oci]
+    # Release tags only. npm and ghcr can both be superseded by the next version;
+    # a registry entry cannot be unpublished, so a prerelease would leave
+    # io.noetive/mcp-server advertising an RC as what it is. A prerelease still
+    # exercises every stage before this one, which is where the failures are.
+    if: ${{ !contains(needs.release.outputs.version, '-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
