@@ -1,0 +1,15 @@
+# Auto-requests review; it gates nothing until "Require review from Code Owners"
+# is enabled on the main ruleset.
+*                       @gurre
+
+# The release path holds NPM_TOKEN and the ed25519 key that grants publish
+# rights over io.noetive/*. A change here can publish, and cannot be unpublished.
+/.github/workflows/     @gurre
+/.goreleaser.yaml       @gurre
+/server.json            @gurre
+/scripts/               @gurre
+
+# Namespace, model and dimensions are never defaulted — that is a data-isolation
+# boundary, not an ergonomics choice. See docs/security.md.
+/docs/security.md       @gurre
+/internal/targeting/    @gurre

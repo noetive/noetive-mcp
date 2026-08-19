@@ -1,0 +1,177 @@
+#!/bin/sh
+# A pre-commit hook is a filter, not a second CI. Everything here is under a
+# second on a warm cache, because a hook you wait on is a hook you pass
+# --no-verify, and a bypassed hook enforces nothing. Tests and lint live in
+# pre-push, where the frequency makes five seconds affordable.
+#
+# No `set -e`: every check runs even after one fails, so a bad commit costs one
+# round of fixes instead of four.
+#
+# Checks read the working tree, not the index. Closing that gap means
+# `git stash --keep-index`, which costs a second and can eat work when the hook
+# is interrupted — a worse trade than the hole it fills.
+#
+# Optional tools announce themselves when absent and never silently skip: a
+# check that quietly stopped running is indistinguishable from one that passes.
+
+fail=0
+skipped=''
+
+note_skip() {
+	skipped="$skipped $1"
+	printf 'pre-commit: SKIPPED %s — %s is not installed (%s). CI runs it regardless.\n' \
+		"$1" "$2" "$3" >&2
+}
+
+# core.quotePath=false because the default renders a non-ASCII path as an
+# escaped, double-quoted string: `"sub/na\303\257ve.key"` matches neither the
+# credential globs below nor `*.go`, and is not a path `git rev-parse` accepts.
+# Every check downstream would pass on a file it never looked at.
+#
+# ACMR, not ACM: a rename is how a file arrives at a name the credential globs
+# match, and dropping renames made a pure-rename commit skip every check here.
+staged=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR)
+[ -n "$staged" ] || exit 0
+
+# --- credentials, by path --------------------------------------------------
+# .envrc.local holds the ed25519 key that grants publish rights over
+# io.noetive/*. .gitignore covers these already; `git add -f` does not care, and
+# a public repository's history cannot be rewritten after a push.
+while IFS= read -r path; do
+	case "$path" in
+	.env | .envrc.local | */.env | */.envrc.local | *.envrc.*.local | *.pem | *.key | *_rsa | *_ed25519)
+		printf 'pre-commit: %s is a credential file and never belongs in a commit.\n' "$path" >&2
+		fail=1
+		;;
+	esac
+done <<STAGED
+$staged
+STAGED
+
+# --- credentials, by content -----------------------------------------------
+# Five repo-specific patterns, not a scanner. A broad entropy check produces
+# false positives, and a hook that cries wolf is what trains the --no-verify
+# reflex. The base58 charset and the 24-character floor are what keep the
+# keyu_/keyt_ fixtures in the tests and the README from tripping it — every one
+# of them is shorter than that and contains a character base58 excludes.
+leaked=$(git diff --cached -U0 --diff-filter=ACMR |
+	grep '^+' |
+	grep -Ea 'key[ut]_[1-9A-HJ-NP-Za-km-z]{24,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|npm_[A-Za-z0-9]{36}')
+if [ -n "$leaked" ]; then
+	printf 'pre-commit: staged content matches a live credential:\n%s\n' "$leaked" >&2
+	fail=1
+fi
+
+# --- binaries and bulk -----------------------------------------------------
+# `make bench` leaves mem.out and `go test -c` leaves a 9 MB broker.test. Both
+# are gitignored and both are one `git add -f` from being permanent. Nothing
+# tracked here is binary, so any binary at all is a mistake.
+while IFS= read -r path; do
+	[ -n "$path" ] || continue
+	blob=$(git rev-parse ":$path" 2>/dev/null)
+	if [ -z "$blob" ]; then
+		printf 'pre-commit: could not read the staged blob for %s, so its size went unchecked.\n' "$path" >&2
+		fail=1
+		continue
+	fi
+	size=$(git cat-file -s "$blob" 2>/dev/null)
+	if [ "$size" -gt 524288 ]; then
+		printf 'pre-commit: %s is %s bytes. Nothing that size belongs in history.\n' "$path" "$size" >&2
+		fail=1
+	fi
+done <<STAGED
+$staged
+STAGED
+
+binaries=$(git diff --cached --numstat --diff-filter=ACMR |
+	awk '$1 == "-" && $2 == "-" { print $3 }')
+if [ -n "$binaries" ]; then
+	printf 'pre-commit: this repository tracks no binaries, but these are staged:\n%s\n' "$binaries" >&2
+	fail=1
+fi
+
+# --- formatting ------------------------------------------------------------
+# `golangci-lint fmt` runs exactly the gofmt+goimports pair .golangci.yml
+# configures, so what passes here passes CI. Emptiness of the diff decides, not
+# exit status: the two have disagreed across releases.
+go_staged=$(printf '%s\n' "$staged" | grep '\.go$')
+if [ -n "$go_staged" ]; then
+	if command -v golangci-lint >/dev/null 2>&1; then
+		drift=$(golangci-lint fmt --diff --config ./.golangci.yml 2>&1)
+		if [ -n "$drift" ]; then
+			printf 'pre-commit: formatting drift. Run `golangci-lint fmt` and stage the result.\n%s\n' "$drift" >&2
+			fail=1
+		fi
+	elif command -v gofmt >/dev/null 2>&1; then
+		printf 'pre-commit: DEGRADED formatting — golangci-lint is absent, so import grouping goes unchecked this commit (go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0).\n' >&2
+		while IFS= read -r path; do
+			[ -f "$path" ] || continue
+			if [ -n "$(gofmt -l "$path")" ]; then
+				printf 'pre-commit: gofmt would rewrite %s.\n' "$path" >&2
+				fail=1
+			fi
+		done <<GOFILES
+$go_staged
+GOFILES
+	else
+		# Not an optional tool: this commit changes Go source.
+		printf 'pre-commit: neither golangci-lint nor gofmt is on PATH and this commit changes Go source.\n' >&2
+		fail=1
+	fi
+fi
+
+# --- generated packaging ---------------------------------------------------
+# The most common way a pull request breaks, and the only check here costing a
+# second — so it runs only when something feeding the emitter is staged.
+#
+# Anchored, one path at a time: an unanchored `*tools/*` against the whole list
+# also matches installer/src/mytools/index.ts and notes/no-skills/README.md, and
+# a false trigger is not free because the emitter writes to the working tree.
+generated='packaging/ .claude-plugin/ .mcp.json skills/'
+needs_emit=''
+while IFS= read -r path; do
+	case "$path" in
+	tools/* | packaging/* | internal/mcpserver/* | .claude-plugin/* | skills/* | .mcp.json)
+		needs_emit=1
+		;;
+	esac
+done <<STAGED
+$staged
+STAGED
+
+if [ -n "$needs_emit" ]; then
+	if command -v go >/dev/null 2>&1; then
+		# Refuse before regenerating rather than after. The emitter overwrites
+		# whatever is in the tree, so running it over an unstaged edit to a
+		# generated file reverts that edit and then reports success — the hook
+		# would destroy work and say nothing.
+		if ! git diff --quiet -- $generated; then
+			printf 'pre-commit: %s have unstaged changes. Stage or discard them first — regenerating over them would silently revert your edits.\n' "$generated" >&2
+			fail=1
+		elif ! go run ./packaging/emit >/dev/null; then
+			printf 'pre-commit: packaging/emit failed — the manifest and the registered tool list disagree.\n' >&2
+			fail=1
+		elif ! git diff --quiet -- $generated ||
+			[ -n "$(git ls-files --others --exclude-standard -- $generated)" ]; then
+			printf 'pre-commit: generated files were out of date. They have been regenerated in your working tree; review and stage %s.\n' "$generated" >&2
+			fail=1
+		fi
+	else
+		note_skip 'packaging drift' go 'https://go.dev/dl'
+	fi
+
+	if command -v claude >/dev/null 2>&1; then
+		if ! claude plugin validate . >/dev/null 2>&1; then
+			claude plugin validate . >&2
+			fail=1
+		fi
+	else
+		note_skip 'marketplace validation' claude 'https://claude.com/claude-code'
+	fi
+fi
+
+if [ "$fail" -eq 0 ] && [ -n "$skipped" ]; then
+	printf 'pre-commit: passed, with skipped checks:%s\n' "$skipped" >&2
+fi
+
+exit $fail

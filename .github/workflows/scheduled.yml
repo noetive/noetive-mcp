@@ -1,0 +1,157 @@
+name: scheduled
+
+on:
+  # Daily: the advisory database and the production API both move without this
+  # repository changing, and both failures are invisible until someone looks.
+  schedule:
+    - cron: "17 6 * * *"
+    # Weekly: a real fuzz campaign. Daily would re-search ground the last one
+    # already covered — a twenty-minute search converges long before morning.
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled
+  cancel-in-progress: false
+
+# github.event.schedule is empty on workflow_dispatch, so a manual run executes
+# every job — which is what you want when you are here because something looks
+# wrong.
+jobs:
+  vulnerabilities:
+    if: github.event.schedule != '41 4 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The pull request check answers "did this change introduce one". This
+      # answers "did one get published against code that has not changed", which
+      # is the more common way a dependency becomes a liability.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer/package-lock.json
+
+      - run: npm ci --ignore-scripts
+        working-directory: installer
+
+      # Runtime tree only: a devDependency advisory cannot reach a user of the
+      # published package, whose files list is bin/, dist/src/ and postinstall.js.
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: installer
+
+  integration:
+    if: github.event.schedule != '41 4 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # These hit production on purpose and skip without a key. A pipeline that
+      # runs them keyless proves nothing and reports success, so the key is
+      # required here even though the suite itself tolerates its absence.
+      - name: Integration suite
+        env:
+          NOETIVE_KEY_SECRET: ${{ secrets.NOETIVE_KEY_SECRET }}
+        run: |
+          if [ -z "$NOETIVE_KEY_SECRET" ]; then
+            echo "NOETIVE_KEY_SECRET is unset; the suite would skip every test and report success." >&2
+            exit 1
+          fi
+          integration/run.sh
+
+  fuzz:
+    if: github.event.schedule != '17 6 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Go keeps interesting inputs in the build cache rather than in the
+      # repository, so without this every campaign restarts from the seeds and
+      # re-covers ground the last one already covered.
+      #
+      # restore and save split apart, because actions/cache only saves when the
+      # job succeeds — which would throw away the corpus of the one run that
+      # actually found something.
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/go-build/fuzz
+          key: fuzz-${{ github.run_id }}
+          restore-keys: fuzz-
+
+      # Ten minutes each against the accumulated corpus. A crasher is written to
+      # internal/broker/testdata/fuzz — commit it as a seed alongside the fix.
+      - name: Fuzz campaign
+        run: |
+          targets=$(go test -list '^Fuzz' ./internal/broker | grep '^Fuzz')
+          test -n "$targets"
+          for target in $targets; do
+            go test -run "^$" -fuzz "^${target}$" -fuzztime 10m ./internal/broker
+          done
+
+      - if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/go-build/fuzz
+          key: fuzz-${{ github.run_id }}
+
+      - if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: crashers
+          path: internal/broker/testdata/fuzz/
+
+  report:
+    needs: [vulnerabilities, integration, fuzz]
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # A scheduled failure turns no pull request red and mails no author. An
+      # issue is the only artefact anyone will see.
+      #
+      # One open issue at a time, commented on rather than reopened: a failure
+      # that persists is one problem, and a week of it should not be seven
+      # issues. The label is the identity, so the title can carry the date.
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --label scheduled-failure --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Failed again: $run_url"
+          else
+            gh label create scheduled-failure --repo "$GITHUB_REPOSITORY" \
+              --description "A scheduled check is failing" --color B60205 2>/dev/null || true
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --label scheduled-failure \
+              --title "Scheduled checks failed on $(date -u +%F)" \
+              --body "$run_url"
+          fi

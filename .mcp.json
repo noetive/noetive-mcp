@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "noetive": {
+      "args": [
+        "-y",
+        "@noetive/mcp-server"
+      ],
+      "command": "npx",
+      "env": {
+        "NOETIVE_KEY_SECRET": "${NOETIVE_KEY_SECRET}"
+      }
+    }
+  }
+}

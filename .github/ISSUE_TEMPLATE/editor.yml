@@ -1,0 +1,53 @@
+name: Editor support
+description: An editor that speaks MCP over stdio and is not in docs/clients.md.
+labels: [editor]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Adding an editor is usually a `clients.json` entry and a test fixture,
+        with no new code — see [docs/clients.md](../../blob/main/docs/clients.md).
+        These fields are that entry, so a filled-in form is most of a pull request.
+
+  - type: input
+    id: editor
+    attributes:
+      label: Editor, and a link to its MCP documentation
+    validations:
+      required: true
+
+  - type: input
+    id: path
+    attributes:
+      label: Config file path
+      description: Global and project scope, per OS. e.g. ~/.cursor/mcp.json
+    validations:
+      required: true
+
+  - type: input
+    id: key
+    attributes:
+      label: Top-level key holding the servers
+      # Copilot uses `servers` where everyone else uses `mcpServers`, and the
+      # wrong one produces a valid file the editor ignores without an error.
+      description: "`mcpServers`, `servers`, or something else."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Config format
+      options: [JSON, JSONC (comments allowed), TOML, YAML, other]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: expands
+    attributes:
+      label: Does it expand ${VAR} in the entry?
+      # If it does not, the key cannot live in the config as a reference and has
+      # to come from the environment the editor was launched in.
+      options: [Yes, No, Unknown]
+    validations:
+      required: true

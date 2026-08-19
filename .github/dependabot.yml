@@ -1,0 +1,52 @@
+version: 2
+
+updates:
+  # Highest signal, lowest volume, and the reason the SHA pins in ci.yml and
+  # release.yml do not rot. It is also the class of change nobody notices by
+  # reading: a stale major is what left golangci-lint-action on the v1 line
+  # while .golangci.yml moved to v2.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+    open-pull-requests-limit: 5
+    groups:
+      go:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # Moving this changes the wire contract the client is written against, so
+      # it belongs to a deliberate read of an SDK release note, not to a bot.
+      - dependency-name: github.com/noetive/noetive-sdk-go
+
+  - package-ecosystem: npm
+    directory: /installer
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+    open-pull-requests-limit: 5
+    groups:
+      installer:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # This repository's own output. scripts/stamp-version.js pins them to the
+      # wrapper's exact version at release; a bot bumping them produces a wrapper
+      # that resolves a binary built from different source.
+      - dependency-name: "@noetive/mcp-server-*"

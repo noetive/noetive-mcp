@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/noetive/noetive-mcp/security/advisories/new
+    about: Do not open a public issue, and do not paste a working key. See SECURITY.md.
+
+  - name: Question about Semantik, SemQL or API keys
+    url: https://noetive.io/docs
+    about: This repository is the MCP client. Broker behaviour is documented there.

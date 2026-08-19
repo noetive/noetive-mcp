@@ -1,0 +1,80 @@
+{
+  "$schema": "./clients.schema.json",
+  "serverName": "noetive",
+  "packageName": "@noetive/mcp-server",
+  "clients": {
+    "cursor": {
+      "displayName": "Cursor",
+      "configFormat": "json",
+      "topLevelKey": "mcpServers",
+      "install": "file-merge",
+      "expandsVariables": true,
+      "detect": ["~/.cursor"],
+      "scopes": {
+        "global": { "path": "~/.cursor/mcp.json", "default": true },
+        "project": { "path": "${workspace}/.cursor/mcp.json" }
+      },
+      "restartHint": "Reload Cursor to pick up the new server.",
+      "quirks": ["Expands ${VAR} in command, args, env, url and headers."]
+    },
+    "claude-code": {
+      "displayName": "Claude Code",
+      "configFormat": "json",
+      "topLevelKey": "mcpServers",
+      "install": "cli-delegate",
+      "expandsVariables": true,
+      "detect": ["~/.claude"],
+      "cli": {
+        "command": "claude",
+        "args": ["mcp", "add", "--scope", "${scope}", "--transport", "stdio", "${serverName}", "--", "npx", "-y", "${packageName}"],
+        "removeArgs": ["mcp", "remove", "--scope", "${scope}", "${serverName}"]
+      },
+      "scopes": {
+        "local": { "path": "~/.claude.json", "default": true },
+        "project": { "path": "${workspace}/.mcp.json" },
+        "user": { "path": "~/.claude.json" }
+      },
+      "restartHint": "Start a new Claude Code session.",
+      "quirks": [
+        "The CLI needs -- before the stdio command.",
+        "Project-scope servers require approval on first use.",
+        "User-scope entries are keyed per project inside ~/.claude.json, which is why the CLI is preferred over editing the file."
+      ]
+    },
+    "copilot": {
+      "displayName": "GitHub Copilot (VS Code)",
+      "configFormat": "jsonc",
+      "topLevelKey": "servers",
+      "install": "file-merge",
+      "expandsVariables": true,
+      "detect": ["${workspace}/.vscode", "~/.vscode"],
+      "entryExtras": { "type": "stdio" },
+      "scopes": {
+        "workspace": { "path": "${workspace}/.vscode/mcp.json", "default": true }
+      },
+      "restartHint": "Switch Copilot Chat to Agent mode — MCP tools are only available there.",
+      "quirks": [
+        "The top-level key is servers, not mcpServers.",
+        "The file is JSONC: comments are preserved on write."
+      ]
+    },
+    "kiro": {
+      "displayName": "Kiro",
+      "configFormat": "json",
+      "topLevelKey": "mcpServers",
+      "install": "file-merge",
+      "expandsVariables": false,
+      "detect": ["~/.kiro"],
+      "entryExtras": { "disabled": false, "autoApprove": [] },
+      "scopes": {
+        "user": { "path": "~/.kiro/settings/mcp.json", "default": true },
+        "workspace": { "path": "${workspace}/.kiro/settings/mcp.json" }
+      },
+      "restartHint": "Kiro reloads mcp.json on save.",
+      "quirks": [
+        "Does not expand ${VAR} in env, so the API key has to be passed with --api-key or inherited from the environment Kiro was launched in.",
+        "The Add to Kiro deeplink writes its own entry; running init afterwards overwrites it with this one."
+      ]
+    }
+  }
+}
