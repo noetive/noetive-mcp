@@ -1,0 +1,43 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    # An MCP tool handler that drops an error returns a plausible-looking empty
+    # result to the model, which then acts on it. Unchecked errors are the most
+    # consequential class of mistake in this codebase.
+    - errcheck
+    - errorlint
+    - bodyclose
+    - contextcheck
+    - noctx
+    - misspell
+    - unconvert
+    - unparam
+    - revive
+
+  settings:
+    govet:
+      # Struct field alignment: every wire type here is allocated per request,
+      # and reordering fields costs nothing but padding.
+      enable:
+        - fieldalignment
+    revive:
+      rules:
+        - name: exported
+        - name: context-as-argument
+        - name: error-strings
+        - name: indent-error-flow
+
+  exclusions:
+    rules:
+      # Test doubles are shaped for readability. A fake's field order has no
+      # allocation cost worth trading legibility for, and a table struct exists
+      # for the duration of one test.
+      - path: _test\.go
+        linters: [govet, unparam]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

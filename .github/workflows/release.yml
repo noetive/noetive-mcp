@@ -1,0 +1,150 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  # Both needed for keyless signing and build provenance: the workflow proves
+  # its own identity with an OIDC token instead of holding a signing key.
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Configure private module access
+        env:
+          TOKEN: ${{ secrets.NOETIVE_MODULE_TOKEN }}
+        run: |
+          echo "GOPRIVATE=github.com/noetive/*" >> "$GITHUB_ENV"
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Attests that these exact bytes came from this workflow at this commit,
+      # which is what lets a consumer distinguish a real release from a
+      # look-alike uploaded by someone with repository write access.
+      - uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            dist/noetive-mcp-*
+            dist/*.tar.gz
+            dist/*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist/
+
+  npm:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: installer/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist/
+
+      - run: npm ci --ignore-scripts
+        working-directory: installer
+
+      - run: npm run build
+        working-directory: installer
+
+      # Every package carries the same version as the git tag, and the wrapper
+      # pins its platform packages to exactly its own version. A drifting pair
+      # would have a wrapper resolving a binary built from different source.
+      - name: Stamp versions
+        run: node scripts/stamp-version.js "${{ needs.release.outputs.version }}"
+
+      - name: Build platform packages
+        run: node scripts/build-platform-packages.js "${{ needs.release.outputs.version }}"
+
+      # Platform packages first: publishing the wrapper before the packages it
+      # depends on leaves a window where an install resolves nothing.
+      - name: Publish platform packages
+        run: |
+          for dir in dist/npm/*/; do
+            npm publish --provenance --access public "$dir"
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish wrapper
+        run: npm publish --provenance --access public
+        working-directory: installer
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  registry:
+    needs: npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # Publishing after npm is deliberate: the registry verifies that the
+      # named package exists and carries a matching mcpName, so running it
+      # earlier fails on a package that is not there yet.
+      - name: Install mcp-publisher
+        run: |
+          curl -sSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          chmod +x mcp-publisher
+
+      # DNS auth, not github-oidc. The registry ties the auth method to the
+      # namespace: GitHub auth only grants io.github.<user-or-org>/*, and this
+      # server is io.noetive/mcp-server — the reverse-DNS form of a domain we
+      # own. Proving that means signing a challenge with the ed25519 key whose
+      # public half is published in noetive.io's apex TXT record, managed in
+      # noetive-platform-infra as route53-apex-txt-io.tf.
+      #
+      # The key is passed through the environment rather than interpolated into
+      # the run block, so it never appears in the rendered command line.
+      - name: Publish to the MCP registry
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          if [ -z "$MCP_REGISTRY_PRIVATE_KEY" ]; then
+            echo "MCP_REGISTRY_PRIVATE_KEY is not set; cannot prove ownership of noetive.io." >&2
+            exit 1
+          fi
+          ./mcp-publisher login dns \
+            --domain noetive.io \
+            --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+          ./mcp-publisher publish

@@ -1,0 +1,93 @@
+version: 2
+
+project_name: noetive-mcp
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: noetive-mcp
+    main: ./cmd/noetive-mcp
+    binary: noetive-mcp
+    env:
+      - CGO_ENABLED=0
+    # Reproducible builds: the timestamp and paths are the two inputs that
+    # otherwise differ between machines, which would make the published
+    # provenance impossible for anyone to reproduce independently.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      # No Windows arm64 npm package is published, so building one would ship an
+      # artifact nothing resolves.
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: noetive-mcp
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "noetive-mcp_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+# The npm fallback downloads a bare binary rather than an archive, so each one is
+# published under the platform key the wrapper computes from process.platform
+# and process.arch. Keep these names in step with PLATFORM_PACKAGES in
+# installer/src/resolveBinary.ts.
+release:
+  extra_files:
+    - glob: dist/noetive-mcp_darwin_arm64/noetive-mcp
+      name_template: noetive-mcp-darwin-arm64
+    - glob: dist/noetive-mcp_darwin_amd64_v1/noetive-mcp
+      name_template: noetive-mcp-darwin-x64
+    - glob: dist/noetive-mcp_linux_arm64/noetive-mcp
+      name_template: noetive-mcp-linux-arm64
+    - glob: dist/noetive-mcp_linux_amd64_v1/noetive-mcp
+      name_template: noetive-mcp-linux-x64
+    - glob: dist/noetive-mcp_windows_amd64_v1/noetive-mcp.exe
+      name_template: noetive-mcp-win32-x64.exe
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+  extra_files:
+    - glob: dist/noetive-mcp_darwin_arm64/noetive-mcp
+      name_template: noetive-mcp-darwin-arm64
+    - glob: dist/noetive-mcp_darwin_amd64_v1/noetive-mcp
+      name_template: noetive-mcp-darwin-x64
+    - glob: dist/noetive-mcp_linux_arm64/noetive-mcp
+      name_template: noetive-mcp-linux-arm64
+    - glob: dist/noetive-mcp_linux_amd64_v1/noetive-mcp
+      name_template: noetive-mcp-linux-x64
+    - glob: dist/noetive-mcp_windows_amd64_v1/noetive-mcp.exe
+      name_template: noetive-mcp-win32-x64.exe
+
+# Keyless signing: the identity is the GitHub Actions workflow itself, recorded
+# in the public transparency log, so a consumer can verify who built an artifact
+# without anyone holding a private key that could leak.
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - --yes
+    artifacts: checksum
+    output: true
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

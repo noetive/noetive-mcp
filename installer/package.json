@@ -1,0 +1,58 @@
+{
+  "name": "@noetive/mcp-server",
+  "version": "0.0.1",
+  "description": "Connect your AI editor to the Noetive Semantik semantic broker over MCP",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "noetive",
+    "semantik",
+    "ai",
+    "agent",
+    "llm"
+  ],
+  "homepage": "https://noetive.io/mcp",
+  "bugs": {
+    "url": "https://github.com/noetive/noetive-mcp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/noetive/noetive-mcp.git",
+    "directory": "installer"
+  },
+  "license": "ISC",
+  "author": "Noetive.io",
+  "mcpName": "io.noetive/mcp-server",
+  "type": "commonjs",
+  "bin": {
+    "noetive-mcp": "./bin/noetive-mcp.js"
+  },
+  "files": [
+    "bin/",
+    "dist/src/",
+    "postinstall.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "npm run build && node --test \"dist/test/*.test.js\"",
+    "postinstall": "node postinstall.js"
+  },
+  "optionalDependencies": {
+    "@noetive/mcp-server-darwin-arm64": "0.0.1",
+    "@noetive/mcp-server-darwin-x64": "0.0.1",
+    "@noetive/mcp-server-linux-arm64": "0.0.1",
+    "@noetive/mcp-server-linux-x64": "0.0.1",
+    "@noetive/mcp-server-win32-x64": "0.0.1"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

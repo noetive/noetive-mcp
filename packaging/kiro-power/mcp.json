@@ -1,0 +1,15 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "noetive-mcp": {
+      "args": [
+        "-y",
+        "@noetive/mcp-server"
+      ],
+      "command": "npx",
+      "env": {
+        "NOETIVE_KEY_SECRET": "${NOETIVE_KEY_SECRET}"
+      }
+    }
+  }
+}

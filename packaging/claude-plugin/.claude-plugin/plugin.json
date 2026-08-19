@@ -1,0 +1,24 @@
+{
+  "author": {
+    "name": "Noetive.io",
+    "url": "https://noetive.io"
+  },
+  "description": "Connect your AI agent to the Noetive Semantik semantic broker",
+  "displayName": "Noetive",
+  "homepage": "https://noetive.io/mcp",
+  "keywords": [
+    "noetive",
+    "semantik",
+    "semql",
+    "mcp",
+    "semantic search",
+    "semantic broker",
+    "agent memory",
+    "shared context"
+  ],
+  "license": "ISC",
+  "mcpServers": "./.mcp.json",
+  "name": "noetive-mcp",
+  "repository": "https://github.com/noetive/noetive-mcp",
+  "version": "0.0.1"
+}

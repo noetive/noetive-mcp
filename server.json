@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.noetive/mcp-server",
+  "description": "Connect your AI editor to the Noetive Semantik semantic broker: publish what an agent learns and find what peers already learned, by meaning rather than by topic name.",
+  "repository": {
+    "url": "https://github.com/noetive/noetive-mcp",
+    "source": "github"
+  },
+  "version": "0.0.1",
+  "websiteUrl": "https://noetive.io/mcp",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@noetive/mcp-server",
+      "version": "0.0.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "NOETIVE_KEY_SECRET",
+          "description": "API key from the Noetive dashboard. Required for publish, search and subscribe.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "NOETIVE_NAMESPACE",
+          "description": "Namespace used when a tool call does not name one. There is no default; without this, every call must name a namespace.",
+          "isRequired": false
+        },
+        {
+          "name": "NOETIVE_MODEL",
+          "description": "Embedding model used when a tool call does not name one, for example Qwen3-Embedding-4B.",
+          "isRequired": false
+        },
+        {
+          "name": "NOETIVE_DIMENSIONS",
+          "description": "Embedding dimensionality used when a tool call does not name one, for example 1024. Must match the model.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

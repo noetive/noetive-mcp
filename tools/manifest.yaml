@@ -1,0 +1,68 @@
+# Authoring source for both plugin formats.
+#
+# The Claude Code plugin and the Kiro Power describe the same product in two
+# schemas that disagree on details: one uses .mcp.json and may declare component
+# paths, the other uses mcp.json and rejects unknown top-level fields. Written by
+# hand they drift, and the drift is invisible until a user installs the format
+# nobody checked. Everything below is written once and emitted into both by
+# `go run ./packaging/emit`.
+#
+# Never edit packaging/claude-plugin or packaging/kiro-power directly; CI fails
+# when they differ from what this file produces.
+
+name: noetive-mcp
+displayName: Noetive
+description: Connect your AI agent to the Noetive Semantik semantic broker
+author:
+  name: Noetive.io
+  url: https://noetive.io
+homepage: https://noetive.io/mcp
+repository: https://github.com/noetive/noetive-mcp
+license: ISC
+version: 0.0.1
+
+# Kiro loads a Power's tools and steering only when one of these appears in the
+# conversation, so the list has to cover how a user actually refers to the thing
+# rather than only its product name.
+keywords:
+  - noetive
+  - semantik
+  - semql
+  - mcp
+  - semantic search
+  - semantic broker
+  - agent memory
+  - shared context
+
+# The MCP server entry both formats install. `npx -y` matters: an editor spawns
+# this with no terminal attached, and without -y npx blocks on a prompt nobody
+# can answer.
+server:
+  command: npx
+  args: ["-y", "@noetive/mcp-server"]
+  env:
+    NOETIVE_KEY_SECRET: "${NOETIVE_KEY_SECRET}"
+
+# Tools are listed here so the generated documentation cannot claim a surface
+# the server does not register. internal/mcpserver.ToolNames is the other half of
+# this contract and the emitter checks the two agree.
+tools:
+  - name: noetive_publish
+    summary: Publish a message so peers can find it by meaning
+  - name: noetive_search
+    summary: Search a namespace with SemQL and read the matching messages
+  - name: noetive_subscribe
+    summary: Watch a namespace for live matches for a bounded window
+  - name: noetive_lint
+    summary: Check a SemQL query before running it
+  - name: noetive_health
+    summary: Check that the editor can reach Noetive and its key is accepted
+
+skills:
+  - name: doctor
+    description: Run diagnostics on the noetive-mcp installation
+    source: doctor.md
+
+steering:
+  - name: using-noetive
+    source: using-noetive.md

@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Noetive MCP client manifest",
+  "description": "Declares how each supported editor stores MCP server configuration. Adding an editor whose config is a JSON object of servers keyed by name requires an entry here and no new code.",
+  "type": "object",
+  "required": ["serverName", "packageName", "clients"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "serverName": {
+      "type": "string",
+      "description": "The key this installer writes under. The only key it ever touches."
+    },
+    "packageName": {
+      "type": "string",
+      "description": "The npm package editors are told to run. Must match the name published to npm and the commands advertised on noetive.io/mcp."
+    },
+    "clients": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/client" }
+    }
+  },
+  "definitions": {
+    "client": {
+      "type": "object",
+      "required": ["displayName", "configFormat", "topLevelKey", "install", "expandsVariables", "scopes", "restartHint"],
+      "additionalProperties": false,
+      "properties": {
+        "displayName": { "type": "string" },
+        "configFormat": {
+          "enum": ["json", "jsonc"],
+          "description": "jsonc files are edited with a comment-preserving parser so a user's notes survive the write."
+        },
+        "topLevelKey": {
+          "type": "string",
+          "description": "The object that holds servers keyed by name. Copilot uses servers; everything else uses mcpServers."
+        },
+        "install": {
+          "enum": ["file-merge", "cli-delegate"],
+          "description": "cli-delegate defers to the editor's own CLI, which is correct when the editor owns config layout the file does not fully describe."
+        },
+        "expandsVariables": {
+          "type": "boolean",
+          "description": "Whether the editor expands ${VAR} in the env block. When false the API key cannot be written as a passthrough."
+        },
+        "detect": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths whose existence indicates the editor is installed. Any one is enough."
+        },
+        "entryExtras": {
+          "type": "object",
+          "description": "Client-specific keys merged into the server entry, such as Copilot's type or Kiro's autoApprove."
+        },
+        "cli": {
+          "type": "object",
+          "required": ["command", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "command": { "type": "string" },
+            "args": { "type": "array", "items": { "type": "string" } },
+            "removeArgs": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "scopes": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Supports a leading ~ for the home directory and ${workspace} for the current directory."
+              },
+              "default": { "type": "boolean" }
+            }
+          }
+        },
+        "restartHint": { "type": "string" },
+        "quirks": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

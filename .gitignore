@@ -175,6 +175,12 @@ $RECYCLE.BIN/
 # env file
 .env
 
+# direnv local overrides. `.env` above does not match these — gitignore treats
+# it as a literal filename — and .envrc.local is where the MCP registry signing
+# key lives, which grants publish rights to the io.noetive/* namespace.
+.envrc.local
+.envrc.*.local
+
 # Editor/IDE
 # .idea/
 # .vscode/
@@ -185,3 +191,14 @@ bin/
 /data/
 integration/payload/cache/
 /semantik
+
+# The npm wrapper's entrypoint is source and must ship; only the binary that
+# postinstall downloads beside it is generated.
+!installer/bin/
+installer/bin/*
+!installer/bin/*.js
+
+# npm build output and dependencies
+installer/node_modules/
+installer/dist/
+.mutation-salvage.json

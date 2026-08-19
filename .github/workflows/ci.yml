@@ -1,0 +1,104 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # noetive-sdk-go is not on the public proxy, so the module has to come
+      # straight from the repository. Without this, every build resolves it
+      # through proxy.golang.org and fails on a 404 that reads like a typo.
+      - name: Configure private module access
+        env:
+          TOKEN: ${{ secrets.NOETIVE_MODULE_TOKEN }}
+        run: |
+          echo "GOPRIVATE=github.com/noetive/*" >> "$GITHUB_ENV"
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...
+
+      # Short by design: the point in CI is that the corpus still replays and no
+      # seed panics, not to search for new inputs. Long campaigns belong in a
+      # scheduled run.
+      - name: Fuzz seeds
+        run: |
+          for target in FuzzPublishArguments FuzzSearchArguments FuzzLintArguments FuzzArgumentTypeConfusion; do
+            go test -run "^$" -fuzz "$target" -fuzztime 30s ./internal/broker
+          done
+
+      - name: Vet
+        run: go vet ./...
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.5.0
+          args: --config ./.golangci.yml ./...
+
+  installer:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # The installer writes into per-user config paths that differ by platform,
+      # so path handling is only actually covered by running on each.
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer/package-lock.json
+
+      - run: npm ci --ignore-scripts
+        working-directory: installer
+
+      - run: npm test
+        working-directory: installer
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # The emitter imports internal/mcpserver to check the documented tool list
+      # against the registered one, so it needs the same private module access
+      # the build does.
+      - name: Configure private module access
+        env:
+          TOKEN: ${{ secrets.NOETIVE_MODULE_TOKEN }}
+        run: |
+          echo "GOPRIVATE=github.com/noetive/*" >> "$GITHUB_ENV"
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      # The emitted plugin payloads are generated from tools/manifest.yaml. This
+      # fails when someone hand-edits a generated file, which is the failure mode
+      # that lets the Claude plugin and the Kiro Power drift apart.
+      - name: Regenerate packaging
+        run: go run ./packaging/emit
+
+      - name: Check packaging is up to date
+        run: git diff --exit-code -- packaging/ .claude-plugin/ .mcp.json
