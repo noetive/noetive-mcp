@@ -11,6 +11,13 @@
 # when they differ from what this file produces.
 
 name: noetive-mcp
+
+# The key the server entry gets in the user's editor config, which is not the
+# plugin name. installer/src/manifest/clients.json writes `noetive` and the
+# README documents `noetive`; a user who installs the plugin and also runs
+# `init --client claude-code` must end up with one entry, not two.
+serverKey: noetive
+
 displayName: Noetive
 description: Connect your AI agent to the Noetive Semantik semantic broker
 author:

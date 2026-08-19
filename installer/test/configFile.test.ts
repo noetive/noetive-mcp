@@ -148,7 +148,7 @@ test("a first write reports no backup", () => {
 
 // A file the process cannot read must fail loudly rather than being treated as
 // absent — that would replace a config the user still has.
-test("an unreadable file is not mistaken for a missing one", () => {
+test("an unreadable file is not mistaken for a missing one", { skip: process.platform === "win32" ? "POSIX mode bits" : false }, () => {
   const target = join(scratch(), "config.json");
   writeFileSync(target, '{"mcpServers":{}}');
   chmodSync(target, 0o000);

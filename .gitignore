@@ -202,3 +202,11 @@ installer/bin/*
 installer/node_modules/
 installer/dist/
 .mutation-salvage.json
+
+# goreleaser writes here, and scripts/build-platform-packages.js writes dist/npm
+# beside it. Anchored so it cannot swallow a future source directory named dist.
+/dist/
+
+# Per-developer Claude Code state. .claude-plugin/ is the published artifact;
+# this is not, and it is one directory letter away from being mistaken for it.
+.claude/settings.local.json

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	json "github.com/goccy/go-json"
+	"gopkg.in/yaml.v3"
 
 	"github.com/noetive/noetive-mcp/internal/mcpserver"
 )
@@ -44,6 +47,7 @@ func completeManifest(t *testing.T) string {
 	}
 
 	return `name: noetive-mcp
+serverKey: noetive
 displayName: Noetive
 description: Connect your AI agent to the Noetive Semantik semantic broker
 author:
@@ -248,8 +252,8 @@ func TestBothFormatsSpawnTheServerIdentically(t *testing.T) {
 		t.Fatalf("emitKiroPower: %v", err)
 	}
 
-	claude := serverEntryOf(t, filepath.Join(root, "packaging", "claude-plugin", ".mcp.json"), model.Name)
-	kiro := serverEntryOf(t, filepath.Join(root, "packaging", "kiro-power", "mcp.json"), model.Name)
+	claude := serverEntryOf(t, filepath.Join(root, "packaging", "claude-plugin", ".mcp.json"), model.ServerKey)
+	kiro := serverEntryOf(t, filepath.Join(root, "packaging", "kiro-power", "mcp.json"), model.ServerKey)
 
 	if claude["command"] != kiro["command"] {
 		t.Errorf("commands differ: %v vs %v", claude["command"], kiro["command"])
@@ -532,8 +536,9 @@ func resolve(t *testing.T, path string) string {
 // plugins whose listing in a marketplace is blank.
 func TestEitherRequiredFieldMissingIsRefused(t *testing.T) {
 	scenarios := map[string]string{
-		"no description": "name: noetive-mcp\nversion: 1.0.0\n",
-		"no name":        "description: something\nversion: 1.0.0\n",
+		"no description": "name: noetive-mcp\nserverKey: noetive\nversion: 1.0.0\n",
+		"no name":        "description: something\nserverKey: noetive\nversion: 1.0.0\n",
+		"no serverKey":   "name: noetive-mcp\ndescription: something\nversion: 1.0.0\n",
 		"neither":        "version: 1.0.0\n",
 	}
 
@@ -567,7 +572,7 @@ func TestNoEnvBlockIsWrittenWhenThereIsNothingInIt(t *testing.T) {
 		t.Fatalf("emitKiroPower: %v", err)
 	}
 
-	entry := serverEntryOf(t, filepath.Join(root, "packaging", "kiro-power", "mcp.json"), model.Name)
+	entry := serverEntryOf(t, filepath.Join(root, "packaging", "kiro-power", "mcp.json"), model.ServerKey)
 	if _, present := entry["env"]; present {
 		t.Errorf("an empty env block was written: %v", entry["env"])
 	}
@@ -591,5 +596,108 @@ func TestAFailureWritingSkillsStopsTheRun(t *testing.T) {
 
 	if err := emitRepositoryPlugin(model, root); err == nil {
 		t.Error("expected the failed skill write to be reported")
+	}
+}
+
+// The plugin is called noetive-mcp; the config entry it installs is called
+// noetive. Keying the entry on the plugin name gives a user who installs the
+// plugin and also runs `init --client claude-code` two entries and two server
+// processes, which is the failure this key exists to prevent.
+func TestTheServerEntryIsKeyedOnTheServerKeyNotThePluginName(t *testing.T) {
+	model, err := load(authoringSource(t, completeManifest(t)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	servers, ok := model.serverEntry()["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatal("the entry carries no mcpServers object")
+	}
+	if _, found := servers[model.ServerKey]; !found {
+		t.Errorf("no entry under the server key %q; got keys %v", model.ServerKey, slices.Sorted(maps.Keys(servers)))
+	}
+	if _, found := servers[model.Name]; found {
+		t.Errorf("an entry was written under the plugin name %q, which installs a second server", model.Name)
+	}
+}
+
+// The version is stamped from the git tag into installer/package.json and
+// server.json at release, but tools/manifest.yaml is committed and emitted into
+// the plugin manifests. Nothing at release reconciles the two, so the only
+// moment the disagreement is cheap to find is here — a tag that disagrees
+// publishes an npm package and a registry entry describing different builds.
+func TestEveryPublishedManifestDeclaresTheSameVersion(t *testing.T) {
+	root, err := repoRoot()
+	if err != nil {
+		t.Fatalf("could not find the module root: %v", err)
+	}
+
+	var manifest struct {
+		Version string `yaml:"version"`
+	}
+	readInto(t, filepath.Join(root, "tools", "manifest.yaml"), yaml.Unmarshal, &manifest)
+
+	var pkg struct {
+		Version              string            `json:"version"`
+		OptionalDependencies map[string]string `json:"optionalDependencies"`
+	}
+	readInto(t, filepath.Join(root, "installer", "package.json"), json.Unmarshal, &pkg)
+
+	// The lockfile is what `npm ci` reads, so a stale copy here publishes a
+	// wrapper resolving the previous release's platform packages.
+	var lock struct {
+		Version  string `json:"version"`
+		Packages map[string]struct {
+			Version              string            `json:"version"`
+			OptionalDependencies map[string]string `json:"optionalDependencies"`
+		} `json:"packages"`
+	}
+	readInto(t, filepath.Join(root, "installer", "package-lock.json"), json.Unmarshal, &lock)
+
+	var server struct {
+		Version  string `json:"version"`
+		Packages []struct {
+			Identifier string `json:"identifier"`
+			Version    string `json:"version"`
+		} `json:"packages"`
+	}
+	readInto(t, filepath.Join(root, "server.json"), json.Unmarshal, &server)
+
+	want := manifest.Version
+	if want == "" {
+		t.Fatal("tools/manifest.yaml declares no version")
+	}
+
+	declared := map[string]string{
+		"installer/package.json":      pkg.Version,
+		"installer/package-lock.json": lock.Version,
+		"server.json":                 server.Version,
+	}
+	for name, version := range pkg.OptionalDependencies {
+		declared["installer/package.json optionalDependencies "+name] = version
+	}
+	declared["installer/package-lock.json root package"] = lock.Packages[""].Version
+	for name, version := range lock.Packages[""].OptionalDependencies {
+		declared["installer/package-lock.json root optionalDependencies "+name] = version
+	}
+	for _, p := range server.Packages {
+		declared["server.json packages "+p.Identifier] = p.Version
+	}
+
+	for where, got := range declared {
+		if got != want {
+			t.Errorf("%s declares %q but tools/manifest.yaml declares %q", where, got, want)
+		}
+	}
+}
+
+// readInto keeps the decodes above to one line each; the assertion is what the
+// test is about, not the plumbing. The decode function is a parameter because
+// one of the four files is YAML and the rest are JSON.
+func readInto(t *testing.T, path string, decode func([]byte, any) error, target any) {
+	t.Helper()
+
+	if err := decode([]byte(readFile(t, path)), target); err != nil {
+		t.Fatalf("could not decode %s: %v", path, err)
 	}
 }

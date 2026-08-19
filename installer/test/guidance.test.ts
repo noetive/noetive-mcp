@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, normalize, sep } from "node:path";
 import { test } from "node:test";
 
 import { MergeAdapter } from "../src/adapters/generic";
 import { configuredScopes } from "../src/cli";
-import { assertUsableWorkspace, clientSpec, defaultScope } from "../src/clients";
+import { assertUsableWorkspace, clientIds, clientSpec, configPath, defaultScope, isInstalled } from "../src/clients";
 import { API_KEY_ENV, DASHBOARD_URL, describeKeyHandling } from "../src/serverEntry";
 
 // The published instruction is "run this in your terminal", which for most
@@ -94,5 +94,41 @@ test("a project-scoped install is found, not only the default scope", async () =
     found.map((f) => f.scope),
     ["project"],
     "expected the project scope to be reported as configured",
+  );
+});
+
+// The manifest spells paths with forward slashes because vendor documentation
+// does. Substituting a Windows workspace into that leaves mixed separators —
+// `C:\Users\me\project/.vscode/mcp.json` — which opens files perfectly well and
+// then fails every comparison against a path built with join, so `list` and
+// `doctor` report an editor as unconfigured while looking straight at its
+// config.
+test("a resolved config path uses this platform's separator throughout", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "noetive-paths-"));
+
+  for (const id of clientIds()) {
+    const spec = clientSpec(id);
+    for (const scope of Object.keys(spec.scopes)) {
+      const resolved = configPath(spec, scope, workspace);
+
+      assert.equal(resolved, normalize(resolved), `${id}/${scope} is not normalized: ${resolved}`);
+      if (sep === "\\") {
+        assert.ok(!resolved.includes("/"), `${id}/${scope} carries a forward slash: ${resolved}`);
+      }
+    }
+  }
+});
+
+// The same path has to come out of the detector, or an editor is "not detected"
+// on the machine it is installed on.
+test("detection and configuration agree on where a workspace is", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "noetive-paths-"));
+  const copilot = clientSpec("copilot");
+
+  mkdirSync(join(workspace, ".vscode"), { recursive: true });
+
+  assert.ok(
+    isInstalled(copilot, workspace, existsSync),
+    "the workspace .vscode directory was not detected",
   );
 });

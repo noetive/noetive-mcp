@@ -74,6 +74,7 @@ type authoring struct {
 	prompts map[string]string
 
 	Name        string     `yaml:"name"`
+	ServerKey   string     `yaml:"serverKey"`
 	DisplayName string     `yaml:"displayName"`
 	Description string     `yaml:"description"`
 	Homepage    string     `yaml:"homepage"`
@@ -113,6 +114,11 @@ func load(dir string) (authoring, error) {
 	if model.Name == "" || model.Description == "" {
 		return authoring{}, fmt.Errorf("manifest.yaml must set name and description; both formats require them")
 	}
+	// An empty serverKey would emit an entry under "", which every editor reads
+	// as a server with no name rather than as a mistake.
+	if model.ServerKey == "" {
+		return authoring{}, fmt.Errorf("manifest.yaml must set serverKey; it is the key users see in their editor config")
+	}
 
 	model.prompts = map[string]string{}
 	for _, doc := range append(append([]document{}, model.Skills...), model.Steering...) {
@@ -149,6 +155,12 @@ func (a authoring) agreesWithServer() error {
 }
 
 // serverEntry is the mcpServers value both formats embed.
+//
+// Keyed on ServerKey, not Name: the plugin is called noetive-mcp but the config
+// entry is called noetive, which is what installer/src/manifest/clients.json
+// writes and what the README documents. Keying it on the plugin name gives a
+// user who installs the plugin and also runs `init --client claude-code` two
+// entries and two server processes.
 func (a authoring) serverEntry() map[string]any {
 	entry := map[string]any{
 		"command": a.Server.Command,
@@ -157,7 +169,7 @@ func (a authoring) serverEntry() map[string]any {
 	if len(a.Server.Env) > 0 {
 		entry["env"] = a.Server.Env
 	}
-	return map[string]any{"mcpServers": map[string]any{a.Name: entry}}
+	return map[string]any{"mcpServers": map[string]any{a.ServerKey: entry}}
 }
 
 // emitClaudePlugin writes packaging/claude-plugin.

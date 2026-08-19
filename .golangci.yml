@@ -1,5 +1,13 @@
 version: "2"
 
+run:
+  # The integration suite is behind a build tag, so with default tags nothing in
+  # `make`, `go build ./...` or `go test ./...` type-checks it — a rename in
+  # internal/ breaks it invisibly until someone runs integration/run.sh by hand.
+  # Fixed here rather than as a CI step so `make lint` catches it too.
+  build-tags:
+    - integration
+
 linters:
   default: standard
   enable:

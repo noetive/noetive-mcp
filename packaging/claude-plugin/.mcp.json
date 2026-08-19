@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "noetive-mcp": {
+    "noetive": {
       "args": [
         "-y",
         "@noetive/mcp-server"

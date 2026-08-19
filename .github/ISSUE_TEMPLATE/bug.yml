@@ -1,0 +1,45 @@
+name: Bug
+description: The server or the installer did something other than what it says.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`npx @noetive/mcp-server --version`"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: Editor
+      options: [Cursor, Claude Code, GitHub Copilot, Kiro, Other]
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      description: e.g. macOS 15 arm64, Windows 11 x64, Ubuntu 24.04 x64
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened
+      description: The exact tool call or command, and the output.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: redacted
+    attributes:
+      # Keys get pasted into issues constantly, and a key in a public issue is a
+      # key that has to be rotated. Asking once, here, is cheaper than rotating.
+      label: Before submitting
+      options:
+        - label: There is no API key in the text above.
+          required: true

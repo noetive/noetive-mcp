@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, normalize, resolve } from "node:path";
 
 import manifest from "./manifest/clients.json";
 
@@ -80,11 +80,26 @@ export function configPath(spec: ClientSpec, scope: string, workspace: string): 
     throw new Error(`client ${spec.displayName} has no scope ${JSON.stringify(scope)}; supported: ${Object.keys(spec.scopes).join(", ")}`);
   }
 
-  let path = declared.path;
+  return expandPath(declared.path, workspace);
+}
+
+/**
+ * expandPath turns a manifest path template into a real path for this machine.
+ *
+ * The manifest spells paths with forward slashes because that is what every
+ * vendor's documentation uses. Substituting into that leaves a Windows path
+ * with mixed separators — `C:\Users\me\project/.vscode/mcp.json` — which opens
+ * files perfectly well and then fails every comparison against a path built
+ * with `join`, so `list` and `doctor` report an editor as unconfigured while
+ * looking straight at its config. Normalising once, here, is what stops that
+ * difference from leaking into everything downstream.
+ */
+function expandPath(template: string, workspace: string): string {
+  let path = template;
   if (path.startsWith("~/")) path = join(homedir(), path.slice(2));
   path = path.replace("${workspace}", workspace);
 
-  return isAbsolute(path) ? path : resolve(workspace, path);
+  return normalize(isAbsolute(path) ? path : resolve(workspace, path));
 }
 
 /**
@@ -134,12 +149,7 @@ export function assertUsableWorkspace(spec: ClientSpec, scope: string, workspace
 export function isInstalled(spec: ClientSpec, workspace: string, exists: (p: string) => boolean): boolean {
   if (!spec.detect || spec.detect.length === 0) return true;
 
-  return spec.detect.some((candidate) => {
-    let path = candidate;
-    if (path.startsWith("~/")) path = join(homedir(), path.slice(2));
-    path = path.replace("${workspace}", workspace);
-    return exists(path);
-  });
+  return spec.detect.some((candidate) => exists(expandPath(candidate, workspace)));
 }
 
 /** expand substitutes ${name} placeholders from values, leaving unknowns alone. */

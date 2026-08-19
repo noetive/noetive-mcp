@@ -4,42 +4,93 @@ on:
   push:
     tags: ["v*"]
 
+# Read by default; the one job that needs to write says so itself. Inverted
+# deliberately — with the grants at the top, the next job added inherits write
+# on repository contents without anyone deciding it should.
 permissions:
-  contents: write
-  # Both needed for keyless signing and build provenance: the workflow proves
-  # its own identity with an OIDC token instead of holding a signing key.
-  id-token: write
-  attestations: write
+  contents: read
+
+# Workflow-wide, not per-tag: two tags in flight at once race on npm's latest
+# dist-tag, and the loser silently becomes what `npx` installs.
+#
+# cancel-in-progress: false keeps a *running* release from being killed between
+# the platform packages and the wrapper, which would leave a published version
+# resolving to nothing. It is not a promise that nothing is ever cancelled:
+# GitHub keeps one pending run per group, so a third tag pushed while two are
+# outstanding cancels the one still waiting. Push release tags one at a time,
+# and re-run from the Actions tab if one is cancelled while queued.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # goreleaser creates the release and uploads to it.
+      contents: write
+      # Both needed for keyless signing and build provenance: the workflow proves
+      # its own identity with an OIDC token instead of holding a signing key.
+      id-token: write
+      attestations: write
     outputs:
       version: ${{ steps.version.outputs.version }}
+      npm_tag: ${{ steps.version.outputs.npm_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
 
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
-      - name: Configure private module access
-        env:
-          TOKEN: ${{ secrets.NOETIVE_MODULE_TOKEN }}
-        run: |
-          echo "GOPRIVATE=github.com/noetive/*" >> "$GITHUB_ENV"
-          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
-
+      # The tag is the only version input: ldflags, both npm manifests and
+      # server.json are all stamped from it. A malformed tag, or one that
+      # disagrees with the packaging manifest, has to stop here — a GitHub
+      # Release cannot be unpublished cleanly and an npm version cannot be
+      # reused at all.
+      #
+      # tools/manifest.yaml is checked rather than stamped: the Claude plugin and
+      # the Kiro Power are served out of the repository itself, so their version
+      # is whatever is committed, and a stamp applied in CI is read by nobody.
+      #
+      # The pattern matches scripts/stamp-version.js exactly, so the two cannot
+      # disagree about what a valid tag is.
       - id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z_.]+)?$' || {
+            echo "tag ${GITHUB_REF_NAME} is not a semver release tag" >&2
+            exit 1
+          }
+          declared=$(sed -n 's/^version: *//p' tools/manifest.yaml)
+          [ "$declared" = "$version" ] || {
+            echo "tools/manifest.yaml declares '${declared}' but the tag is '${version}'." >&2
+            echo "Bump the manifest, run make emit, commit, then tag." >&2
+            exit 1
+          }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - uses: goreleaser/goreleaser-action@v6
+          # npm assigns the `latest` dist-tag to any publish that does not name
+          # one; it infers nothing from the version string. Every install path
+          # advertised anywhere is a bare `npx @noetive/mcp-server`, so without
+          # this a prerelease becomes what every user gets.
+          if [ "$version" = "${version%%-*}" ]; then
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_tag=next" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
-          version: latest
+          # Pinned like golangci-lint in ci.yml: with `latest`, the tool that
+          # produces the signed artifacts can change between two runs of the same
+          # tag, and a release nobody can reproduce is not a release.
+          version: v2.17.1
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,14 +98,19 @@ jobs:
       # Attests that these exact bytes came from this workflow at this commit,
       # which is what lets a consumer distinguish a real release from a
       # look-alike uploaded by someone with repository write access.
-      - uses: actions/attest-build-provenance@v1
+      #
+      # The build output, not the release asset names: goreleaser renames the
+      # bare binaries on upload, and attestation is keyed by digest, so attesting
+      # what is on disk covers the asset installer/postinstall.js downloads.
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-path: |
-            dist/noetive-mcp-*
+            dist/*/noetive-mcp
+            dist/*/noetive-mcp.exe
             dist/*.tar.gz
             dist/*.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: binaries
           path: dist/
@@ -62,24 +118,29 @@ jobs:
   npm:
     needs: release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
           cache-dependency-path: installer/package-lock.json
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: binaries
           path: dist/
 
+      # Both before the stamp. The stamp is a no-op on a correctly prepared tag
+      # — scripts/stamp-version.js writes package.json and the lockfile together
+      # and the release commit already carries both — but ordering it after the
+      # install keeps that true rather than depending on it.
       - run: npm ci --ignore-scripts
         working-directory: installer
 
@@ -100,32 +161,198 @@ jobs:
       - name: Publish platform packages
         run: |
           for dir in dist/npm/*/; do
-            npm publish --provenance --access public "$dir"
+            npm publish --provenance --access public --tag "$NPM_TAG" "$dir"
           done
         env:
+          NPM_TAG: ${{ needs.release.outputs.npm_tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish wrapper
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: installer
         env:
+          NPM_TAG: ${{ needs.release.outputs.npm_tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  registry:
-    needs: npm
+  # The second distribution channel: a hosted agent runtime runs the server in a
+  # container beside the agent rather than beside a person's editor. Built from
+  # source rather than from the release archives — the Dockerfile cross-compiles,
+  # so one buildx invocation produces both architectures at full speed, and the
+  # image stays buildable on its own.
+  oci:
+    needs: release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Pushing to ghcr.io, and signing what was pushed.
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      # `latest` only for a final release: a candidate that claims it becomes
+      # what `docker pull` hands someone who never asked for one.
+      - id: tags
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          {
+            echo "tags<<EOF"
+            echo "ghcr.io/noetive/noetive-mcp:${VERSION}"
+            case "$VERSION" in
+            *-*) ;;
+            *) echo "ghcr.io/noetive/noetive-mcp:latest" ;;
+            esac
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # The index annotation is not a duplicate of the Dockerfile's LABEL. The
+      # label lands on each per-architecture image's config; the MCP registry
+      # resolves the multi-arch index, which inherits nothing from its children.
+      # Without this, ownership validation fails with a missing-annotation error
+      # against an image that visibly carries the label.
+      #
+      # provenance is off because buildx would otherwise add unknown/unknown
+      # attestation entries to that same index, giving the registry's manifest
+      # walk one more shape to get wrong. The provenance itself is not lost — the
+      # step below records it in GitHub's attestation store instead of the index.
+      - id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          build-args: VERSION=${{ needs.release.outputs.version }}
+          tags: ${{ steps.tags.outputs.tags }}
+          annotations: |
+            index:io.modelcontextprotocol.server.name=io.noetive/mcp-server
+
+      # By digest, not by tag: a tag is a mutable pointer, so signing it attests
+      # to whatever it names later rather than to what was built here.
+      - name: Sign the image
+        run: cosign sign --yes "ghcr.io/noetive/noetive-mcp@${{ steps.push.outputs.digest }}"
+
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: ghcr.io/noetive/noetive-mcp
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: false
+
+  # One string comparison that proves goreleaser stamped the binary correctly,
+  # the right binary landed in the right platform package, that package
+  # published, and the wrapper resolved it. Gating the registry on this is the
+  # point: an npm mistake is recoverable with a patch bump, a registry entry
+  # advertising a broken version is not.
+  smoke:
+    needs: [release, npm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      # --ignore-scripts on purpose: it disables the postinstall download, so
+      # this can only pass if the platform package for this host published and
+      # the wrapper resolved it. With scripts enabled the fallback papers over a
+      # missing package until a user hits it.
+      #
+      # The version check is inside the retry, not after it. npm treats
+      # optionalDependencies as best-effort: a platform package that has not
+      # reached this edge yet leaves `npm install` exiting 0 with no binary, so
+      # retrying the install alone would succeed on the first attempt and then
+      # fail the assertion permanently. Retrying the whole thing is what makes
+      # this a propagation wait rather than a coin toss.
+      - name: The published package installs and reports the released version
+        shell: bash
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          for _ in $(seq 1 10); do
+            if npm install -g "@noetive/mcp-server@${VERSION}" --ignore-scripts &&
+              got=$(noetive-mcp --version 2>&1) &&
+              [ "$got" = "$VERSION" ]; then
+              echo "noetive-mcp --version reports ${got}"
+              exit 0
+            fi
+            echo "not ready yet (last saw '${got:-no binary}'); retrying" >&2
+            sleep 15
+          done
+          echo "@noetive/mcp-server@${VERSION} never resolved a working binary on this host" >&2
+          exit 1
+
+  # Last, because the registry validates every package server.json points at:
+  # the npm package must exist and carry a matching mcpName, and the image must
+  # exist and carry a matching io.modelcontextprotocol.server.name annotation.
+  # Running before either publishes fails on an artifact that is not there yet.
+  registry:
+    needs: [release, smoke, oci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      # Publishing after npm is deliberate: the registry verifies that the
-      # named package exists and carries a matching mcpName, so running it
-      # earlier fails on a package that is not there yet.
+      # server.json is read out of this checkout, and the registry records
+      # whatever it is handed — permanently, since an entry cannot be
+      # unpublished. On a correctly prepared tag this restamp changes nothing,
+      # because the release job already refused a tag disagreeing with
+      # tools/manifest.yaml and packaging/emit's tests refuse a tree whose
+      # version files disagree with each other. It runs anyway: it costs a
+      # second, it needs no state from any other job, and it makes this the job
+      # you can safely re-run on its own after a transient registry failure.
+      - name: Stamp versions
+        run: node scripts/stamp-version.js "${{ needs.release.outputs.version }}"
+
+      # Pinned and checked against the checksum published with that release.
+      # `latest/download/` hands the release path a binary nobody chose, while
+      # MCP_REGISTRY_PRIVATE_KEY is in scope for whatever it turns out to be.
+      # Bump the two constants together; a mismatch aborts.
       - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: "1.8.1"
+          MCP_PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
         run: |
-          curl -sSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          base="https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}"
+          curl -fsSL -o mcp-publisher.tar.gz "${base}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
           chmod +x mcp-publisher
+
+      # This is the exact request the registry's npm validator makes, so the
+      # release waits on the fact it depends on rather than on a guess. Separate
+      # from the smoke job's retry: different consumer, different cache edge.
+      - name: Wait for npm to serve the published version
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          url="https://registry.npmjs.org/@noetive%2Fmcp-server/${VERSION}"
+          for _ in $(seq 1 30); do
+            if [ "$(curl -fsSL "$url" | jq -r '.mcpName // empty')" = "io.noetive/mcp-server" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "npm did not serve @noetive/mcp-server@${VERSION} with mcpName io.noetive/mcp-server within five minutes" >&2
+          exit 1
 
       # DNS auth, not github-oidc. The registry ties the auth method to the
       # namespace: GitHub auth only grants io.github.<user-or-org>/*, and this

@@ -40,32 +40,44 @@ archives:
 # published under the platform key the wrapper computes from process.platform
 # and process.arch. Keep these names in step with PLATFORM_PACKAGES in
 # installer/src/resolveBinary.ts.
+#
+# The globs stop at the GOARCH and wildcard the rest: goreleaser appends a
+# microarchitecture level to the output directory — amd64 as _v1, arm64 as _v8.0
+# — and it has changed which architectures get one. Hard-coding the directory
+# name is what broke here: arm64 acquired a suffix these globs did not have, and
+# the release failed at the checksum stage with the binaries already built.
 release:
+  # A prerelease tag must not become the repository's "Latest release": that is
+  # what installer/postinstall.js's fallback download resolves against, and what
+  # anyone landing on the releases page reads as current. `auto` marks it from
+  # the tag, matching the npm dist-tag the release workflow derives the same way.
+  prerelease: auto
+
   extra_files:
-    - glob: dist/noetive-mcp_darwin_arm64/noetive-mcp
+    - glob: dist/noetive-mcp_darwin_arm64*/noetive-mcp
       name_template: noetive-mcp-darwin-arm64
-    - glob: dist/noetive-mcp_darwin_amd64_v1/noetive-mcp
+    - glob: dist/noetive-mcp_darwin_amd64*/noetive-mcp
       name_template: noetive-mcp-darwin-x64
-    - glob: dist/noetive-mcp_linux_arm64/noetive-mcp
+    - glob: dist/noetive-mcp_linux_arm64*/noetive-mcp
       name_template: noetive-mcp-linux-arm64
-    - glob: dist/noetive-mcp_linux_amd64_v1/noetive-mcp
+    - glob: dist/noetive-mcp_linux_amd64*/noetive-mcp
       name_template: noetive-mcp-linux-x64
-    - glob: dist/noetive-mcp_windows_amd64_v1/noetive-mcp.exe
+    - glob: dist/noetive-mcp_windows_amd64*/noetive-mcp.exe
       name_template: noetive-mcp-win32-x64.exe
 
 checksum:
   name_template: checksums.txt
   algorithm: sha256
   extra_files:
-    - glob: dist/noetive-mcp_darwin_arm64/noetive-mcp
+    - glob: dist/noetive-mcp_darwin_arm64*/noetive-mcp
       name_template: noetive-mcp-darwin-arm64
-    - glob: dist/noetive-mcp_darwin_amd64_v1/noetive-mcp
+    - glob: dist/noetive-mcp_darwin_amd64*/noetive-mcp
       name_template: noetive-mcp-darwin-x64
-    - glob: dist/noetive-mcp_linux_arm64/noetive-mcp
+    - glob: dist/noetive-mcp_linux_arm64*/noetive-mcp
       name_template: noetive-mcp-linux-arm64
-    - glob: dist/noetive-mcp_linux_amd64_v1/noetive-mcp
+    - glob: dist/noetive-mcp_linux_amd64*/noetive-mcp
       name_template: noetive-mcp-linux-x64
-    - glob: dist/noetive-mcp_windows_amd64_v1/noetive-mcp.exe
+    - glob: dist/noetive-mcp_windows_amd64*/noetive-mcp.exe
       name_template: noetive-mcp-win32-x64.exe
 
 # Keyless signing: the identity is the GitHub Actions workflow itself, recorded
@@ -86,8 +98,17 @@ signs:
 changelog:
   use: github
   sort: asc
+  # Scoped forms too: dependabot writes `chore(deps): bump ...`, which a bare
+  # `^chore:` does not match, and a scope is the normal way to say which part of
+  # the tree a docs change touched. The changelog is read by someone deciding
+  # whether to upgrade an npm package; nothing excluded here changes what that
+  # package does.
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
+      - '^docs(\(.+\))?:'
+      - '^test(\(.+\))?:'
+      - '^chore(\(.+\))?:'
+      - '^build(\(.+\))?:'
+      - '^ci(\(.+\))?:'
+      - '^style(\(.+\))?:'
+      - '^refactor(\(.+\))?:'

@@ -1,0 +1,65 @@
+#!/bin/sh
+# The slow half: about five seconds here. Affordable at push frequency, not at
+# commit frequency — which is the whole reason pre-commit does not run these.
+#
+# git feeds one `<local ref> <local oid> <remote ref> <remote oid>` line per ref
+# on stdin. An all-zero local oid is a branch deletion, which has nothing to
+# check; an all-zero remote oid is a branch the remote has never seen, so the
+# comparison point is the merge base with the remote's default branch rather
+# than the whole of history.
+#
+# When the range cannot be worked out — no merge base, or a remote oid this
+# clone does not have after a fetch prune or a history rewrite — everything
+# runs. The safe direction for an unknown is more checking, not less.
+
+remote=${1:-origin}
+zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+
+# The remote's own idea of its default branch, so this works against a fork
+# remote or a repository whose default branch is not main. Falling back rather
+# than failing: a wrong guess here only costs a wider diff.
+default=$(git symbolic-ref --quiet "refs/remotes/$remote/HEAD" 2>/dev/null) ||
+	default="refs/remotes/$remote/main"
+
+changed=''
+everything=''
+
+while read -r _ local_oid _ remote_oid; do
+	[ "$local_oid" = "$zero" ] && continue
+	if [ "$remote_oid" = "$zero" ]; then
+		base=$(git merge-base "$local_oid" "$default" 2>/dev/null) || base=''
+	else
+		base=$remote_oid
+	fi
+	if [ -z "$base" ]; then
+		everything=1
+		break
+	fi
+	# Status, not output: a bad object prints nothing and succeeds from the
+	# caller's point of view, which would leave `changed` holding a bare newline
+	# and skip every check below.
+	if ! names=$(git diff --name-only "$base" "$local_oid" 2>/dev/null); then
+		everything=1
+		break
+	fi
+	changed="$changed
+$names"
+done
+
+[ -n "$everything" ] || printf '%s\n' "$changed" | grep -qE '\.go$|(^|/)go\.(mod|sum)$' || exit 0
+
+fail=0
+
+if command -v go >/dev/null 2>&1; then
+	go test -race ./... || fail=1
+else
+	printf 'pre-push: SKIPPED tests — go is not installed (https://go.dev/dl). CI runs them regardless.\n' >&2
+fi
+
+if command -v golangci-lint >/dev/null 2>&1; then
+	golangci-lint run --config ./.golangci.yml ./... || fail=1
+else
+	printf 'pre-push: SKIPPED lint — golangci-lint is not installed (go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0). CI runs it regardless.\n' >&2
+fi
+
+exit $fail

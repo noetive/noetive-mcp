@@ -1,0 +1,48 @@
+# The build stage does `COPY . .`, so everything not excluded here is shipped to
+# the daemon and lands in an intermediate layer. Two reasons that matters:
+# .envrc.local holds the ed25519 key that grants publish rights over
+# io.noetive/*, and installer/node_modules is 26 MB the Go build never reads.
+
+.git
+.github
+.githooks
+
+# Credentials. The final image is distroless and copies only the binary, so
+# nothing here reaches a published layer — but the build context and the local
+# layer cache are not nothing.
+#
+# `**/` on every one of these: docker matches with filepath.Match, where `*`
+# does not cross a `/`, so a bare `*.pem` covers the root and nothing else. The
+# same patterns in .gitignore do match at any depth, which makes the two files
+# look equivalent when they are not.
+**/.env
+**/.envrc
+**/.envrc.local
+**/.envrc.*.local
+**/*.pem
+**/*.key
+
+# The npm wrapper is a separate artifact with a separate pipeline; the image
+# runs the Go binary directly.
+installer/
+scripts/
+packaging/
+docs/
+skills/
+tools/
+
+# Build output, from here or from a previous run.
+dist/
+bin/
+tmp/
+**/*.test
+**/*.out
+.mutation-salvage.json
+
+# Editor and agent state.
+.claude/
+.vscode/
+.idea/
+
+*.md
+!README.md

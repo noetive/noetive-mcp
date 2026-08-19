@@ -5,6 +5,13 @@ import { test } from "node:test";
 
 import { binaryName, defaultFallbackDir, hostKey, packageRoot, platformPackage, resolveBinary } from "../src/resolveBinary";
 
+// Built with join so the separator is whatever this platform uses. Spelled as
+// literals, these compare against a Windows resolver that returns backslashes
+// and every path assertion fails for a reason that has nothing to do with the
+// behaviour under test.
+const PKG_DIR = join("/", "pkg");
+const FALLBACK_DIR = join("/", "fallback");
+
 // postinstall downloads into the package's own bin directory. If resolution
 // looks anywhere else, a machine where the download succeeded still reports
 // "could not find the binary" — which is exactly what happened before this was
@@ -21,12 +28,12 @@ test("the platform package is preferred over the downloaded fallback", () => {
   const resolved = resolveBinary({
     platform: "darwin",
     arch: "arm64",
-    resolvePackage: (name) => (name === "@noetive/mcp-server-darwin-arm64" ? "/pkg" : undefined),
+    resolvePackage: (name) => (name === "@noetive/mcp-server-darwin-arm64" ? PKG_DIR : undefined),
     fileExists: () => true,
-    fallbackDir: "/fallback",
+    fallbackDir: FALLBACK_DIR,
   });
 
-  assert.equal(resolved, join("/pkg", "bin", "noetive-mcp"));
+  assert.equal(resolved, join(PKG_DIR, "bin", "noetive-mcp"));
 });
 
 // When install scripts ran but the optional dependency did not land, the
@@ -36,11 +43,11 @@ test("the downloaded fallback is used when no platform package is installed", ()
     platform: "linux",
     arch: "x64",
     resolvePackage: () => undefined,
-    fileExists: (p) => p.startsWith("/fallback"),
-    fallbackDir: "/fallback",
+    fileExists: (p) => p.startsWith(FALLBACK_DIR),
+    fallbackDir: FALLBACK_DIR,
   });
 
-  assert.equal(resolved, join("/fallback", "noetive-mcp"));
+  assert.equal(resolved, join(FALLBACK_DIR, "noetive-mcp"));
 });
 
 // A missing binary is the failure a user is most likely to hit, and the least
@@ -54,11 +61,11 @@ test("a missing binary names both search paths and a remedy", () => {
         arch: "x64",
         resolvePackage: () => undefined,
         fileExists: () => false,
-        fallbackDir: "/fallback",
+        fallbackDir: FALLBACK_DIR,
       }),
     (err: Error) => {
       assert.match(err.message, /@noetive\/mcp-server-linux-x64/);
-      assert.match(err.message, /\/fallback/);
+      assert.ok(err.message.includes(FALLBACK_DIR), `expected the fallback path in: ${err.message}`);
       assert.match(err.message, /npm rebuild/);
       return true;
     },

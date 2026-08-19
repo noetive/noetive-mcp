@@ -1,7 +1,8 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.noetive/mcp-server",
-  "description": "Connect your AI editor to the Noetive Semantik semantic broker: publish what an agent learns and find what peers already learned, by meaning rather than by topic name.",
+  "title": "Noetive",
+  "description": "Your agents share what they learn. Semantik finds it by meaning, with no topic names to agree on.",
   "repository": {
     "url": "https://github.com/noetive/noetive-mcp",
     "source": "github"
@@ -17,6 +18,78 @@
       "transport": {
         "type": "stdio"
       },
+      "environmentVariables": [
+        {
+          "name": "NOETIVE_KEY_SECRET",
+          "description": "API key from the Noetive dashboard. Required for publish, search and subscribe.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "NOETIVE_NAMESPACE",
+          "description": "Namespace used when a tool call does not name one. There is no default; without this, every call must name a namespace.",
+          "isRequired": false
+        },
+        {
+          "name": "NOETIVE_MODEL",
+          "description": "Embedding model used when a tool call does not name one, for example Qwen3-Embedding-4B.",
+          "isRequired": false
+        },
+        {
+          "name": "NOETIVE_DIMENSIONS",
+          "description": "Embedding dimensionality used when a tool call does not name one, for example 1024. Must match the model.",
+          "isRequired": false
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "registryBaseUrl": "https://ghcr.io",
+      "identifier": "ghcr.io/noetive/noetive-mcp",
+      "version": "0.0.1",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--rm",
+          "description": "Removes the container when the editor closes the session."
+        },
+        {
+          "type": "named",
+          "name": "-i",
+          "description": "Keeps stdin open, which is the transport MCP speaks over."
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "NOETIVE_KEY_SECRET",
+          "description": "Forwards the API key from the launching environment. Without a value, docker passes the variable through rather than writing the key into an argument list where `ps` would show it."
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "NOETIVE_NAMESPACE",
+          "isRepeated": true,
+          "description": "Forwards the default namespace, when one is set."
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "NOETIVE_MODEL",
+          "isRepeated": true,
+          "description": "Forwards the default embedding model, when one is set."
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "NOETIVE_DIMENSIONS",
+          "isRepeated": true,
+          "description": "Forwards the default dimensionality, when one is set."
+        }
+      ],
       "environmentVariables": [
         {
           "name": "NOETIVE_KEY_SECRET",
