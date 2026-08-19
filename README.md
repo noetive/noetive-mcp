@@ -61,7 +61,7 @@ make build      # binary into installer/bin, where the npm wrapper looks for it
 make test       # go test -race
 make fuzz       # replay the fuzz corpus
 make lint
-make emit       # regenerate both plugin formats from tools/manifest.yaml
+make emit       # regenerate every generated manifest from tools/manifest.yaml
 make installer  # build and test the npm wrapper
 ```
 

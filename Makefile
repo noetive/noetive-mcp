@@ -65,8 +65,9 @@ bench:
 	go test -run "^$$" -bench=. -benchmem -benchtime=20000x -memprofile=mem.out ./internal/broker/
 	go tool pprof -top -alloc_objects -nodecount=10 mem.out
 
-# Regenerates both plugin formats from tools/manifest.yaml. Never hand-edit
-# packaging/claude-plugin or packaging/kiro-power; CI fails when they differ.
+# Regenerates all three payloads — the Claude plugin, the Kiro Power and this
+# repository's own plugin manifest — from tools/manifest.yaml. Never hand-edit
+# packaging/, .claude-plugin/, skills/ or .mcp.json; CI fails when they differ.
 emit:
 	go run ./packaging/emit
 

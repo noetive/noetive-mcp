@@ -10,7 +10,7 @@ cd installer && npm ci --ignore-scripts && npm test
 
 `make hooks` points `core.hooksPath` at `.githooks`; `make build` and `make test` do it too, so a fresh clone gets the hooks from the first thing it runs. The pre-commit hook is the fast half — formatting, credentials, and the generated-file check — and pre-push runs `go test -race` and the linter. Both name anything they had to skip because a tool was missing.
 
-Node 22 or newer for the installer: `npm test` runs `node --test "dist/test/*.test.js"`, and node expands that glob itself only from 22 onwards.
+Node 22 or newer for the installer: `npm test` runs `node --test "dist/test/*.test.js"`, and node only expands that glob itself from 21 onwards. The published wrapper's own floor is lower — `engines` says `>=20` — because that governs users, not contributors.
 
 ## Things that are load-bearing
 
@@ -41,36 +41,45 @@ Usually a `clients.json` entry and a test fixture, with no new code. See [docs/c
 ```sh
 make test lint emit
 cd installer && npm test
-git status --porcelain   # emit produced no change, and added no file
+git status --porcelain -- packaging/ .claude-plugin/ .mcp.json skills/   # emit changed nothing
 ```
 
-`git status --porcelain` rather than `git diff`: adding a tool emits a *new* skill file, which a diff does not see at all. CI asserts the same thing the same way.
+`git status`, not `git diff`: adding a tool emits a *new* skill file, and a diff does not see one at all. CI asserts the same thing without the pathspec, because its checkout has nothing else in it.
 
 Integration tests hit production and need a key: `NOETIVE_KEY_SECRET=keyu_... integration/run.sh`. They skip without one.
 
 ## Cutting a release
 
 ```sh
-# 1. Bump the version in tools/manifest.yaml, then:
-make emit
-git commit -am "chore: release 1.4.0"
+node scripts/stamp-version.js 1.4.0   # every file that carries a version
+make emit                             # push it into the plugin manifests
+git add -A && git commit -m "chore: release 1.4.0"
 git push
-# 2. Once CI is green:
+# Once CI is green:
 git tag v1.4.0 && git push origin v1.4.0
 ```
 
-The tag drives everything: the binary's `--version`, both npm manifests and
-`server.json` are stamped from it. `tools/manifest.yaml` is the exception — the
-Claude plugin and the Kiro Power are served out of this repository, so their
-version is whatever is committed, and the release refuses a tag that disagrees
-with it. That refusal is the first step of the run, before a GitHub Release
-exists, because a release cannot be unpublished cleanly and an npm version
-cannot be reused at all.
+`git add -A`, not `commit -am`: adding a tool emits a *new* skill file, and `-a`
+does not stage what git has never seen.
+
+The committed tree is what ships, and the tag only has to agree with it. Nine
+files carry the version — `tools/manifest.yaml`, both installer manifests,
+`server.json` and the three generated plugin manifests among them — so the bump
+is one command rather than a checklist. Two guards keep them together: the
+emitter's tests refuse a tree whose version files disagree with each other, and
+the release workflow refuses a tag that disagrees with `tools/manifest.yaml`.
+That refusal is the first step of the run, before a GitHub Release exists,
+because a release cannot be unpublished cleanly and an npm version cannot be
+reused at all.
 
 The pipeline is tag → GitHub Release → npm → a smoke install on three operating
 systems → the MCP registry. Each stage gates the next, so a broken npm publish
-never reaches the registry entry that advertises it. Cut the first release of
-anything risky as a prerelease (`v1.4.0-rc.1`); every stage accepts one.
+never reaches the registry entry that advertises it.
+
+A prerelease tag (`v1.4.0-rc.1`) is carried through the whole pipeline, but
+published where nothing picks it up by default: npm gets the `next` dist-tag
+rather than `latest`, and the GitHub Release is marked as a prerelease. Install
+one explicitly with `npm i -g @noetive/mcp-server@next`.
 
 ## Mutation testing
 
