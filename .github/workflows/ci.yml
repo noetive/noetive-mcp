@@ -182,8 +182,14 @@ jobs:
 
       # Exits non-zero on the first binary it cannot find, so running it is the
       # assertion.
+      #
+      # The committed version rather than a dummy: the script refuses to pin a
+      # wrapper stamped to a different release, so a made-up argument tests a
+      # path the release never takes. Reading it here also means this exercises
+      # the same call the release makes. It rewrites installer/package.json in
+      # this checkout, which nothing downstream reads.
       - name: Platform packages resolve every built binary
-        run: node scripts/build-platform-packages.js 0.0.0
+        run: node scripts/build-platform-packages.js "$(node -p "require('./installer/package.json').version")"
 
   # Both architectures, because the release pushes both and only one of them is
   # the runner's own. The Dockerfile cross-compiles rather than emulating, so

@@ -9,9 +9,13 @@
 // they do it without running an install script — which pnpm v10 blocks by
 // default.
 //
+//     node scripts/stamp-version.js 1.4.0     # first: the version must match
 //     node scripts/build-platform-packages.js 1.4.0
 //
-// Reads GoReleaser's build output from dist/ and writes dist/npm/<name>/.
+// Reads GoReleaser's build output from dist/, writes dist/npm/<name>/, and pins
+// installer/package.json to the packages it just built. The version has to be
+// the one the wrapper is already stamped to, because a wrapper pinned to
+// binaries from a different release is the skew this pinning exists to prevent.
 
 const { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
