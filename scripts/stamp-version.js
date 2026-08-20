@@ -41,7 +41,19 @@ function main() {
   stampInstaller(version);
   stampJson(join(ROOT, "server.json"), (doc) => {
     doc.version = version;
-    for (const pkg of doc.packages ?? []) pkg.version = version;
+    for (const pkg of doc.packages ?? []) {
+      pkg.version = version;
+
+      // An OCI package carries the version twice: once in `version`, and again
+      // as the tag inside `identifier`. The MCP registry rejects an OCI entry
+      // with a registryBaseUrl and wants that canonical reference instead, so
+      // the tag is not optional — and stamping only `version` would leave the
+      // registry advertising this release while pointing at the previous
+      // release's image.
+      if (pkg.registryType === "oci") {
+        pkg.identifier = `${pkg.identifier.split(":")[0]}:${version}`;
+      }
+    }
   });
   console.log(`stamped ${version} — run \`make emit\` to regenerate the plugin manifests`);
 }

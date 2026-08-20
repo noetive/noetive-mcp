@@ -132,6 +132,46 @@ jobs:
           cache: npm
           cache-dependency-path: installer/package-lock.json
 
+      # Trusted publishing needs npm 11.5.1 or later and Node 22.14 or later.
+      # Node 22 satisfies the runtime but still bundles npm 10, which does not
+      # know how to exchange an OIDC token at all — it would fall silently
+      # through to token auth and the publish would look like it simply needed a
+      # secret. Pinned rather than @latest so a bad npm release cannot break a
+      # release of this.
+      - run: npm install -g npm@11.6.2
+
+      # Before anything is built. Without it the job installs, builds, stamps
+      # and packs five 8 MB binaries before npm reports ENEEDAUTH — by which
+      # point the GitHub Release already exists, so a missing repository secret
+      # reads as a release that half-worked.
+      #
+      # whoami rather than a non-empty check: an expired or revoked token is
+      # also a string, and it fails at exactly the same late point.
+      # Two ways to authenticate, and npm prefers the first: it detects an OIDC
+      # environment and only falls back to a token. This checks that at least
+      # one of them is available, because the alternative is discovering it
+      # after the GitHub Release already exists.
+      #
+      # It cannot confirm that a trusted publisher is actually configured for
+      # each package — npm exposes no way to ask — so OIDC being available is as
+      # far as this goes.
+      - name: Check the publish credential
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+            echo "OIDC is available; npm will attempt trusted publishing."
+            exit 0
+          fi
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error title=No way to authenticate to npm::Configure a trusted publisher for each @noetive/mcp-server* package on npmjs.com, or add an npm token with publish rights on the @noetive scope as the NPM_TOKEN repository secret."
+            exit 1
+          fi
+          npm whoami || {
+            echo "::error title=NPM_TOKEN is not valid::npm rejected the token. It is set but expired, revoked, or lacks publish rights on the @noetive scope."
+            exit 1
+          }
+
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: binaries
@@ -156,21 +196,76 @@ jobs:
       - name: Build platform packages
         run: node scripts/build-platform-packages.js "${{ needs.release.outputs.version }}"
 
-      # Platform packages first: publishing the wrapper before the packages it
-      # depends on leaves a window where an install resolves nothing.
+      # --provenance is redundant under trusted publishing, which generates it
+      # anyway, and load-bearing on the token fallback, which does not. Kept so
+      # the two paths produce the same artefact.
+      #
+      # Platform packages first: the wrapper declares them as optionalDependencies,
+      # and npm skips an optional dependency it cannot resolve without erroring.
+      # A wrapper published ahead of them therefore installs cleanly and finds no
+      # binary — and npm will not let that version be replaced.
+      #
+      # Already-published versions are skipped rather than retried: npm versions
+      # are immutable, so a re-run after a partial publish has no other way
+      # forward, and without this the whole job is unrepeatable.
       - name: Publish platform packages
         run: |
+          handled=0
           for dir in dist/npm/*/; do
-            npm publish --provenance --access public --tag "$NPM_TAG" "$dir"
+            name=$(node -p "require('./$dir/package.json').name")
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION is already published; skipping."
+            else
+              npm publish --provenance --access public --tag "$NPM_TAG" "$dir"
+            fi
+            handled=$((handled + 1))
           done
+          if [ "$handled" -ne 5 ]; then
+            echo "::error title=Wrong number of platform packages::Expected 5, found $handled in dist/npm/. The wrapper pins all five, so publishing it now would ship one that cannot resolve on some platform."
+            exit 1
+          fi
         env:
+          VERSION: ${{ needs.release.outputs.version }}
           NPM_TAG: ${{ needs.release.outputs.npm_tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # The gate before the one irreversible step in this job. Publishing the
+      # wrapper is what a user installs; if any platform package is missing when
+      # it goes out, that version is broken on that platform for good.
+      #
+      # Retried because the registry is read-your-writes only eventually: a
+      # package published seconds ago can still 404 from another edge.
+      - name: Every platform package resolves
+        run: |
+          for dir in dist/npm/*/; do
+            name=$(node -p "require('./$dir/package.json').name")
+            found=''
+            for _ in $(seq 1 10); do
+              if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+                found=1
+                break
+              fi
+              sleep 10
+            done
+            if [ -z "$found" ]; then
+              echo "::error title=Platform package missing::$name@$VERSION is not on the registry. Refusing to publish the wrapper, which would install cleanly and then find no binary on that platform."
+              exit 1
+            fi
+            echo "$name@$VERSION resolves."
+          done
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+
       - name: Publish wrapper
-        run: npm publish --provenance --access public --tag "$NPM_TAG"
+        run: |
+          if npm view "@noetive/mcp-server@$VERSION" version >/dev/null 2>&1; then
+            echo "@noetive/mcp-server@$VERSION is already published; skipping."
+            exit 0
+          fi
+          npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: installer
         env:
+          VERSION: ${{ needs.release.outputs.version }}
           NPM_TAG: ${{ needs.release.outputs.npm_tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

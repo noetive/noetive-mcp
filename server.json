@@ -44,8 +44,7 @@
     },
     {
       "registryType": "oci",
-      "registryBaseUrl": "https://ghcr.io",
-      "identifier": "ghcr.io/noetive/noetive-mcp",
+      "identifier": "ghcr.io/noetive/noetive-mcp:0.1.0",
       "version": "0.1.0",
       "runtimeHint": "docker",
       "transport": {

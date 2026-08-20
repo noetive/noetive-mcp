@@ -701,3 +701,48 @@ func readInto(t *testing.T, path string, decode func([]byte, any) error, target 
 		t.Fatalf("could not decode %s: %v", path, err)
 	}
 }
+
+// The MCP registry rejects an OCI package that carries a registryBaseUrl and
+// wants the image tag inside the identifier instead. That puts the version in
+// two places in one entry, so a release can advertise itself while pointing at
+// the previous release's image — and a registry entry cannot be unpublished.
+func TestTheOCIPackageIsShapedTheWayTheRegistryAccepts(t *testing.T) {
+	root, err := repoRoot()
+	if err != nil {
+		t.Fatalf("could not find the module root: %v", err)
+	}
+
+	var server struct {
+		Packages []struct {
+			RegistryType    string `json:"registryType"`
+			RegistryBaseURL string `json:"registryBaseUrl"`
+			Identifier      string `json:"identifier"`
+			Version         string `json:"version"`
+		} `json:"packages"`
+	}
+	readInto(t, filepath.Join(root, "server.json"), json.Unmarshal, &server)
+
+	found := false
+	for _, p := range server.Packages {
+		if p.RegistryType != "oci" {
+			continue
+		}
+		found = true
+
+		if p.RegistryBaseURL != "" {
+			t.Errorf("the oci package declares registryBaseUrl %q; the registry refuses to publish an entry that carries one", p.RegistryBaseURL)
+		}
+
+		tag := p.Identifier[strings.LastIndex(p.Identifier, ":")+1:]
+		if !strings.Contains(p.Identifier, ":") {
+			t.Fatalf("the oci identifier %q carries no tag; the registry wants a canonical reference", p.Identifier)
+		}
+		if tag != p.Version {
+			t.Errorf("the oci identifier points at %s but the entry declares version %s", tag, p.Version)
+		}
+	}
+
+	if !found {
+		t.Fatal("server.json declares no oci package; the container channel would go unlisted")
+	}
+}

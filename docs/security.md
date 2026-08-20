@@ -36,7 +36,7 @@ Releases are built by a GitHub Actions workflow from a tagged commit, with `-tri
 
 - `checksums.txt` is signed with cosign keyless. The signing identity is the workflow itself, recorded in the public transparency log; no private key exists to leak.
 - Build provenance is attested with `actions/attest-build-provenance`, so a consumer can verify which workflow and commit produced a given artifact.
-- npm packages are published with provenance from the same workflow.
+- npm packages are published with provenance from the same workflow, authenticated by trusted publishing: the workflow proves its identity with an OIDC token rather than holding a long-lived npm credential, so there is no publish secret to leak or rotate. A token remains configured as a fallback for the first publish of a package, which has no settings page on which to name a trusted publisher until it exists.
 - The postinstall fallback verifies a downloaded binary against the published `checksums.txt` before making it executable. An asset with no published checksum is refused rather than trusted — treating a missing checksum as acceptable would make the check bypassable by exactly the party who can serve a malicious download.
 
 ## Reporting
