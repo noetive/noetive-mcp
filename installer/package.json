@@ -1,6 +1,6 @@
 {
   "name": "@noetive/mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connect your AI editor to the Noetive Semantik semantic broker over MCP",
   "keywords": [
     "mcp",
@@ -39,14 +39,8 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "test": "npm run build && node --test \"dist/test/*.test.js\"",
-    "postinstall": "node postinstall.js"
-  },
-  "optionalDependencies": {
-    "@noetive/mcp-server-darwin-arm64": "0.1.0",
-    "@noetive/mcp-server-darwin-x64": "0.1.0",
-    "@noetive/mcp-server-linux-arm64": "0.1.0",
-    "@noetive/mcp-server-linux-x64": "0.1.0",
-    "@noetive/mcp-server-win32-x64": "0.1.0"
+    "postinstall": "node postinstall.js",
+    "prepublishOnly": "node -e \"if(!Object.keys(require('./package.json').optionalDependencies||{}).length)throw new Error('optionalDependencies is empty; scripts/build-platform-packages.js writes them and must run before publish, or this wrapper resolves no binary on any platform')\""
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1"

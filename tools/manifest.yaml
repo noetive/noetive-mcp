@@ -26,7 +26,7 @@ author:
 homepage: https://noetive.io/mcp
 repository: https://github.com/noetive/noetive-mcp
 license: ISC
-version: 0.1.0
+version: 0.1.1
 
 # Kiro loads a Power's tools and steering only when one of these appears in the
 # conversation, so the list has to cover how a user actually refers to the thing

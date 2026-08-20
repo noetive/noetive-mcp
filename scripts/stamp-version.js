@@ -73,17 +73,23 @@ function stampManifest(version) {
   writeFileSync(path, after);
 }
 
-// The lockfile mirrors the manifest's version, its engines and its
-// optionalDependency pins. `npm ci` reads the lockfile, so leaving it behind
-// publishes a wrapper resolving the previous release's platform packages.
+// Versions only. The platform pins are deliberately not written here: this runs
+// on the release commit, and a committed pin can only name a version that does
+// not exist yet, which npm records in the lockfile as the placeholder
+// `{"optional": true}`. That placeholder is accepted right up until the version
+// it stands for is published, at which point `npm ci` refuses the lockfile as
+// out of sync — turning every push between one release and the next red, which
+// is what happened after 0.1.0 shipped.
+//
+// scripts/build-platform-packages.js writes the pins instead, immediately after
+// building the packages they name and immediately before publish.
 function stampInstaller(version) {
   stampJson(join(ROOT, "installer", "package.json"), (doc) => {
     doc.version = version;
-    for (const name of Object.keys(doc.optionalDependencies ?? {})) {
-      doc.optionalDependencies[name] = version;
-    }
   });
 
+  // The lockfile carries the version twice and is never published; `npm ci`
+  // reads it, so it has to agree with package.json about which release this is.
   stampJson(join(ROOT, "installer", "package-lock.json"), (doc) => {
     doc.version = version;
     const root = doc.packages?.[""];
@@ -92,9 +98,6 @@ function stampInstaller(version) {
       process.exit(1);
     }
     root.version = version;
-    for (const name of Object.keys(root.optionalDependencies ?? {})) {
-      root.optionalDependencies[name] = version;
-    }
   });
 }
 

@@ -13,7 +13,7 @@
 //
 // Reads GoReleaser's build output from dist/ and writes dist/npm/<name>/.
 
-const { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } = require("node:fs");
+const { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const ROOT = join(__dirname, "..");
@@ -70,6 +70,15 @@ function main() {
     process.exit(1);
   }
 
+  // Before any package is written: this pins the wrapper at the end, and a
+  // wrapper stamped to a different release than the binaries it points at is
+  // the skew the pinning exists to prevent.
+  const wrapper = JSON.parse(readFileSync(join(ROOT, "installer", "package.json"), "utf8")).version;
+  if (wrapper !== version) {
+    console.error(`installer/package.json is at ${wrapper}, not ${version}; run scripts/stamp-version.js first`);
+    process.exit(1);
+  }
+
   for (const target of TARGETS) {
     const source = join(DIST, buildDir(target.build), target.bin);
     // A missing binary is fatal. Skipping it would publish a wrapper whose
@@ -114,6 +123,32 @@ function main() {
 
     console.log(`built ${target.pkg}@${version}`);
   }
+
+  pinWrapperDependencies(version);
 }
 
-main();
+// The wrapper's optionalDependencies are written here, not committed, and this
+// is the only place that knows every package was actually built.
+//
+// A committed pin can only name a version that does not exist yet — these are
+// published by the same release that publishes the wrapper — so npm records the
+// placeholder `{"optional": true}` in the lockfile. That placeholder is accepted
+// right up until the version it stands for is published, at which point
+// `npm ci` refuses the lockfile as out of sync. Committing the pins therefore
+// turns every push between one release and the next red, which is what happened
+// after 0.1.0 shipped.
+//
+// The lockfile is deliberately left alone: it is never published, and `npm ci`
+// has already run by the time this does.
+function pinWrapperDependencies(version) {
+  const path = join(ROOT, "installer", "package.json");
+  const doc = JSON.parse(readFileSync(path, "utf8"));
+
+  doc.optionalDependencies = Object.fromEntries(TARGETS.map((t) => [t.pkg, version]));
+  writeFileSync(path, `${JSON.stringify(doc, null, 2)}\n`);
+  console.log(`pinned the wrapper to ${TARGETS.length} platform packages at ${version}`);
+}
+
+if (require.main === module) {
+  main();
+}

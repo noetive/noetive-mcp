@@ -673,13 +673,7 @@ func TestEveryPublishedManifestDeclaresTheSameVersion(t *testing.T) {
 		"installer/package-lock.json": lock.Version,
 		"server.json":                 server.Version,
 	}
-	for name, version := range pkg.OptionalDependencies {
-		declared["installer/package.json optionalDependencies "+name] = version
-	}
 	declared["installer/package-lock.json root package"] = lock.Packages[""].Version
-	for name, version := range lock.Packages[""].OptionalDependencies {
-		declared["installer/package-lock.json root optionalDependencies "+name] = version
-	}
 	for _, p := range server.Packages {
 		declared["server.json packages "+p.Identifier] = p.Version
 	}
@@ -688,6 +682,22 @@ func TestEveryPublishedManifestDeclaresTheSameVersion(t *testing.T) {
 		if got != want {
 			t.Errorf("%s declares %q but tools/manifest.yaml declares %q", where, got, want)
 		}
+	}
+
+	// The platform pins belong to the published artifact, not to the committed
+	// tree. A pin can only name a version that does not exist yet — the platform
+	// packages ship with this wrapper — so npm records the placeholder
+	// `{"optional": true}` in the lockfile, and `npm ci` rejects that lockfile
+	// from the moment that version is published. Committed pins therefore turn
+	// every push between one release and the next red.
+	// scripts/build-platform-packages.js writes them just before publish.
+	if len(pkg.OptionalDependencies) != 0 {
+		t.Errorf("installer/package.json commits %d optionalDependencies; they are written at publish time, and committing them breaks npm ci once the release goes out",
+			len(pkg.OptionalDependencies))
+	}
+	if len(lock.Packages[""].OptionalDependencies) != 0 {
+		t.Errorf("installer/package-lock.json commits %d root optionalDependencies; regenerate it with `npm install --package-lock-only`",
+			len(lock.Packages[""].OptionalDependencies))
 	}
 }
 
