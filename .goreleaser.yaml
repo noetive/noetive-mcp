@@ -111,6 +111,15 @@ signs:
 changelog:
   use: github
   sort: asc
+
+  # Spelled out because the default is not safe here. GoReleaser's default entry
+  # template attributes each commit to `@handle` when it can resolve one from the
+  # GitHub API and falls back to `Name <email>` when it cannot — so a commit
+  # authored with a personal address publishes that address in the release notes,
+  # which is not something a reader of a changelog needs and not something the
+  # author chose. `with` renders the handle when there is one and nothing at all
+  # otherwise; the email is never a fallback.
+  format: "{{ .SHA }}: {{ .Message }}{{ with .AuthorUsername }} (@{{ . }}){{ end }}"
   # Scoped forms too: dependabot writes `chore(deps): bump ...`, which a bare
   # `^chore:` does not match, and a scope is the normal way to say which part of
   # the tree a docs change touched. The changelog is read by someone deciding
