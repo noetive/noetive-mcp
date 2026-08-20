@@ -21,7 +21,7 @@
       "environmentVariables": [
         {
           "name": "NOETIVE_KEY_SECRET",
-          "description": "API key from the Noetive dashboard. Required for publish, search and subscribe.",
+          "description": "API key from the Noetive dashboard. Every tool reaches Noetive, so every tool needs it. Without it the server still starts and registers its tools, and each one explains what is missing.",
           "isRequired": true,
           "isSecret": true
         },
@@ -92,7 +92,7 @@
       "environmentVariables": [
         {
           "name": "NOETIVE_KEY_SECRET",
-          "description": "API key from the Noetive dashboard. Required for publish, search and subscribe.",
+          "description": "API key from the Noetive dashboard. Every tool reaches Noetive, so every tool needs it. Without it the server still starts and registers its tools, and each one explains what is missing.",
           "isRequired": true,
           "isSecret": true
         },
