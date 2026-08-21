@@ -37,7 +37,7 @@ license: ISC
 # a failure that only ever shows up at the last step of a release. This is the
 # one that is authored; `go run ./packaging/emit` checks the rest against it.
 registry: io.noetive/mcp-server
-version: 0.1.1
+version: 0.1.2
 
 # Kiro loads a Power's tools and steering only when one of these appears in the
 # conversation, so the list has to cover how a user actually refers to the thing

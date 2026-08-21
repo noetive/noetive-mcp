@@ -7,14 +7,14 @@
     "url": "https://github.com/noetive/noetive-mcp",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "websiteUrl": "https://noetive.io/mcp",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@noetive/mcp-server",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "transport": {
         "type": "stdio"
       },
@@ -44,8 +44,8 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/noetive/noetive-mcp:0.1.1",
-      "version": "0.1.1",
+      "identifier": "ghcr.io/noetive/noetive-mcp:0.1.2",
+      "version": "0.1.2",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"
