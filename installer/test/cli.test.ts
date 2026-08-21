@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
@@ -23,18 +23,33 @@ async function capture(argv: string[]): Promise<{ code: number; out: string; err
  * withHome runs body against a scratch home directory containing exactly the
  * given editor markers, so which editors are detected is a property of the test
  * rather than of whatever happens to be installed on the machine running it.
+ *
+ * Both variables, because os.homedir() reads a different one per platform:
+ * USERPROFILE on Windows and HOME everywhere else. Setting only HOME leaves
+ * Windows detecting against the real user profile, where the answer depends on
+ * what the runner happens to have — which passed on two of the three platforms
+ * in the matrix and failed on the third.
  */
 async function withHome<T>(markers: string[], body: () => Promise<T>): Promise<T> {
   const home = mkdtempSync(join(tmpdir(), "noetive-home-"));
   for (const marker of markers) mkdirSync(join(home, marker), { recursive: true });
 
-  const previous = process.env.HOME;
+  const previous = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
   process.env.HOME = home;
+  process.env.USERPROFILE = home;
+
+  // Asserted rather than assumed: if a future platform reads a third variable,
+  // every detection test below starts answering from the real machine and fails
+  // somewhere far from the cause. This names the cause.
+  assert.equal(homedir(), home, "the scratch home did not take effect on this platform");
+
   try {
     return await body();
   } finally {
-    if (previous === undefined) delete process.env.HOME;
-    else process.env.HOME = previous;
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 }
 
