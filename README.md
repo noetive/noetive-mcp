@@ -115,7 +115,8 @@ make hooks      # wire .githooks into this clone; make build and make test do it
 
 make build      # binary into installer/bin, where the npm wrapper looks for it
 make test       # go test -race
-make fuzz       # replay the fuzz corpus
+make fuzz       # replay the fuzz seeds and corpus; deterministic
+make fuzz-live  # search for new inputs, FUZZTIME=30s by default
 make lint
 make emit       # regenerate every generated manifest from tools/manifest.yaml
 make installer  # build and test the npm wrapper

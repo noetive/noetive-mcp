@@ -2,7 +2,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 BINARY  := noetive-mcp
 
-.PHONY: build test fuzz lint mutate bench emit installer docker clean hooks
+.PHONY: build test fuzz fuzz-live lint mutate bench emit installer docker clean hooks
 
 # The hooks are the only part of setup that lives in .git/config instead of the
 # tree, which makes them the only part that can silently not be there. Wired
@@ -31,22 +31,47 @@ test: hooks
 	go clean -testcache
 	go test -race ./...
 
-# Short by design: replays the corpus and the seeds. Long campaigns belong in a
-# scheduled run, not in the loop a developer waits on.
+# Replays the seeds and every input a campaign has already promoted into
+# internal/broker/testdata/fuzz. Deterministic, which is what makes it a gate:
+# the same commit gives the same verdict on every machine and every run.
+#
+# It deliberately does not search. `-fuzz` does, and a search is not a check —
+# it explores random inputs, so the same command legitimately passes now and
+# fails ten minutes later having found something new. As a gate that teaches
+# people to re-run until green; the failure that prompted this split was exactly
+# that, a `context deadline exceeded` at the -fuzztime boundary that four
+# subsequent runs could not reproduce. `make fuzz-live` is the search, named as
+# what it is.
+#
+# The list is captured and checked before running: `go test -list` exits 0 and
+# writes the build error to stderr when the package does not compile, so trusting
+# its output reports a broken package as fuzzing that passed.
+fuzz:
+	@targets=$$(go test -list '^Fuzz' ./internal/broker | grep '^Fuzz') || exit 1; \
+	 test -n "$$targets" || { echo "no fuzz targets found in ./internal/broker" >&2; exit 1; }; \
+	 echo "replaying: $$(echo $$targets | tr '\n' ' ')"; \
+	 go test -run '^Fuzz' -count=1 ./internal/broker
+
+# The search, opt-in and time-boxed. A green run here proves only that nothing
+# turned up inside FUZZTIME, which is why it gates nothing.
+#
+# When it does find something, Go writes the offending input to
+# internal/broker/testdata/fuzz/<Target>/. Commit that file: `make fuzz` replays
+# it from then on, which is how a one-off discovery becomes a permanent
+# regression test. CI runs the same search per push, and a weekly campaign at a
+# far longer budget.
 #
 # Enumerated rather than listed: a hand-written list silently stops covering the
 # target somebody added last week, and a new tool argument is exactly when
 # fuzzing earns its keep. CI enumerates the same way.
-#
-# The list is captured and checked before the loop: `go test -list` exits 0 and
-# writes the build error to stderr when the package does not compile, so looping
-# straight over its output reports a broken package as fuzzing that passed.
-fuzz:
+FUZZTIME ?= 30s
+
+fuzz-live:
 	@targets=$$(go test -list '^Fuzz' ./internal/broker | grep '^Fuzz') || exit 1; \
 	 test -n "$$targets" || { echo "no fuzz targets found in ./internal/broker" >&2; exit 1; }; \
 	 for target in $$targets; do \
-	   echo "fuzz: $$target"; \
-	   go test -run "^$$" -fuzz "^$$target$$" -fuzztime 30s ./internal/broker || exit 1; \
+	   echo "fuzz: $$target ($(FUZZTIME))"; \
+	   go test -run "^$$" -fuzz "^$$target$$" -fuzztime $(FUZZTIME) ./internal/broker || exit 1; \
 	 done
 
 lint:
