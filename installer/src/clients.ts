@@ -3,7 +3,7 @@ import { isAbsolute, join, normalize, resolve } from "node:path";
 
 import manifest from "./manifest/clients.json";
 
-export type ConfigFormat = "json" | "jsonc";
+export type ConfigFormat = "json" | "jsonc" | "toml";
 export type InstallStrategy = "file-merge" | "cli-delegate";
 
 export interface ScopeSpec {
@@ -15,6 +15,24 @@ export interface CliSpec {
   readonly command: string;
   readonly args: readonly string[];
   readonly removeArgs?: readonly string[];
+  /**
+   * The flag this CLI takes one `NAME=value` pair after. Each entry the server
+   * needs is spliced into `args` at the `${env}` placeholder.
+   */
+  readonly envArg?: string;
+  /**
+   * Args that exit zero when the server is already configured. Used only where
+   * there is no file to read; the exit status is the whole answer, so no CLI
+   * output is parsed.
+   */
+  readonly statusArgs?: readonly string[];
+  /**
+   * What to do when the command is not on PATH. "file-merge" edits the config
+   * directly, which is right for an editor whose file we can write. "none"
+   * refuses, which is the only safe answer for an editor whose config is not
+   * the JSON this installer knows how to merge.
+   */
+  readonly fallback?: "file-merge" | "none";
 }
 
 export interface ClientSpec {

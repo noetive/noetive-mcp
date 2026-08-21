@@ -31,7 +31,8 @@ const USAGE = `noetive-mcp — connect your AI editor to Noetive Semantik
 
 Usage:
   npx ${PACKAGE_NAME}                          serve over stdio (what editors run)
-  npx ${PACKAGE_NAME} init --client <id>       configure an editor
+  npx ${PACKAGE_NAME} init                     configure the editor found here
+  npx ${PACKAGE_NAME} init --client <id>       configure a named editor
   npx ${PACKAGE_NAME} remove --client <id>     remove the ${SERVER_NAME} entry
   npx ${PACKAGE_NAME} list                     show every editor and its status
   npx ${PACKAGE_NAME} doctor                   diagnose an installation
@@ -40,7 +41,7 @@ Clients:
 ${clientIds().map((id) => `  ${id.padEnd(14)}${clientSpec(id).displayName}`).join("\n")}
 
 Options:
-  --client <id>        editor to configure
+  --client <id>        editor to configure; detected when omitted
   --scope <name>       where to write; defaults per editor (see list)
   --api-key <key>      write the key into the config instead of referencing ${API_KEY_ENV}
   --namespace <name>   default namespace for tool calls that do not name one
@@ -96,7 +97,7 @@ export async function run(argv: readonly string[], out: Writer = console.log, er
 }
 
 async function install(options: Options, out: Writer): Promise<number> {
-  const clientId = requireString(options, "client");
+  const clientId = stringFlag(options, "client") ?? detectClient(process.cwd());
   const spec = clientSpec(clientId);
   const scope = stringFlag(options, "scope") ?? defaultScope(spec);
   const workspace = process.cwd();
@@ -145,9 +146,28 @@ async function install(options: Options, out: Writer): Promise<number> {
   }
 
   out(`Configured ${spec.displayName} at ${outcome.target}.`);
-  out(describeKeyHandling(spec, entryOptions));
+  out(describeKeyHandling(spec, clientId, entryOptions));
   out(spec.restartHint);
+  out(`Check it worked: npx ${PACKAGE_NAME} doctor`);
   return 0;
+}
+
+/**
+ * detectClient picks the editor to configure when --client was omitted.
+ *
+ * Requiring the flag means a first-time user has to learn our client ids before
+ * they can install anything, and the ids are ours, not theirs. One detected
+ * editor is an unambiguous answer. Several is not, and choosing for them would
+ * write into an editor they did not mean — so it lists them and stops.
+ */
+function detectClient(workspace: string): string {
+  const found = clientIds().filter((id) => isInstalled(clientSpec(id), workspace, existsSync));
+
+  if (found.length === 1) return found[0]!;
+  if (found.length === 0) {
+    throw new Error(`no supported editor was detected here; name one with --client: ${clientIds().join(", ")}`);
+  }
+  throw new Error(`several editors are installed; name one with --client: ${found.join(", ")}`);
 }
 
 async function uninstall(options: Options, out: Writer): Promise<number> {

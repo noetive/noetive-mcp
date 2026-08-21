@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { ClaudeCodeAdapter, RunResult, Runner, systemRunner } from "../src/adapters/claudeCode";
+import { CliDelegateAdapter, RunResult, Runner, systemRunner } from "../src/adapters/cliDelegate";
 import { MergeAdapter } from "../src/adapters/generic";
 import { ClientSpec, SERVER_NAME } from "../src/clients";
 import { run } from "../src/cli";
@@ -150,7 +150,7 @@ test("a client with no CLI configured falls back to the file", async () => {
   const withoutCli: ClientSpec = { ...cursor, install: "cli-delegate" };
 
   const workspace = scratch();
-  const outcome = await new ClaudeCodeAdapter(runner).install(request(withoutCli, workspace));
+  const outcome = await new CliDelegateAdapter(runner).install(request(withoutCli, workspace));
 
   assert.equal(outcome.target, join(workspace, "mcp.json"), "the file fallback was not used");
 });
@@ -175,7 +175,7 @@ test("a rejected CLI removal reports no change", async () => {
     },
   };
 
-  const outcome = await new ClaudeCodeAdapter(runner).remove(request(claudeCode, scratch()));
+  const outcome = await new CliDelegateAdapter(runner).remove(request(claudeCode, scratch()));
 
   assert.equal(outcome.changed, false, "a rejected removal was reported as a change");
 });

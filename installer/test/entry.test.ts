@@ -48,7 +48,7 @@ test("no placeholder is written for an editor that cannot expand it", () => {
 // Writing a key into a dotfile is a decision with consequences the user should
 // hear about once, at the moment they make it.
 test("embedding a key warns about version control", () => {
-  assert.match(describeKeyHandling(clientSpec("cursor"), { apiKey: "keyu_x" }), /version control/);
+  assert.match(describeKeyHandling(clientSpec("cursor"), "cursor", { apiKey: "keyu_x" }), /version control/);
 });
 
 // Routing defaults are the operator naming a namespace, which is different from
@@ -66,13 +66,45 @@ test("configured targeting is written into the environment block", () => {
 // Every advertised editor must be present and answerable, since each has a
 // published install command or button pointing at it.
 test("every advertised client is in the manifest with a usable default scope", () => {
-  for (const id of ["cursor", "claude-code", "copilot", "kiro"]) {
+  for (const id of clientIds()) {
     const spec = clientSpec(id);
     const scope = defaultScope(spec);
     assert.ok(spec.scopes[scope], `${id} has no scope named ${scope}`);
     assert.ok(spec.restartHint.length > 0, `${id} has no restart hint`);
   }
-  assert.deepEqual(clientIds().sort(), ["claude-code", "copilot", "cursor", "kiro"]);
+
+  // Pinned rather than derived: the set is what noetive.io/mcp publishes a
+  // command for, so gaining or losing one is a change to a public promise and
+  // should not pass quietly.
+  assert.deepEqual(clientIds().sort(), ["antigravity", "claude-code", "codex", "copilot", "cursor", "kiro"]);
+});
+
+// The file merger writes JSON. Pointing it at an editor whose config is TOML
+// would replace a working config.toml with a JSON document that editor cannot
+// read — and the merger's own read-back check would pass, because the JSON it
+// wrote is exactly the JSON it looks for. The schema states this; nothing runs
+// the schema, so it is asserted here.
+test("an editor whose config is not JSON is never handed to the file merger", () => {
+  for (const id of clientIds()) {
+    const spec = clientSpec(id);
+    if (spec.configFormat === "json" || spec.configFormat === "jsonc") continue;
+
+    assert.equal(spec.install, "cli-delegate", `${id} keeps ${spec.configFormat} but is configured by file merge`);
+    assert.equal(spec.cli?.fallback, "none", `${id} keeps ${spec.configFormat} but falls back to the JSON merger`);
+  }
+});
+
+// A CLI-configured editor that never passes the key configures a server that
+// cannot authenticate, and says nothing about it. The placeholder is what
+// carries the environment into the command, so its absence is a silent one.
+test("every delegated install has a way to pass the environment", () => {
+  for (const id of clientIds()) {
+    const spec = clientSpec(id);
+    if (spec.install !== "cli-delegate") continue;
+
+    assert.ok(spec.cli?.envArg, `${id} delegates to a CLI with no envArg, so the API key can never reach it`);
+    assert.ok(spec.cli?.args.includes("${env}"), `${id} declares an envArg but no \${env} placeholder to splice it into`);
+  }
 });
 
 // Copilot is the one editor that does not use mcpServers. Getting this wrong

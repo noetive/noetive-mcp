@@ -65,6 +65,32 @@ tools:
   - name: noetive_health
     summary: Check that the editor can reach Noetive and its key is accepted
 
+# One-click installs, for the editors that accept them.
+#
+# Every one of these carries the same server entry, and every one encodes it
+# differently: the name is a URL parameter here where it is the object key in a
+# config file, and Cursor wants base64 where the others want percent-encoding.
+# Hand-written they go stale silently — a deeplink that decodes to a stale entry
+# still opens the editor and still reports success — so they are generated from
+# the same `server:` block above and emitted into packaging/install.json for the
+# README and noetive.io/mcp to read.
+#
+# ${config} is the server entry percent-encoded, ${configBase64} the same JSON
+# in base64, and ${serverKey} the key the entry is written under. entryExtras
+# mirrors installer/src/manifest/clients.json: VS Code needs an explicit type.
+deeplinks:
+  - client: cursor
+    label: Add to Cursor
+    url: cursor://anysphere.cursor-deeplink/mcp/install?name=${serverKey}&config=${configBase64}
+  - client: copilot
+    label: Add to VS Code
+    entryExtras:
+      type: stdio
+    url: https://vscode.dev/redirect/mcp/install?name=${serverKey}&config=${config}
+  - client: kiro
+    label: Add to Kiro
+    url: https://kiro.dev/launch/mcp/add?name=${serverKey}&config=${config}
+
 skills:
   - name: doctor
     description: Run diagnostics on the noetive-mcp installation

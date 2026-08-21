@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -754,5 +757,259 @@ func TestTheOCIPackageIsShapedTheWayTheRegistryAccepts(t *testing.T) {
 
 	if !found {
 		t.Fatal("server.json declares no oci package; the container channel would go unlisted")
+	}
+}
+
+// clientsSource stages the installer's client manifest under root, so the
+// install-link emitter has the same two inputs it has in the repository.
+func clientsSource(t *testing.T, root, body string) {
+	t.Helper()
+
+	dir := filepath.Join(root, "installer", "src", "manifest")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("could not create %s: %v", dir, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "clients.json"), []byte(body), 0o644); err != nil {
+		t.Fatalf("could not write clients.json: %v", err)
+	}
+}
+
+const twoClients = `{
+  "serverName": "noetive",
+  "packageName": "@noetive/mcp-server",
+  "clients": {
+    "cursor": {"displayName": "Cursor"},
+    "codex": {"displayName": "Codex"}
+  }
+}`
+
+// withDeeplinks appends a deeplinks block, inserted before skills so YAML does
+// not fold it into whichever list happens to be last.
+func withDeeplinks(t *testing.T, block string) string {
+	t.Helper()
+
+	manifest := strings.Replace(completeManifest(t), "skills:\n", block+"skills:\n", 1)
+	if !strings.Contains(manifest, "deeplinks:") {
+		t.Fatal("the manifest template changed shape; the skills marker no longer matches")
+	}
+	return manifest
+}
+
+// installTargets reads the emitted clients list.
+func installTargets(t *testing.T, root string) map[string]map[string]any {
+	t.Helper()
+
+	emitted := readJSON(t, filepath.Join(root, "packaging", "install.json"))
+	raw, ok := emitted["clients"].([]any)
+	if !ok {
+		t.Fatalf("expected a clients array, got %v", emitted["clients"])
+	}
+
+	byID := map[string]map[string]any{}
+	for _, entry := range raw {
+		target, ok := entry.(map[string]any)
+		if !ok {
+			t.Fatalf("expected an object per client, got %v", entry)
+		}
+		byID[target["id"].(string)] = target
+	}
+	return byID
+}
+
+// The install commands are published in three places — this repository's
+// README, noetive.io/mcp and the plugin listings — and have already drifted
+// apart once. Emitting them from the client manifest means an editor cannot be
+// supported without being advertised, or advertised without being supported.
+func TestEveryClientGetsAPublishedInstallCommand(t *testing.T) {
+	model, err := load(authoringSource(t, completeManifest(t)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	root := t.TempDir()
+	clientsSource(t, root, twoClients)
+	if err := emitInstall(model, root); err != nil {
+		t.Fatalf("emitInstall: %v", err)
+	}
+
+	targets := installTargets(t, root)
+	if len(targets) != 2 {
+		t.Fatalf("expected one target per client, got %v", targets)
+	}
+	for id, want := range map[string]string{
+		"cursor": "npx @noetive/mcp-server init --client cursor",
+		"codex":  "npx @noetive/mcp-server init --client codex",
+	} {
+		if got := targets[id]["command"]; got != want {
+			t.Errorf("%s command = %v, want %q", id, got, want)
+		}
+	}
+}
+
+// A deeplink that decodes to a stale entry still opens the editor and still
+// reports success, so nothing about using one tells you it is wrong. Deriving
+// the payload from the same server block the plugin formats embed is what keeps
+// the button and the command installing the same thing.
+func TestADeeplinkCarriesTheSameServerEntryTheFormatsEmbed(t *testing.T) {
+	model, err := load(authoringSource(t, withDeeplinks(t, `deeplinks:
+  - client: cursor
+    label: Add to Cursor
+    url: cursor://install?name=${serverKey}&config=${configBase64}
+  - client: codex
+    label: Add to Codex
+    url: https://example.test/install?name=${serverKey}&config=${config}
+`)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	root := t.TempDir()
+	clientsSource(t, root, twoClients)
+	if err := emitInstall(model, root); err != nil {
+		t.Fatalf("emitInstall: %v", err)
+	}
+
+	// Whatever the plugin formats install under the server key is what the
+	// button has to install too.
+	servers := model.serverEntry()["mcpServers"].(map[string]any)
+	want := servers[model.ServerKey].(map[string]any)
+
+	targets := installTargets(t, root)
+	for id, decode := range map[string]func(string) ([]byte, error){
+		"cursor": base64.StdEncoding.DecodeString,
+		"codex":  func(s string) ([]byte, error) { return []byte(s), nil },
+	} {
+		link, _ := targets[id]["deeplink"].(string)
+		parsed, err := url.Parse(link)
+		if err != nil {
+			t.Fatalf("%s deeplink does not parse: %v", id, err)
+		}
+		if got := parsed.Query().Get("name"); got != model.ServerKey {
+			t.Errorf("%s deeplink names %q, want %q", id, got, model.ServerKey)
+		}
+
+		raw, err := decode(parsed.Query().Get("config"))
+		if err != nil {
+			t.Fatalf("%s config does not decode: %v", id, err)
+		}
+		var entry map[string]any
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			t.Fatalf("%s config is not JSON: %v", id, err)
+		}
+
+		if fmt.Sprint(entry["command"]) != fmt.Sprint(want["command"]) {
+			t.Errorf("%s deeplink runs %v, the formats run %v", id, entry["command"], want["command"])
+		}
+		if fmt.Sprint(entry["args"]) != fmt.Sprint(want["args"]) {
+			t.Errorf("%s deeplink args %v, the formats use %v", id, entry["args"], want["args"])
+		}
+	}
+}
+
+// VS Code refuses an entry with no type. The extras are per-editor for exactly
+// this reason, and dropping them yields a link that installs a server the
+// editor then ignores.
+func TestDeeplinkExtrasReachTheEncodedEntry(t *testing.T) {
+	model, err := load(authoringSource(t, withDeeplinks(t, `deeplinks:
+  - client: cursor
+    label: Add to Cursor
+    entryExtras:
+      type: stdio
+    url: https://example.test/install?name=${serverKey}&config=${config}
+`)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	root := t.TempDir()
+	clientsSource(t, root, twoClients)
+	if err := emitInstall(model, root); err != nil {
+		t.Fatalf("emitInstall: %v", err)
+	}
+
+	link, _ := installTargets(t, root)["cursor"]["deeplink"].(string)
+	parsed, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("deeplink does not parse: %v", err)
+	}
+
+	var entry map[string]any
+	if err := json.Unmarshal([]byte(parsed.Query().Get("config")), &entry); err != nil {
+		t.Fatalf("config is not JSON: %v", err)
+	}
+	if entry["type"] != "stdio" {
+		t.Errorf("the entry extras never reached the link: %v", entry)
+	}
+}
+
+// A deeplink for an editor the installer does not support publishes a button
+// that configures an editor `init` then cannot repair or remove.
+func TestADeeplinkForAnUnsupportedClientIsRefused(t *testing.T) {
+	model, err := load(authoringSource(t, withDeeplinks(t, `deeplinks:
+  - client: windsurf
+    label: Add to Windsurf
+    url: https://example.test/install?config=${config}
+`)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	root := t.TempDir()
+	clientsSource(t, root, twoClients)
+	if err := emitInstall(model, root); err == nil {
+		t.Error("expected a deeplink for an unsupported client to be refused")
+	}
+}
+
+// An unreplaced placeholder produces a link that opens the editor and installs
+// nothing, which reads as the editor's fault rather than ours.
+func TestAnUnknownPlaceholderIsRefused(t *testing.T) {
+	model, err := load(authoringSource(t, withDeeplinks(t, `deeplinks:
+  - client: cursor
+    label: Add to Cursor
+    url: https://example.test/install?config=${configXml}
+`)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	root := t.TempDir()
+	clientsSource(t, root, twoClients)
+	if err := emitInstall(model, root); err == nil {
+		t.Error("expected an unknown placeholder to be refused")
+	}
+}
+
+// The two manifests describe one server. Disagreeing gives a user who installs
+// the plugin and also runs `init` two entries and two server processes, each
+// half-configured.
+func TestTheTwoManifestsMustAgreeOnTheServer(t *testing.T) {
+	model, err := load(authoringSource(t, completeManifest(t)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	scenarios := map[string]string{
+		"a different key": `{
+  "serverName": "semantik",
+  "packageName": "@noetive/mcp-server",
+  "clients": {"cursor": {"displayName": "Cursor"}}
+}`,
+		"a different package": `{
+  "serverName": "noetive",
+  "packageName": "@noetive/semantik-mcp",
+  "clients": {"cursor": {"displayName": "Cursor"}}
+}`,
+	}
+
+	for name, body := range scenarios {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			clientsSource(t, root, body)
+
+			if err := emitInstall(model, root); err == nil {
+				t.Error("expected the disagreement to stop the run")
+			}
+		})
 	}
 }

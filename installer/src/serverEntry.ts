@@ -37,15 +37,18 @@ export interface ServerEntry {
 }
 
 /**
- * buildEntry produces the server entry written under the `noetive` key.
+ * entryEnv is the environment the server needs, whatever shape the client
+ * stores it in.
  *
- * `npx -y` is deliberate: an editor spawns the server with no terminal
- * attached, and without -y npx blocks on an install prompt nobody can answer,
- * which surfaces to the user as an editor that never connects.
+ * It is separate from buildEntry because two install strategies need the same
+ * answer: an editor configured by file merge gets these as an `env` object,
+ * and an editor configured through its own CLI gets them as repeated `--env`
+ * flags. Deriving them twice is how the CLI path came to silently drop the API
+ * key and the targeting triple while reporting that it had written them.
  *
- *     buildEntry(cursorSpec, { targeting: { namespace: "global" } })
+ *     entryEnv(cursorSpec, { targeting: { namespace: "global" } })
  */
-export function buildEntry(spec: ClientSpec, options: EntryOptions = {}): ServerEntry {
+export function entryEnv(spec: ClientSpec, options: EntryOptions = {}): Record<string, string> {
   const env: Record<string, string> = {};
 
   if (options.apiKey) {
@@ -61,6 +64,21 @@ export function buildEntry(spec: ClientSpec, options: EntryOptions = {}): Server
   if (targeting.model) env[TARGETING_ENV.model] = targeting.model;
   if (targeting.dimensions) env[TARGETING_ENV.dimensions] = targeting.dimensions;
 
+  return env;
+}
+
+/**
+ * buildEntry produces the server entry written under the `noetive` key.
+ *
+ * `npx -y` is deliberate: an editor spawns the server with no terminal
+ * attached, and without -y npx blocks on an install prompt nobody can answer,
+ * which surfaces to the user as an editor that never connects.
+ *
+ *     buildEntry(cursorSpec, { targeting: { namespace: "global" } })
+ */
+export function buildEntry(spec: ClientSpec, options: EntryOptions = {}): ServerEntry {
+  const env = entryEnv(spec, options);
+
   const entry: Record<string, unknown> = {
     command: "npx",
     args: ["-y", PACKAGE_NAME],
@@ -74,8 +92,12 @@ export function buildEntry(spec: ClientSpec, options: EntryOptions = {}): Server
 /**
  * describeKeyHandling explains where the API key will come from, so the user
  * finds out at install time rather than when the first tool call fails.
+ *
+ * clientId is passed rather than derived from the spec because the advice ends
+ * in a command the user is meant to run, and naming the wrong editor in it
+ * sends them to configure something they were not installing.
  */
-export function describeKeyHandling(spec: ClientSpec, options: EntryOptions = {}): string {
+export function describeKeyHandling(spec: ClientSpec, clientId: string, options: EntryOptions = {}): string {
   if (options.apiKey) {
     return `Your API key was written into the config file. Keep that file out of version control.`;
   }
@@ -101,6 +123,6 @@ export function describeKeyHandling(spec: ClientSpec, options: EntryOptions = {}
     getKey,
     `${spec.displayName} does not expand \${${API_KEY_ENV}} in its config, so no key was written. Re-run with the key to finish:`,
     ``,
-    `    npx ${PACKAGE_NAME} init --client kiro --api-key keyu_...`,
+    `    npx ${PACKAGE_NAME} init --client ${clientId} --api-key keyu_...`,
   ].join("\n");
 }

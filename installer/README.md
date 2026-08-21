@@ -9,12 +9,17 @@ Connect your AI editor to [Noetive Semantik](https://noetive.io) over the Model 
 ```bash
 npx @noetive/mcp-server init --client cursor
 npx @noetive/mcp-server init --client claude-code
+npx @noetive/mcp-server init --client codex
 npx @noetive/mcp-server init --client copilot
+npx @noetive/mcp-server init --client antigravity
+npx @noetive/mcp-server init --client kiro
 ```
 
-Kiro users can add it from the button on [noetive.io/mcp](https://noetive.io/mcp).
+Run it with no `--client` and it configures the editor it finds. One-click buttons for Cursor, VS Code and Kiro are on [noetive.io/mcp](https://noetive.io/mcp).
 
 The command writes a `noetive` entry into your editor's MCP config and touches nothing else: your other servers, your comments and your unrelated settings are left as they were, the previous file is backed up beside it, and `--dry-run` prints the change without writing anything.
+
+Registry-aware clients can install by name instead: `io.noetive/mcp-server`.
 
 ## Authenticate
 
@@ -26,11 +31,19 @@ By default `init` writes a reference to that variable rather than the key itself
 export NOETIVE_KEY_SECRET=keyu_...
 ```
 
-Kiro does not expand variables in its config, so pass the key directly there:
+Kiro and Codex do not expand variables in their configs, so pass the key directly there:
 
 ```bash
 npx @noetive/mcp-server init --client kiro --api-key keyu_...
 ```
+
+## Check it worked
+
+```bash
+npx @noetive/mcp-server doctor
+```
+
+It reports the binary, the key and each editor's config separately, so an editor showing no Noetive tools points at one of them rather than at all three. To check Semantik itself, ask your agent to call `noetive_health`.
 
 ## Tools
 

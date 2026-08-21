@@ -26,8 +26,10 @@
       "detect": ["~/.claude"],
       "cli": {
         "command": "claude",
-        "args": ["mcp", "add", "--scope", "${scope}", "--transport", "stdio", "${serverName}", "--", "npx", "-y", "${packageName}"],
-        "removeArgs": ["mcp", "remove", "--scope", "${scope}", "${serverName}"]
+        "args": ["mcp", "add", "--scope", "${scope}", "--transport", "stdio", "${env}", "${serverName}", "--", "npx", "-y", "${packageName}"],
+        "removeArgs": ["mcp", "remove", "--scope", "${scope}", "${serverName}"],
+        "envArg": "--env",
+        "fallback": "file-merge"
       },
       "scopes": {
         "local": { "path": "~/.claude.json", "default": true },
@@ -36,9 +38,52 @@
       },
       "restartHint": "Start a new Claude Code session.",
       "quirks": [
-        "The CLI needs -- before the stdio command.",
+        "The CLI needs -- before the stdio command, so --env has to be spliced in ahead of the server name.",
         "Project-scope servers require approval on first use.",
         "User-scope entries are keyed per project inside ~/.claude.json, which is why the CLI is preferred over editing the file."
+      ]
+    },
+    "codex": {
+      "displayName": "Codex",
+      "configFormat": "toml",
+      "topLevelKey": "mcp_servers",
+      "install": "cli-delegate",
+      "expandsVariables": false,
+      "detect": ["~/.codex"],
+      "cli": {
+        "command": "codex",
+        "args": ["mcp", "add", "${serverName}", "${env}", "--", "npx", "-y", "${packageName}"],
+        "removeArgs": ["mcp", "remove", "${serverName}"],
+        "statusArgs": ["mcp", "get", "${serverName}"],
+        "envArg": "--env",
+        "fallback": "none"
+      },
+      "scopes": {
+        "user": { "path": "~/.codex/config.toml", "default": true }
+      },
+      "restartHint": "Start a new Codex session.",
+      "quirks": [
+        "Config is TOML — a [mcp_servers.<name>] table — so there is no file fallback: without the codex command on PATH the install refuses rather than writing JSON into config.toml.",
+        "Status is the exit code of `codex mcp get`, because there is no file this installer can parse.",
+        "Does not expand ${VAR}: --env writes literal values, so the API key has to be passed with --api-key or inherited from the environment Codex was launched in."
+      ]
+    },
+    "antigravity": {
+      "displayName": "Antigravity",
+      "configFormat": "json",
+      "topLevelKey": "mcpServers",
+      "install": "file-merge",
+      "expandsVariables": true,
+      "detect": ["~/.gemini"],
+      "entryExtras": { "disabled": false },
+      "scopes": {
+        "global": { "path": "~/.gemini/config/mcp_config.json", "default": true },
+        "workspace": { "path": "${workspace}/.agents/mcp_config.json" }
+      },
+      "restartHint": "Restart Antigravity to pick up the new server.",
+      "quirks": [
+        "Uses serverUrl rather than url for remote servers. Irrelevant here — this server is stdio — but it is why an Antigravity config cannot be copied from a Cursor one.",
+        "The IDE, the agy CLI and the SDK share one config file."
       ]
     },
     "copilot": {

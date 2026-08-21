@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
 import { parse, run } from "../src/cli";
+import { clientIds } from "../src/clients";
 
 /** capture runs a command and collects everything it wrote. */
 async function capture(argv: string[]): Promise<{ code: number; out: string; err: string }> {
@@ -16,6 +17,25 @@ async function capture(argv: string[]): Promise<{ code: number; out: string; err
     (line) => err.push(line),
   );
   return { code, out: out.join("\n"), err: err.join("\n") };
+}
+
+/**
+ * withHome runs body against a scratch home directory containing exactly the
+ * given editor markers, so which editors are detected is a property of the test
+ * rather than of whatever happens to be installed on the machine running it.
+ */
+async function withHome<T>(markers: string[], body: () => Promise<T>): Promise<T> {
+  const home = mkdtempSync(join(tmpdir(), "noetive-home-"));
+  for (const marker of markers) mkdirSync(join(home, marker), { recursive: true });
+
+  const previous = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    return await body();
+  } finally {
+    if (previous === undefined) delete process.env.HOME;
+    else process.env.HOME = previous;
+  }
 }
 
 // Both spellings are in circulation — the published commands use one, and
@@ -73,18 +93,38 @@ test("help names each command and each supported editor", async () => {
   for (const command of ["init", "remove", "list", "doctor"]) {
     assert.match(out, new RegExp(command));
   }
-  for (const client of ["cursor", "claude-code", "copilot", "kiro"]) {
+  for (const client of clientIds()) {
     assert.match(out, new RegExp(client));
   }
 });
 
-// Without a client there is nothing to configure. Failing with the list is more
-// useful than failing with a rejection.
-test("init without a client is refused and lists the choices", async () => {
-  const { code, err } = await capture(["init"]);
+// Requiring --client means a first-time user has to learn our client ids
+// before they can install anything, and the ids are ours rather than theirs.
+// One installed editor is an unambiguous answer, so it is the answer.
+test("init without a client configures the one editor that is installed", async () => {
+  const { code, out } = await withHome([".cursor"], () => capture(["init", "--dry-run"]));
+
+  assert.equal(code, 0);
+  assert.match(out, /\.cursor/, `detection did not pick Cursor: ${out}`);
+});
+
+// Choosing between several would write into an editor the user did not name.
+// Listing what was found is the useful failure; picking one is a silent one.
+test("init without a client lists the choices when several are installed", async () => {
+  const { code, err } = await withHome([".cursor", ".kiro"], () => capture(["init"]));
 
   assert.equal(code, 1);
-  assert.match(err, /--client is required/);
+  assert.match(err, /cursor/);
+  assert.match(err, /kiro/);
+});
+
+// Nothing detected is not the same as nothing supported, so the message has to
+// name the ids rather than only report the absence.
+test("init without a client names the supported ids when none is installed", async () => {
+  const { code, err } = await withHome([], () => capture(["init"]));
+
+  assert.equal(code, 1);
+  assert.match(err, /no supported editor/);
   assert.match(err, /cursor/);
 });
 
@@ -104,7 +144,7 @@ test("list reports every supported editor", async () => {
   const { code, out } = await capture(["list"]);
 
   assert.equal(code, 0);
-  for (const name of ["Cursor", "Claude Code", "GitHub Copilot", "Kiro"]) {
+  for (const name of ["Cursor", "Claude Code", "Codex", "GitHub Copilot", "Antigravity", "Kiro"]) {
     assert.match(out, new RegExp(name));
   }
 });
@@ -117,7 +157,7 @@ test("--json emits parseable output and nothing else", async () => {
   assert.equal(code, 0);
   const parsed = JSON.parse(out);
   assert.ok(Array.isArray(parsed), "expected an array of editors");
-  assert.equal(parsed.length, 4);
+  assert.equal(parsed.length, clientIds().length);
 });
 
 // doctor's exit code is what a script keys off. A missing binary is a genuine

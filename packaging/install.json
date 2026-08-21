@@ -1,0 +1,65 @@
+{
+  "clients": [
+    {
+      "id": "antigravity",
+      "displayName": "Antigravity",
+      "command": "npx @noetive/mcp-server init --client antigravity"
+    },
+    {
+      "id": "claude-code",
+      "displayName": "Claude Code",
+      "command": "npx @noetive/mcp-server init --client claude-code"
+    },
+    {
+      "id": "codex",
+      "displayName": "Codex",
+      "command": "npx @noetive/mcp-server init --client codex"
+    },
+    {
+      "id": "copilot",
+      "displayName": "GitHub Copilot (VS Code)",
+      "command": "npx @noetive/mcp-server init --client copilot",
+      "label": "Add to VS Code",
+      "deeplink": "https://vscode.dev/redirect/mcp/install?name=noetive&config=%7B%22args%22%3A%5B%22-y%22%2C%22%40noetive%2Fmcp-server%22%5D%2C%22command%22%3A%22npx%22%2C%22env%22%3A%7B%22NOETIVE_KEY_SECRET%22%3A%22%24%7BNOETIVE_KEY_SECRET%7D%22%7D%2C%22type%22%3A%22stdio%22%7D"
+    },
+    {
+      "id": "cursor",
+      "displayName": "Cursor",
+      "command": "npx @noetive/mcp-server init --client cursor",
+      "label": "Add to Cursor",
+      "deeplink": "cursor://anysphere.cursor-deeplink/mcp/install?name=noetive&config=eyJhcmdzIjpbIi15IiwiQG5vZXRpdmUvbWNwLXNlcnZlciJdLCJjb21tYW5kIjoibnB4IiwiZW52Ijp7Ik5PRVRJVkVfS0VZX1NFQ1JFVCI6IiR7Tk9FVElWRV9LRVlfU0VDUkVUfSJ9fQ=="
+    },
+    {
+      "id": "kiro",
+      "displayName": "Kiro",
+      "command": "npx @noetive/mcp-server init --client kiro",
+      "label": "Add to Kiro",
+      "deeplink": "https://kiro.dev/launch/mcp/add?name=noetive&config=%7B%22args%22%3A%5B%22-y%22%2C%22%40noetive%2Fmcp-server%22%5D%2C%22command%22%3A%22npx%22%2C%22env%22%3A%7B%22NOETIVE_KEY_SECRET%22%3A%22%24%7BNOETIVE_KEY_SECRET%7D%22%7D%7D"
+    }
+  ],
+  "packageName": "@noetive/mcp-server",
+  "registry": "io.noetive/mcp-server",
+  "serverKey": "noetive",
+  "tools": [
+    {
+      "name": "noetive_publish",
+      "summary": "Publish a message so peers can find it by meaning"
+    },
+    {
+      "name": "noetive_search",
+      "summary": "Search a namespace with SemQL and read the matching messages"
+    },
+    {
+      "name": "noetive_subscribe",
+      "summary": "Watch a namespace for live matches for a bounded window"
+    },
+    {
+      "name": "noetive_lint",
+      "summary": "Check a SemQL query before running it"
+    },
+    {
+      "name": "noetive_health",
+      "summary": "Check that the editor can reach Noetive and its key is accepted"
+    }
+  ]
+}

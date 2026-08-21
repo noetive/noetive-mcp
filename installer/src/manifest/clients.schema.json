@@ -25,11 +25,21 @@
       "type": "object",
       "required": ["displayName", "configFormat", "topLevelKey", "install", "expandsVariables", "scopes", "restartHint"],
       "additionalProperties": false,
+      "allOf": [
+        {
+          "description": "The file merger writes JSON. An editor whose config is TOML has to be configured through its own CLI, or the merge would replace a working config with a JSON document the editor cannot read.",
+          "if": { "properties": { "configFormat": { "const": "toml" } }, "required": ["configFormat"] },
+          "then": {
+            "properties": { "install": { "const": "cli-delegate" }, "cli": { "properties": { "fallback": { "const": "none" } }, "required": ["fallback"] } },
+            "required": ["cli"]
+          }
+        }
+      ],
       "properties": {
         "displayName": { "type": "string" },
         "configFormat": {
-          "enum": ["json", "jsonc"],
-          "description": "jsonc files are edited with a comment-preserving parser so a user's notes survive the write."
+          "enum": ["json", "jsonc", "toml"],
+          "description": "jsonc files are edited with a comment-preserving parser so a user's notes survive the write. toml is documentation only: no file of that format is ever written here."
         },
         "topLevelKey": {
           "type": "string",
@@ -58,8 +68,26 @@
           "additionalProperties": false,
           "properties": {
             "command": { "type": "string" },
-            "args": { "type": "array", "items": { "type": "string" } },
-            "removeArgs": { "type": "array", "items": { "type": "string" } }
+            "args": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "${scope}, ${serverName} and ${packageName} are substituted. ${env} is spliced, expanding to one envArg flag and one NAME=value pair per entry the server needs, and to nothing when there are none."
+            },
+            "removeArgs": { "type": "array", "items": { "type": "string" } },
+            "statusArgs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Args that exit zero when the server is already configured. Only consulted where fallback is none, since everywhere else the file is the better answer."
+            },
+            "envArg": {
+              "type": "string",
+              "description": "The flag this CLI takes one NAME=value pair after. Without it, ${env} expands to nothing and the server is configured with no environment."
+            },
+            "fallback": {
+              "enum": ["file-merge", "none"],
+              "default": "file-merge",
+              "description": "What to do when the command is not on PATH. none is required for any editor whose config this installer cannot write itself."
+            }
           }
         },
         "scopes": {

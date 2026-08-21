@@ -47,8 +47,8 @@ test("a home-scoped install from the home directory is allowed", () => {
 // exists or where to get one. Without it they get an editor that connects
 // successfully and then refuses every call.
 test("install guidance names where to get a key", () => {
-  for (const id of ["cursor", "kiro"]) {
-    assert.match(describeKeyHandling(clientSpec(id)), new RegExp(DASHBOARD_URL.replace(/\//g, "\\/")));
+  for (const id of clientIds()) {
+    assert.match(describeKeyHandling(clientSpec(id), id), new RegExp(DASHBOARD_URL.replace(/\//g, "\\/")));
   }
 });
 
@@ -56,7 +56,7 @@ test("install guidance names where to get a key", () => {
 // to export the variable without saying that is advice that quietly fails on
 // the most common setup.
 test("guidance warns that desktop launchers do not see shell exports", () => {
-  const guidance = describeKeyHandling(clientSpec("cursor"));
+  const guidance = describeKeyHandling(clientSpec("cursor"), "cursor");
 
   assert.match(guidance, new RegExp(API_KEY_ENV));
   assert.match(guidance, /desktop/i);
@@ -65,10 +65,19 @@ test("guidance warns that desktop launchers do not see shell exports", () => {
 // Kiro cannot expand the placeholder at all, so its guidance has to be the
 // command that actually works rather than an export that never takes effect.
 test("guidance for an editor that cannot expand variables gives the working command", () => {
-  const guidance = describeKeyHandling(clientSpec("kiro"));
+  const guidance = describeKeyHandling(clientSpec("kiro"), "kiro");
 
   assert.match(guidance, /--api-key/);
   assert.doesNotMatch(guidance, /export NOETIVE_KEY_SECRET=/);
+});
+
+// That guidance ends in a command the user is meant to run. Naming a fixed
+// editor in it sends a Codex user to configure Kiro — an editor they may not
+// have — while their own install stays keyless and every tool call fails.
+test("guidance names the editor being configured, not a fixed one", () => {
+  for (const id of clientIds().filter((c) => !clientSpec(c).expandsVariables)) {
+    assert.match(describeKeyHandling(clientSpec(id), id), new RegExp(`--client ${id}\\b`));
+  }
 });
 
 // An editor can be configured per-project rather than globally, and which entry
