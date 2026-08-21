@@ -213,7 +213,7 @@ jobs:
           handled=0
           for dir in dist/npm/*/; do
             name=$(node -p "require('./$dir/package.json').name")
-            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+            if npm view "$name@$VERSION" version --prefer-online >/dev/null 2>&1; then
               echo "$name@$VERSION is already published; skipping."
             else
               npm publish --provenance --access public --tag "$NPM_TAG" "$dir"
@@ -241,7 +241,7 @@ jobs:
             name=$(node -p "require('./$dir/package.json').name")
             found=''
             for _ in $(seq 1 10); do
-              if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              if npm view "$name@$VERSION" version --prefer-online >/dev/null 2>&1; then
                 found=1
                 break
               fi
@@ -258,7 +258,7 @@ jobs:
 
       - name: Publish wrapper
         run: |
-          if npm view "@noetive/mcp-server@$VERSION" version >/dev/null 2>&1; then
+          if npm view "@noetive/mcp-server@$VERSION" version --prefer-online >/dev/null 2>&1; then
             echo "@noetive/mcp-server@$VERSION is already published; skipping."
             exit 0
           fi
@@ -369,28 +369,55 @@ jobs:
       # the wrapper resolved it. With scripts enabled the fallback papers over a
       # missing package until a user hits it.
       #
-      # The version check is inside the retry, not after it. npm treats
-      # optionalDependencies as best-effort: a platform package that has not
-      # reached this edge yet leaves `npm install` exiting 0 with no binary, so
-      # retrying the install alone would succeed on the first attempt and then
-      # fail the assertion permanently. Retrying the whole thing is what makes
-      # this a propagation wait rather than a coin toss.
+      # --prefer-online on every registry read is what makes retrying mean
+      # anything. npm caches the packument under ~/.npm/_cacache and, within its
+      # freshness window, answers from that copy without revalidating. A lookup
+      # made seconds after publish can therefore cache a document that does not
+      # list the new version yet, and every later attempt re-reads that same
+      # stale document from disk — the registry is fine and the host never asks
+      # it again. 0.1.1 published at 22:15:12; smoke first asked at 22:15:20 and
+      # all ten attempts over the next 2.4 minutes reported ETARGET for a
+      # version the registry already had.
+      #
+      # Two waits, because the two failure modes need different evidence.
       - name: The published package installs and reports the released version
         shell: bash
         env:
           VERSION: ${{ needs.release.outputs.version }}
         run: |
-          for _ in $(seq 1 10); do
-            if npm install -g "@noetive/mcp-server@${VERSION}" --ignore-scripts &&
+          # First: does this host's edge serve the wrapper at all? Asked
+          # separately so "not propagated yet" is never reported as a broken
+          # binary, which is what the old single loop did.
+          for _ in $(seq 1 20); do
+            if npm view "@noetive/mcp-server@${VERSION}" version --prefer-online >/dev/null 2>&1; then
+              served=1
+              break
+            fi
+            echo "registry has not served ${VERSION} to this host yet; retrying" >&2
+            sleep 15
+          done
+          if [ -z "${served:-}" ]; then
+            echo "::error title=Wrapper never propagated::@noetive/mcp-server@${VERSION} did not resolve on this host within five minutes of publish, with cache revalidation forced." >&2
+            exit 1
+          fi
+
+          # Then: install and assert together, still retried. npm treats
+          # optionalDependencies as best-effort, so a platform package that has
+          # not reached this edge yet leaves `npm install` exiting 0 with no
+          # binary. Splitting these would let the install succeed once and then
+          # fail the assertion permanently.
+          for _ in $(seq 1 20); do
+            if npm install -g "@noetive/mcp-server@${VERSION}" --ignore-scripts --prefer-online &&
               got=$(noetive-mcp --version 2>&1) &&
               [ "$got" = "$VERSION" ]; then
               echo "noetive-mcp --version reports ${got}"
               exit 0
             fi
-            echo "not ready yet (last saw '${got:-no binary}'); retrying" >&2
+            echo "wrapper resolves but no working binary yet (last saw '${got:-nothing}'); retrying" >&2
+            got=''
             sleep 15
           done
-          echo "@noetive/mcp-server@${VERSION} never resolved a working binary on this host" >&2
+          echo "::error title=No working binary::@noetive/mcp-server@${VERSION} resolved but never produced a runnable binary on this host." >&2
           exit 1
 
   # Last, because the registry validates every package server.json points at:
