@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -46,6 +47,14 @@ func main() {
 	// The manifest documents a tool surface and the server registers one. If
 	// they disagree, the generated docs promise something no editor can call.
 	if err := model.agreesWithServer(); err != nil {
+		log.Fatal(err)
+	}
+
+	// The registry name is repeated across packaging, docs, the image and both
+	// workflows. The MCP registry validates every one of them and refuses the
+	// publish on any disagreement — at the last step of a release, after the
+	// GitHub Release, npm and the image have all already gone out.
+	if err := model.registryNameIsConsistent(root); err != nil {
 		log.Fatal(err)
 	}
 
@@ -81,6 +90,7 @@ type authoring struct {
 	prompts map[string]string
 
 	Name        string     `yaml:"name"`
+	Registry    string     `yaml:"registry"`
 	ServerKey   string     `yaml:"serverKey"`
 	DisplayName string     `yaml:"displayName"`
 	Description string     `yaml:"description"`
@@ -135,6 +145,11 @@ func load(dir string) (authoring, error) {
 	if model.ServerKey == "" {
 		return authoring{}, fmt.Errorf("manifest.yaml must set serverKey; it is the key users see in their editor config")
 	}
+	// Empty would make every consistency check below compare against "" and
+	// pass, which is the one way this could quietly stop protecting anything.
+	if model.Registry == "" {
+		return authoring{}, fmt.Errorf("manifest.yaml must set registry; it is the name the MCP registry publishes this server under")
+	}
 
 	model.prompts = map[string]string{}
 	for _, doc := range append(append([]document{}, model.Skills...), model.Steering...) {
@@ -166,6 +181,79 @@ func (a authoring) agreesWithServer() error {
 		if documented[i] != registered[i] {
 			return fmt.Errorf("manifest documents %v but the server registers %v", documented, registered)
 		}
+	}
+	return nil
+}
+
+// registryClaim is one file's copy of the registry name and how to read it out.
+//
+// A pattern rather than a substring search: substring answers "is the right
+// name in here somewhere", which stays true after a rename leaves the old name
+// behind as well. Extracting every occurrence and comparing each one catches
+// the half-finished rename, which is the shape this drift actually takes.
+type registryClaim struct {
+	pattern *regexp.Regexp
+	path    string
+	what    string
+}
+
+// registryClaims lists every file that repeats the registry name.
+//
+// The two JSON files are read as JSON rather than matched: server.json nests a
+// `name` key under every environment variable, so a pattern loose enough to
+// find the top-level one finds those too.
+func registryClaims() []registryClaim {
+	return []registryClaim{
+		{path: "README.md", what: "the mcp-name marker the registry reads to verify ownership", pattern: regexp.MustCompile(`<!--\s*mcp-name:\s*(\S+)\s*-->`)},
+		{path: filepath.Join("installer", "README.md"), what: "the mcp-name marker the registry reads to verify ownership", pattern: regexp.MustCompile(`<!--\s*mcp-name:\s*(\S+)\s*-->`)},
+		{path: "Dockerfile", what: "the OCI label the registry matches against server.json", pattern: regexp.MustCompile(`io\.modelcontextprotocol\.server\.name="([^"]+)"`)},
+		{path: filepath.Join(".github", "workflows", "ci.yml"), what: "the image annotation", pattern: regexp.MustCompile(`io\.modelcontextprotocol\.server\.name=(\S+)`)},
+		{path: filepath.Join(".github", "workflows", "release.yml"), what: "the image annotation", pattern: regexp.MustCompile(`io\.modelcontextprotocol\.server\.name=(\S+)`)},
+	}
+}
+
+// registryNameIsConsistent checks every copy of the registry name against the
+// manifest's.
+func (a authoring) registryNameIsConsistent(root string) error {
+	if err := a.jsonNameMatches(filepath.Join(root, "server.json"), "name", "the name the registry publishes"); err != nil {
+		return err
+	}
+	if err := a.jsonNameMatches(filepath.Join(root, "installer", "package.json"), "mcpName", "the npm wrapper's registry claim"); err != nil {
+		return err
+	}
+
+	for _, claim := range registryClaims() {
+		raw, err := os.ReadFile(filepath.Join(root, claim.path))
+		if err != nil {
+			return err
+		}
+
+		found := claim.pattern.FindAllStringSubmatch(string(raw), -1)
+		if len(found) == 0 {
+			return fmt.Errorf("%s no longer carries %s; the registry needs it to match %q", claim.path, claim.what, a.Registry)
+		}
+		for _, match := range found {
+			if match[1] != a.Registry {
+				return fmt.Errorf("%s declares %q as %s, but the manifest says %q", claim.path, match[1], claim.what, a.Registry)
+			}
+		}
+	}
+	return nil
+}
+
+// jsonNameMatches checks one string field of a JSON document.
+func (a authoring) jsonNameMatches(path, field, what string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if doc[field] != a.Registry {
+		return fmt.Errorf("%s sets %s to %v as %s, but the manifest says %q", filepath.Base(path), field, doc[field], what, a.Registry)
 	}
 	return nil
 }
@@ -388,7 +476,7 @@ func emitInstall(a authoring, root string) error {
 	return writeJSON(filepath.Join(root, "packaging", "install.json"), map[string]any{
 		"serverKey":   a.ServerKey,
 		"packageName": clients.PackageName,
-		"registry":    "io.noetive/mcp-server",
+		"registry":    a.Registry,
 		"tools":       a.Tools,
 		"clients":     targets,
 	})

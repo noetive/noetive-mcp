@@ -26,6 +26,17 @@ author:
 homepage: https://noetive.io/mcp
 repository: https://github.com/noetive/noetive-mcp
 license: ISC
+
+# How registry-aware clients ask for this server by name, in the reverse-DNS
+# form of a domain we control.
+#
+# Repeated in eight other places that all have to agree — server.json, the npm
+# wrapper's mcpName, the mcp-name marker in both READMEs, the OCI label in the
+# Dockerfile, and the image annotation in both workflows. The MCP registry
+# validates the lot and refuses the publish when any of them disagrees, which is
+# a failure that only ever shows up at the last step of a release. This is the
+# one that is authored; `go run ./packaging/emit` checks the rest against it.
+registry: io.noetive/mcp-server
 version: 0.1.1
 
 # Kiro loads a Power's tools and steering only when one of these appears in the

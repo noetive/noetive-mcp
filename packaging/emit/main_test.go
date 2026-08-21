@@ -51,6 +51,7 @@ func completeManifest(t *testing.T) string {
 
 	return `name: noetive-mcp
 serverKey: noetive
+registry: io.noetive/mcp-server
 displayName: Noetive
 description: Connect your AI agent to the Noetive Semantik semantic broker
 author:
@@ -1011,5 +1012,149 @@ func TestTheTwoManifestsMustAgreeOnTheServer(t *testing.T) {
 				t.Error("expected the disagreement to stop the run")
 			}
 		})
+	}
+}
+
+// registryTree stages a repository whose every copy of the registry name
+// agrees, so each test can move exactly one of them and nothing else.
+func registryTree(t *testing.T, name string) string {
+	t.Helper()
+
+	root := t.TempDir()
+	files := map[string]string{
+		"README.md":                     "# noetive-mcp\n\n<!-- mcp-name: " + name + " -->\n",
+		"Dockerfile":                    "FROM scratch\nLABEL io.modelcontextprotocol.server.name=\"" + name + "\"\n",
+		".github/workflows/ci.yml":      "jobs:\n  oci:\n    annotations: |\n      index:io.modelcontextprotocol.server.name=" + name + "\n",
+		".github/workflows/release.yml": "jobs:\n  oci:\n    annotations: |\n      index:io.modelcontextprotocol.server.name=" + name + "\n",
+		"server.json":                   `{"name": "` + name + `", "version": "9.9.9"}`,
+		"installer/README.md":           "# @noetive/mcp-server\n\n<!-- mcp-name: " + name + " -->\n",
+		"installer/package.json":        `{"name": "@noetive/mcp-server", "mcpName": "` + name + `"}`,
+	}
+	for path, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("could not create %s: %v", filepath.Dir(full), err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("could not write %s: %v", path, err)
+		}
+	}
+	return root
+}
+
+// The registry name is authored once and repeated in seven other places. The
+// MCP registry validates all of them and refuses the publish on any
+// disagreement — at the last step of a release, after the GitHub Release, npm
+// and the image have already gone out and cannot be taken back.
+func TestEveryCopyOfTheRegistryNameIsChecked(t *testing.T) {
+	const name = "io.noetive/mcp-server"
+
+	model, err := load(authoringSource(t, completeManifest(t)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+	model.Registry = name
+
+	root := registryTree(t, name)
+	if err := model.registryNameIsConsistent(root); err != nil {
+		t.Fatalf("a tree that agrees was rejected: %v", err)
+	}
+
+	// Every file, one at a time: a check that covers six of seven is a check
+	// that lets the seventh fail a release.
+	for _, path := range []string{
+		"README.md", "Dockerfile", ".github/workflows/ci.yml", ".github/workflows/release.yml",
+		"server.json", "installer/README.md", "installer/package.json",
+	} {
+		t.Run(path, func(t *testing.T) {
+			drifted := registryTree(t, name)
+			full := filepath.Join(drifted, filepath.FromSlash(path))
+
+			body, err := os.ReadFile(full)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			renamed := strings.ReplaceAll(string(body), name, "io.noetive/semantik-mcp")
+			if renamed == string(body) {
+				t.Fatalf("%s never carried the name, so this case proves nothing", path)
+			}
+			if err := os.WriteFile(full, []byte(renamed), 0o644); err != nil {
+				t.Fatalf("write %s: %v", path, err)
+			}
+
+			err = model.registryNameIsConsistent(drifted)
+			if err == nil {
+				t.Fatalf("a rename left in %s was not caught", path)
+			}
+			if !strings.Contains(err.Error(), filepath.Base(path)) {
+				t.Errorf("the error does not name the offending file: %v", err)
+			}
+		})
+	}
+}
+
+// A file that stops carrying the name at all is the other half of the rename:
+// deleting the marker is as breaking as changing it, and passes any check that
+// only compares the occurrences it happens to find.
+func TestARegistryNameThatDisappearsIsCaught(t *testing.T) {
+	const name = "io.noetive/mcp-server"
+
+	model, err := load(authoringSource(t, completeManifest(t)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+	model.Registry = name
+
+	root := registryTree(t, name)
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# noetive-mcp\n"), 0o644); err != nil {
+		t.Fatalf("write README.md: %v", err)
+	}
+
+	if err := model.registryNameIsConsistent(root); err == nil {
+		t.Error("a README with no mcp-name marker was accepted")
+	}
+}
+
+// An empty registry would make every comparison above compare against "" and
+// pass, which is the one way this check could quietly stop protecting anything.
+func TestAManifestWithNoRegistryIsRefused(t *testing.T) {
+	manifest := strings.ReplaceAll(completeManifest(t), "serverKey: noetive\n", "serverKey: noetive\nregistry: \"\"\n")
+
+	if _, err := load(authoringSource(t, manifest)); err == nil {
+		t.Error("a manifest with an empty registry was accepted")
+	}
+}
+
+// A rename that updates one occurrence and leaves another behind is the shape
+// this drift actually takes, and it is invisible to any check that stops at the
+// first match: the file still contains the right name, just not only the right
+// name.
+func TestARenameThatMissesOneOccurrenceIsCaught(t *testing.T) {
+	const name = "io.noetive/mcp-server"
+
+	model, err := load(authoringSource(t, completeManifest(t)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+	model.Registry = name
+
+	root := registryTree(t, name)
+	workflow := filepath.Join(root, ".github", "workflows", "ci.yml")
+
+	// Two annotations, the first correct and the second stale — a check that
+	// reads only the first sees nothing wrong.
+	body := "jobs:\n  oci:\n    annotations: |\n" +
+		"      index:io.modelcontextprotocol.server.name=" + name + "\n" +
+		"      index:io.modelcontextprotocol.server.name=io.noetive/semantik-mcp\n"
+	if err := os.WriteFile(workflow, []byte(body), 0o644); err != nil {
+		t.Fatalf("write ci.yml: %v", err)
+	}
+
+	err = model.registryNameIsConsistent(root)
+	if err == nil {
+		t.Fatal("a stale second occurrence was not caught")
+	}
+	if !strings.Contains(err.Error(), "semantik-mcp") {
+		t.Errorf("the error does not name the stale value: %v", err)
 	}
 }
