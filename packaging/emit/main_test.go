@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/noetive/noetive-mcp/internal/mcpserver"
+	"github.com/noetive/noetive-mcp/internal/targeting"
 )
 
 // authoringSource writes a minimal but complete authoring tree and returns its
@@ -342,6 +343,246 @@ func TestSkillBodiesReachTheEmittedFiles(t *testing.T) {
 	}
 }
 
+// withReferencedSkill adds a skill that loads reference files, which is how the
+// long material stays out of the body that every load pays for.
+func withReferencedSkill(t *testing.T, dir string) string {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Join(dir, "prompts", "semql"), 0o755); err != nil {
+		t.Fatalf("could not create the reference directory: %v", err)
+	}
+	for name, body := range map[string]string{
+		"semql.md":          "body of semql.md",
+		"semql/grammar.md":  "body of grammar.md",
+		"semql/patterns.md": "body of patterns.md",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "prompts", name), []byte(body), 0o644); err != nil {
+			t.Fatalf("could not write %s: %v", name, err)
+		}
+	}
+
+	return `
+  - name: semql
+    description: "Write, review and debug SemQL: the query language"
+    source: semql.md
+    references:
+      - semql/grammar.md
+      - semql/patterns.md
+`
+}
+
+// A skill's references have to land beside it as references/<file>, because
+// that is the path the skill body tells its reader to open. Emitting the body
+// without them produces a skill that instructs its reader to read a file that
+// is not there.
+func TestSkillReferencesAreEmittedBesideTheSkill(t *testing.T) {
+	dir := authoringSource(t, completeManifest(t))
+	manifest := readFile(t, filepath.Join(dir, "manifest.yaml"))
+	extra := withReferencedSkill(t, dir)
+
+	manifest = strings.Replace(manifest, "steering:\n", extra+"steering:\n", 1)
+	if err := os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("could not rewrite the manifest: %v", err)
+	}
+
+	model, err := load(dir)
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	root := t.TempDir()
+	if err := emitClaudePlugin(model, root); err != nil {
+		t.Fatalf("emitClaudePlugin: %v", err)
+	}
+
+	skills := filepath.Join(root, "packaging", "claude-plugin", "skills", "semql")
+	if got := readFile(t, filepath.Join(skills, "SKILL.md")); !strings.Contains(got, "body of semql.md") {
+		t.Errorf("expected the skill body, got: %s", got)
+	}
+
+	// Flattened to a basename. The manifest groups prompt files by skill, but
+	// the skill body reads its own references as references/<file>.
+	for name, want := range map[string]string{
+		"grammar.md":  "body of grammar.md",
+		"patterns.md": "body of patterns.md",
+	} {
+		got := readFile(t, filepath.Join(skills, "references", name))
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in references/%s, got: %s", want, name, got)
+		}
+	}
+}
+
+// A reference the manifest names but nobody wrote is fatal, for the same reason
+// a missing body is: the skill installs cleanly and then tells its reader to
+// open a file that does not exist.
+func TestAMissingReferenceStopsTheBuild(t *testing.T) {
+	dir := authoringSource(t, completeManifest(t))
+	manifest := readFile(t, filepath.Join(dir, "manifest.yaml"))
+
+	manifest = strings.Replace(manifest, "steering:\n", `
+  - name: semql
+    description: Write SemQL
+    source: doctor.md
+    references:
+      - semql/nobody-wrote-this.md
+`+"steering:\n", 1)
+	if err := os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("could not rewrite the manifest: %v", err)
+	}
+
+	if _, err := load(dir); err == nil {
+		t.Fatal("expected a missing reference to stop the build")
+	}
+}
+
+// The description is a sentence written to make a skill trigger, and the
+// sentences that do that are long and full of punctuation. Interpolated raw
+// after "description:", the first colon ends the value and the host reads a
+// skill with no description, which silently stops it triggering at all.
+func TestASkillDescriptionSurvivesPunctuationThatWouldBreakYAML(t *testing.T) {
+	hostile := `Write SemQL: the query language, including "quoted" anchors, #hashes and a trailing colon:`
+
+	rendered, err := frontmatter(document{Name: "semql", Description: hostile})
+	if err != nil {
+		t.Fatalf("frontmatter returned error: %v", err)
+	}
+
+	body, ok := strings.CutPrefix(rendered, "---\n")
+	if !ok {
+		t.Fatalf("expected a frontmatter fence, got: %s", rendered)
+	}
+	body, _, ok = strings.Cut(body, "---\n")
+	if !ok {
+		t.Fatalf("expected a closing fence, got: %s", rendered)
+	}
+
+	var parsed struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+	}
+	if err := yaml.Unmarshal([]byte(body), &parsed); err != nil {
+		t.Fatalf("the emitted frontmatter is not valid YAML: %v\n%s", err, rendered)
+	}
+	if parsed.Description != hostile {
+		t.Errorf("expected the description to survive intact\n want: %s\n  got: %s", hostile, parsed.Description)
+	}
+	if parsed.Name != "semql" {
+		t.Errorf("expected the name to survive, got %q", parsed.Name)
+	}
+}
+
+// Skills are addressed by name, so a renamed or deleted one leaves its old
+// directory behind. A stale SKILL.md is worse than a missing one: it still
+// loads, still triggers, and still teaches whatever it said before someone
+// decided it was wrong.
+func TestARemovedSkillDoesNotLingerAtTheRepositoryRoot(t *testing.T) {
+	model, err := load(authoringSource(t, completeManifest(t)))
+	if err != nil {
+		t.Fatalf("load returned error: %v", err)
+	}
+
+	root := t.TempDir()
+	stale := filepath.Join(root, "skills", "retired", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatalf("could not stage a stale skill: %v", err)
+	}
+	if err := os.WriteFile(stale, []byte("advice nobody stands behind any more"), 0o644); err != nil {
+		t.Fatalf("could not stage a stale skill: %v", err)
+	}
+
+	if err := emitRepositoryPlugin(model, root); err != nil {
+		t.Fatalf("emitRepositoryPlugin: %v", err)
+	}
+
+	assertMissing(t, stale)
+	assertExists(t, filepath.Join(root, "skills", "doctor", "SKILL.md"))
+	// The npm wrapper installs from its own copy, which npm cannot pack from
+	// above the package root.
+	assertExists(t, filepath.Join(root, "installer", "skills", "doctor", "SKILL.md"))
+}
+
+// server.json is what a registry-aware client reads to know what to set, and it
+// describes the environment three times over. A variable the server reads but
+// server.json omits ships invisible: nothing offers to configure it.
+func TestServerJSONMustDocumentEveryVariableTheServerReads(t *testing.T) {
+	root := t.TempDir()
+
+	write := func(doc map[string]any) {
+		t.Helper()
+		raw, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatalf("could not marshal server.json: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "server.json"), raw, 0o644); err != nil {
+			t.Fatalf("could not write server.json: %v", err)
+		}
+	}
+
+	named := func(names ...string) []map[string]any {
+		out := make([]map[string]any, 0, len(names))
+		for _, n := range names {
+			out = append(out, map[string]any{"name": n})
+		}
+		return out
+	}
+	forwarded := func(names ...string) []map[string]any {
+		out := []map[string]any{{"type": "named", "name": "--rm"}}
+		for _, n := range names {
+			out = append(out, map[string]any{"type": "named", "name": "-e", "value": n})
+		}
+		return out
+	}
+
+	every := append([]string{mcpserver.APIKeyEnv}, targeting.EnvNames()...)
+
+	// The real shape: an npm package that inherits its environment and an
+	// image that has to be told to forward each one.
+	write(map[string]any{"packages": []map[string]any{
+		{"environmentVariables": named(every...)},
+		{"environmentVariables": named(every...), "runtimeArguments": forwarded(every...)},
+	}})
+	if err := documentedEnvironmentIsComplete(root); err != nil {
+		t.Fatalf("expected a complete server.json to pass, got: %v", err)
+	}
+
+	// One variable short in the npm block.
+	write(map[string]any{"packages": []map[string]any{
+		{"environmentVariables": named(every[:len(every)-1]...)},
+	}})
+	if err := documentedEnvironmentIsComplete(root); err == nil {
+		t.Error("expected an undocumented variable to be refused")
+	}
+
+	// Documented but never forwarded, so the image silently ignores it.
+	write(map[string]any{"packages": []map[string]any{
+		{"environmentVariables": named(every...), "runtimeArguments": forwarded(every[:len(every)-1]...)},
+	}})
+	if err := documentedEnvironmentIsComplete(root); err == nil {
+		t.Error("expected a variable that is documented but not forwarded to be refused")
+	}
+
+	// A variable server.json invents sends users to configure nothing.
+	write(map[string]any{"packages": []map[string]any{
+		{"environmentVariables": named(append(append([]string{}, every...), "NOETIVE_INVENTED")...)},
+	}})
+	if err := documentedEnvironmentIsComplete(root); err == nil {
+		t.Error("expected a variable the server does not read to be refused")
+	}
+}
+
+// The shipped server.json is the one that matters; the check above only proves
+// the checker works.
+func TestTheShippedServerJSONDocumentsEveryVariable(t *testing.T) {
+	root, err := repoRoot()
+	if err != nil {
+		t.Fatalf("repoRoot: %v", err)
+	}
+	if err := documentedEnvironmentIsComplete(root); err != nil {
+		t.Error(err)
+	}
+}
+
 func serverEntryOf(t *testing.T, path, name string) map[string]any {
 	t.Helper()
 
@@ -593,8 +834,9 @@ func TestAFailureWritingSkillsStopsTheRun(t *testing.T) {
 	}
 
 	root := t.TempDir()
-	// A regular file where the skills directory belongs.
-	if err := os.WriteFile(filepath.Join(root, "skills"), []byte("not a directory"), 0o644); err != nil {
+	// A regular file where the installer directory belongs, so the copy of the
+	// skills that npm packs cannot be created.
+	if err := os.WriteFile(filepath.Join(root, "installer"), []byte("not a directory"), 0o644); err != nil {
 		t.Fatalf("could not stage the blocker: %v", err)
 	}
 

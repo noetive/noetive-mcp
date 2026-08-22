@@ -52,7 +52,7 @@ func BenchmarkSearch(b *testing.B) {
 				}
 			}
 
-			_, handler := broker.SearchTool(&stubBroker{searchResp: semantik.SearchResponse{Results: results}}, complete)
+			_, handler := broker.SearchTool(&stubBroker{searchResp: semantik.SearchResponse{Results: results}}, configured)
 			run(b, handler, benchRequest(map[string]any{
 				"query": `MATCH DISTANCE("payment reconciliation") WITHIN 0.4 LIMIT 50`,
 			}))
@@ -63,7 +63,7 @@ func BenchmarkSearch(b *testing.B) {
 func BenchmarkPublish(b *testing.B) {
 	_, handler := broker.PublishTool(&stubBroker{
 		publishResp: semantik.PublishResponse{MessageID: "msg_01hz", Epoch: 7, Seq: 42},
-	}, complete)
+	}, configured)
 
 	run(b, handler, benchRequest(map[string]any{
 		"text":            "the gateway returns 202 before the write lands",
@@ -76,7 +76,7 @@ func BenchmarkPublish(b *testing.B) {
 // The targeting triple is resolved on every publish, search and subscribe, so
 // its cost is paid by every call regardless of what the tool then does.
 func BenchmarkTargetingResolution(b *testing.B) {
-	_, handler := broker.SearchTool(&stubBroker{}, complete)
+	_, handler := broker.SearchTool(&stubBroker{}, configured)
 
 	b.Run("from configuration", func(b *testing.B) {
 		run(b, handler, benchRequest(map[string]any{"query": "MATCH"}))
@@ -100,7 +100,7 @@ func BenchmarkErrorShaping(b *testing.B) {
 		Message:    "subscription setup did not complete within the budget",
 		RequestID:  "req_01hz2k3m4n5p6q7r8s9t0v1w2x",
 		HTTPStatus: 503,
-	}}, complete)
+	}}, configured)
 
 	run(b, handler, benchRequest(map[string]any{"query": "MATCH"}))
 }

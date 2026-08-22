@@ -15,7 +15,7 @@ func TestCallValuesWinOverConfiguration(t *testing.T) {
 	call := targeting.Target{Namespace: "incidents", Model: "model-a", Dimensions: 512}
 	fallback := targeting.Target{Namespace: "global", Model: "model-b", Dimensions: 1024}
 
-	got, err := targeting.Resolve(call, fallback)
+	got, err := targeting.Policy{Fallback: fallback}.Resolve(call)
 	if err != nil {
 		t.Fatalf("Resolve returned error: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestUnsetFieldsFallBackIndividually(t *testing.T) {
 	call := targeting.Target{Namespace: "incidents"}
 	fallback := targeting.Target{Namespace: "global", Model: "model-b", Dimensions: 1024}
 
-	got, err := targeting.Resolve(call, fallback)
+	got, err := targeting.Policy{Fallback: fallback}.Resolve(call)
 	if err != nil {
 		t.Fatalf("Resolve returned error: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestMissingFieldIsRefusedAndNamed(t *testing.T) {
 
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
-			_, err := targeting.Resolve(sc.call, targeting.Target{})
+			_, err := targeting.Policy{}.Resolve(sc.call)
 
 			var missing *targeting.MissingError
 			if !errors.As(err, &missing) {
@@ -77,7 +77,7 @@ func TestMissingFieldIsRefusedAndNamed(t *testing.T) {
 // caller that ignores the error would otherwise publish into whatever partial
 // namespace survived.
 func TestRefusedResolutionYieldsNoTarget(t *testing.T) {
-	got, err := targeting.Resolve(targeting.Target{Namespace: "incidents"}, targeting.Target{})
+	got, err := targeting.Policy{}.Resolve(targeting.Target{Namespace: "incidents"})
 	if err == nil {
 		t.Fatal("expected an error for a partially-specified target")
 	}
@@ -123,16 +123,17 @@ func TestEmptyEnvironmentIsNotAnError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromEnv returned error: %v", err)
 	}
-	if got != (targeting.Target{}) {
-		t.Errorf("expected the zero Target, got %+v", got)
+	if got != (targeting.Policy{}) {
+		t.Errorf("expected the zero Policy, got %+v", got)
 	}
 }
 
-func TestFromEnvReadsAllThreeFields(t *testing.T) {
+func TestFromEnvReadsEveryVariable(t *testing.T) {
 	env := map[string]string{
-		targeting.EnvNamespace:  "incidents",
-		targeting.EnvModel:      "model-a",
-		targeting.EnvDimensions: "512",
+		targeting.EnvNamespace:     "incidents",
+		targeting.EnvModel:         "model-a",
+		targeting.EnvDimensions:    "512",
+		targeting.EnvDisableGlobal: "1",
 	}
 
 	got, err := targeting.FromEnv(func(k string) string { return env[k] })
@@ -140,9 +141,47 @@ func TestFromEnvReadsAllThreeFields(t *testing.T) {
 		t.Fatalf("FromEnv returned error: %v", err)
 	}
 
-	want := targeting.Target{Namespace: "incidents", Model: "model-a", Dimensions: 512}
+	want := targeting.Policy{
+		Fallback:       targeting.Target{Namespace: "incidents", Model: "model-a", Dimensions: 512},
+		GlobalDisabled: true,
+	}
 	if got != want {
 		t.Errorf("expected %+v, got %+v", want, got)
+	}
+}
+
+// Every variable this package reads has to be listed, because the packaging
+// emitter checks server.json against this list rather than keeping its own. A
+// variable missing here is a variable that silently stops being documented.
+func TestEnvNamesCoversEveryVariableRead(t *testing.T) {
+	named := map[string]bool{}
+	for _, name := range targeting.EnvNames() {
+		named[name] = true
+	}
+
+	for _, want := range []string{
+		targeting.EnvNamespace,
+		targeting.EnvModel,
+		targeting.EnvDimensions,
+		targeting.EnvDisableGlobal,
+	} {
+		if !named[want] {
+			t.Errorf("expected EnvNames to list %s", want)
+		}
+	}
+
+	// FromEnv reading a variable EnvNames does not report is the failure this
+	// catches from the other side: every name reported must be one that a
+	// lookup is actually made for.
+	var lookedUp []string
+	if _, err := targeting.FromEnv(func(k string) string {
+		lookedUp = append(lookedUp, k)
+		return ""
+	}); err != nil {
+		t.Fatalf("FromEnv returned error: %v", err)
+	}
+	if len(lookedUp) != len(targeting.EnvNames()) {
+		t.Errorf("FromEnv looked up %v but EnvNames reports %v", lookedUp, targeting.EnvNames())
 	}
 }
 
@@ -164,6 +203,157 @@ func TestUnusableDimensionsAreRejected(t *testing.T) {
 				t.Errorf("expected %q to be rejected", sc.value)
 			}
 		})
+	}
+}
+
+// The point of the whole feature: with the shared namespace closed, a call that
+// resolves to it is refused before any bytes leave the process. If this passes,
+// a tenant who closed "global" is still publishing into it.
+func TestAClosedGlobalNamespaceIsRefused(t *testing.T) {
+	policy := targeting.Policy{
+		Fallback:       targeting.Target{Model: "model-a", Dimensions: 512},
+		GlobalDisabled: true,
+	}
+
+	// Namespace names are case-insensitive, so every spelling below names the
+	// same namespace. A guard that matched only the exact lowercase form would
+	// leave it reachable by capitalising it, which is a spelling a model
+	// produces without being asked.
+	for _, spelling := range []string{"global", "Global", "GLOBAL", "  global  ", "gLoBaL"} {
+		t.Run(spelling, func(t *testing.T) {
+			_, err := policy.Resolve(targeting.Target{Namespace: spelling})
+
+			var forbidden *targeting.ForbiddenError
+			if !errors.As(err, &forbidden) {
+				t.Fatalf("expected *ForbiddenError for %q, got %v", spelling, err)
+			}
+		})
+	}
+}
+
+// The refusal must not extend past the one namespace that was closed. A guard
+// that also refuses "globalscope" or "my-global-notes" would break tenants who
+// never used the shared namespace at all.
+func TestClosingGlobalLeavesEveryOtherNamespaceAlone(t *testing.T) {
+	policy := targeting.Policy{
+		Fallback:       targeting.Target{Model: "model-a", Dimensions: 512},
+		GlobalDisabled: true,
+	}
+
+	for _, namespace := range []string{"globalscope", "my-global-notes", "incidents", "global-ops", "acme_global"} {
+		t.Run(namespace, func(t *testing.T) {
+			got, err := policy.Resolve(targeting.Target{Namespace: namespace})
+			if err != nil {
+				t.Fatalf("expected %q to be allowed, got: %v", namespace, err)
+			}
+			if got.Namespace != namespace {
+				t.Errorf("expected the namespace to survive unchanged, got %q", got.Namespace)
+			}
+		})
+	}
+}
+
+// With the switch off, the shared namespace is an ordinary destination. This is
+// the default and the behaviour every existing install depends on.
+func TestTheSharedNamespaceIsUsableWhenNotClosed(t *testing.T) {
+	policy := targeting.Policy{Fallback: targeting.Target{Model: "model-a", Dimensions: 512}}
+
+	got, err := policy.Resolve(targeting.Target{Namespace: targeting.GlobalNamespace})
+	if err != nil {
+		t.Fatalf("expected the shared namespace to be usable by default, got: %v", err)
+	}
+	if got.Namespace != targeting.GlobalNamespace {
+		t.Errorf("expected %q, got %q", targeting.GlobalNamespace, got.Namespace)
+	}
+}
+
+// A configured fallback naming the shared namespace must be refused just as a
+// tool call naming it is. Checking only the call argument would let an operator
+// close the namespace and keep routing there through their own configuration.
+func TestAClosedNamespaceIsRefusedWhenItComesFromTheFallback(t *testing.T) {
+	policy := targeting.Policy{
+		Fallback:       targeting.Target{Namespace: targeting.GlobalNamespace, Model: "model-a", Dimensions: 512},
+		GlobalDisabled: true,
+	}
+
+	if _, err := policy.Resolve(targeting.Target{}); err == nil {
+		t.Fatal("expected a fallback naming the closed namespace to be refused")
+	}
+}
+
+// A refused resolution yields the zero Target, so a caller that ignores the
+// error publishes nowhere rather than into the namespace that was closed.
+func TestARefusedNamespaceYieldsNoTarget(t *testing.T) {
+	policy := targeting.Policy{
+		Fallback:       targeting.Target{Model: "model-a", Dimensions: 512},
+		GlobalDisabled: true,
+	}
+
+	got, _ := policy.Resolve(targeting.Target{Namespace: targeting.GlobalNamespace})
+	if got != (targeting.Target{}) {
+		t.Errorf("expected the zero Target alongside the refusal, got %+v", got)
+	}
+}
+
+// An operator writes this variable by hand into an editor config. Every
+// spelling of yes and no that a person reasonably types has to work, or they
+// will believe they closed the namespace when they did not.
+func TestTheDisableSwitchAcceptsTheSpellingsPeopleType(t *testing.T) {
+	scenarios := []struct {
+		raw  string
+		want bool
+	}{
+		{"1", true}, {"true", true}, {"TRUE", true}, {"yes", true}, {"On", true}, {" true ", true},
+		{"0", false}, {"false", false}, {"no", false}, {"off", false}, {"", false},
+	}
+
+	for _, sc := range scenarios {
+		t.Run(sc.raw, func(t *testing.T) {
+			got, err := targeting.ParseDisableGlobal(sc.raw)
+			if err != nil {
+				t.Fatalf("expected %q to parse, got: %v", sc.raw, err)
+			}
+			if got != sc.want {
+				t.Errorf("expected %q to mean %v, got %v", sc.raw, sc.want, got)
+			}
+		})
+	}
+}
+
+// A value nobody recognises must stop the process rather than read as false.
+// This is the whole reason the variable is parsed strictly: a server that fails
+// open here permits exactly what its operator told it to forbid, and says
+// nothing.
+func TestAnUnrecognisedDisableValueStopsStartup(t *testing.T) {
+	for _, raw := range []string{"ture", "enabled", "2", "-1", "y", "disable"} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := targeting.ParseDisableGlobal(raw); err == nil {
+				t.Errorf("expected %q to be refused rather than read as false", raw)
+			}
+
+			env := map[string]string{targeting.EnvDisableGlobal: raw}
+			got, err := targeting.FromEnv(func(k string) string { return env[k] })
+			if err == nil {
+				t.Errorf("expected FromEnv to refuse %q", raw)
+			}
+			if got != (targeting.Policy{}) {
+				t.Errorf("expected the zero Policy alongside the error, got %+v", got)
+			}
+		})
+	}
+}
+
+// The refusal message has to say which namespace was refused and what to do
+// instead. An agent reads this string and retries; "forbidden" alone would have
+// it retry the same call.
+func TestTheClosedNamespaceMessageNamesTheNamespaceAndTheRemedy(t *testing.T) {
+	err := &targeting.ForbiddenError{Namespace: targeting.GlobalNamespace}
+
+	message := err.Error()
+	for _, want := range []string{targeting.GlobalNamespace, targeting.EnvDisableGlobal, "name the namespace"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("expected the message to mention %q, got: %s", want, message)
+		}
 	}
 }
 

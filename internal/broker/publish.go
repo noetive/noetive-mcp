@@ -30,13 +30,14 @@ type publication struct {
 	Seq       uint64 `json:"seq"`
 }
 
-// PublishTool builds the noetive_publish tool and its handler. fallback
-// supplies routing fields the operator configured; anything it leaves unset
-// must arrive on the call.
+// PublishTool builds the noetive_publish tool and its handler. policy supplies
+// the routing fields the operator configured, and says which namespaces this
+// server may write to; anything the fallback leaves unset must arrive on the
+// call.
 //
 //	tool, handler := broker.PublishTool(client, configured)
 //	srv.AddTool(tool, handler)
-func PublishTool(p Publisher, fallback targeting.Target) (mcp.Tool, mcpserver.ToolHandlerFunc) {
+func PublishTool(p Publisher, policy targeting.Policy) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	options := []mcp.ToolOption{
 		mcp.WithDescription("Publish a message to a Noetive Semantik namespace so other agents and subscribers can find it by meaning. Returns the server-assigned message id and its position in the log."),
 		mcp.WithString("text",
@@ -55,7 +56,7 @@ func PublishTool(p Publisher, fallback targeting.Target) (mcp.Tool, mcpserver.To
 			mcp.Enum(string(semantik.AckStored), string(semantik.AckDurable)),
 		),
 	}
-	options = append(options, targetingOptions()...)
+	options = append(options, targetingOptions(policy)...)
 
 	tool := mcp.NewTool("noetive_publish", options...)
 
@@ -72,7 +73,7 @@ func PublishTool(p Publisher, fallback targeting.Target) (mcp.Tool, mcpserver.To
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("noetive_publish: invalid arguments", err), nil
 		}
-		target, err := targeting.Resolve(requested, fallback)
+		target, err := policy.Resolve(requested)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("noetive_publish", err), nil
 		}

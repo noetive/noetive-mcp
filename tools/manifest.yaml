@@ -102,10 +102,45 @@ deeplinks:
     label: Add to Kiro
     url: https://kiro.dev/launch/mcp/add?name=${serverKey}&config=${config}
 
+# Skills the plugin formats install and the npm wrapper writes into editors that
+# read skills from a directory.
+#
+# The description is what decides whether a skill triggers at all, so it names
+# the words a user actually types rather than only the product name. It is
+# emitted into the SKILL.md frontmatter through the YAML encoder, so a colon or
+# a comma in it is safe.
+#
+# References are loaded only when the skill needs them, which is what lets the
+# body stay short enough to read on every load while the grammar and the pattern
+# catalogue stay complete. Paths are relative to tools/prompts and are flattened
+# to their basename under skills/<name>/references/.
 skills:
   - name: doctor
     description: Run diagnostics on the noetive-mcp installation
     source: doctor.md
+
+  - name: semql
+    description: >-
+      Write, review and debug SemQL queries for Noetive Semantik. Use whenever the
+      user mentions SemQL, a semantic query, a semantic subscription, matching by
+      meaning or embedding space, or wants to express interest in messages about a
+      topic. Also use for "like X but not Y" queries, for DISTANCE, DIRECTION or
+      CONTRAST clauses, and when a search returns invalid_request. Covers the text
+      syntax and the JSON wire format.
+    source: semql.md
+    references:
+      - semql/grammar.md
+      - semql/patterns.md
+
+  - name: semantik
+    description: >-
+      Explain what Noetive Semantik is and which capability fits a problem. Use
+      when the user mentions Semantik, a semantic broker or semantic pub/sub, asks
+      how it differs from a message broker or a vector database, asks whether to
+      search or subscribe, or describes wanting agents to share what they learn and
+      find it by meaning. Covers namespaces, messages, subscriptions and how a call
+      is routed.
+    source: semantik.md
 
 steering:
   - name: using-noetive

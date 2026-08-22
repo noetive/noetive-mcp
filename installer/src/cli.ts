@@ -12,8 +12,11 @@ import {
   PACKAGE_NAME,
   SERVER_NAME,
 } from "./clients";
+import { interview } from "./interview";
+import { Cancelled, interactive, Prompter, terminalPrompter } from "./prompt";
 import { resolveBinary } from "./resolveBinary";
 import { API_KEY_ENV, describeKeyHandling, EntryOptions } from "./serverEntry";
+import { bundledSkills, installSkills, removeSkills, SkillDocument, skillTarget } from "./skills";
 
 /**
  * packageVersion reads the published version from the package manifest, which
@@ -27,7 +30,7 @@ function packageVersion(): string {
   return JSON.parse(readFileSync(manifest, "utf8")).version as string;
 }
 
-const USAGE = `noetive-mcp — connect your AI editor to Noetive Semantik
+const USAGE = `noetive-mcp: connect your AI editor to Noetive Semantik
 
 Usage:
   npx ${PACKAGE_NAME}                          serve over stdio (what editors run)
@@ -40,13 +43,21 @@ Usage:
 Clients:
 ${clientIds().map((id) => `  ${id.padEnd(14)}${clientSpec(id).displayName}`).join("\n")}
 
+Run \`init\` in a terminal and it asks for what it needs. Pass the flags below to
+answer ahead of time; anything you pass is not asked about again, and with
+--yes nothing is asked at all.
+
 Options:
   --client <id>        editor to configure; detected when omitted
   --scope <name>       where to write; defaults per editor (see list)
   --api-key <key>      write the key into the config instead of referencing ${API_KEY_ENV}
-  --namespace <name>   default namespace for tool calls that do not name one
-  --model <name>       default embedding model
-  --dimensions <n>     default embedding dimensionality
+  --namespace <name>   namespace for tool calls that do not name one
+  --model <name>       embedding model that namespace is provisioned with
+  --dimensions <n>     dimensions for that model
+  --disable-global-ns  refuse calls that route to the shared "global" namespace
+  --allow-global-ns    leave the shared namespace available
+  --skills <list>      skills to install: all, none, or a comma-separated list
+  --yes                accept the defaults and ask nothing
   --dry-run            print what would change and exit
   --json               machine-readable output
   --version            print the version
@@ -91,104 +102,231 @@ export async function run(argv: readonly string[], out: Writer = console.log, er
         return 2;
     }
   } catch (e) {
+    // Ctrl-C during the interview is an answer, not a fault. Nothing has been
+    // written at that point, so there is nothing to explain and nothing to
+    // undo; saying "noetive-mcp: cancelled" would read as a failure.
+    if (e instanceof Cancelled) {
+      err(`Cancelled. Nothing was written.`);
+      return 130;
+    }
     err(`noetive-mcp: ${(e as Error).message}`);
     return 1;
   }
 }
 
 async function install(options: Options, out: Writer): Promise<number> {
-  const clientId = stringFlag(options, "client") ?? detectClient(process.cwd());
+  const workspace = process.cwd();
+  const asking = shouldAsk(options);
+
+  const clientId = stringFlag(options, "client") ?? (await chooseClient(options, workspace));
   const spec = clientSpec(clientId);
   const scope = stringFlag(options, "scope") ?? defaultScope(spec);
-  const workspace = process.cwd();
 
   assertUsableWorkspace(spec, scope, workspace);
+
+  const available = bundledSkills();
+  const installable = skillTarget(spec, scope, workspace) ? available : [];
 
   // The key is embedded only when the user asks for it by name. Reading it out
   // of the ambient environment and writing it to disk would turn an exported
   // shell variable into a file that gets synced, committed or screen-shared.
-  const apiKey = stringFlag(options, "api-key");
-  const namespace = stringFlag(options, "namespace");
-  const model = stringFlag(options, "model");
-  const dimensions = stringFlag(options, "dimensions");
-
-  const entryOptions: EntryOptions = {
-    ...(apiKey ? { apiKey } : {}),
-    targeting: {
-      ...(namespace ? { namespace } : {}),
-      ...(model ? { model } : {}),
-      ...(dimensions ? { dimensions } : {}),
-    },
+  const given = {
+    ...optional("apiKey", stringFlag(options, "api-key")),
+    ...optional("namespace", stringFlag(options, "namespace")),
+    ...optional("model", stringFlag(options, "model")),
+    ...optional("dimensions", stringFlag(options, "dimensions")),
+    ...optional("disableGlobalNamespace", sharedNamespaceFlag(options)),
+    ...optional("skills", chosenSkills(options, installable)),
+    expandsVariables: spec.expandsVariables,
+    offeredSkills: installable.map((skill) => ({ value: skill.name, label: skill.name, hint: summarize(skill) })),
   };
 
-  const outcome = await adapterFor(spec).install({
-    spec,
-    clientId,
-    scope,
-    workspace,
-    entryOptions,
-    dryRun: options.flags.has("dry-run"),
-  });
+  // Everything unanswered defaults to unset, which is what every release before
+  // this one wrote. An install nobody could be asked about must not acquire
+  // settings nobody chose.
+  const answers = asking
+    ? await interview(prompterFor(options), given)
+    : { ...given, skills: given.skills ?? [] };
+
+  const entryOptions: EntryOptions = {
+    ...optional("apiKey", answers.apiKey),
+    targeting: {
+      ...optional("namespace", answers.namespace),
+      ...optional("model", answers.model),
+      ...optional("dimensions", answers.dimensions),
+    },
+    ...optional("disableGlobalNamespace", answers.disableGlobalNamespace),
+  };
+
+  const dryRun = options.flags.has("dry-run");
+  const outcome = await adapterFor(spec).install({ spec, clientId, scope, workspace, entryOptions, dryRun });
+
+  const chosen = available.filter((skill) => answers.skills.includes(skill.name));
+  const skills = installSkills(spec, scope, workspace, chosen, { dryRun });
 
   if (options.flags.has("json")) {
-    out(JSON.stringify({ client: clientId, scope, ...outcome }, null, 2));
+    out(JSON.stringify({ client: clientId, scope, ...outcome, skills }, null, 2));
     return 0;
   }
 
   if (outcome.diff) {
     out(outcome.diff);
+    for (const path of skills.written) out(`  would write ${path}`);
     out(`\nDry run: nothing was written.`);
     return 0;
   }
+
   if (!outcome.changed) {
-    out(`${spec.displayName} already has ${SERVER_NAME} configured at ${outcome.target}. Nothing to do.`);
-    return 0;
+    out(`${spec.displayName} already has ${SERVER_NAME} configured at ${outcome.target}.`);
+  } else {
+    out(`Configured ${spec.displayName} at ${outcome.target}.`);
   }
 
-  out(`Configured ${spec.displayName} at ${outcome.target}.`);
-  out(describeKeyHandling(spec, clientId, entryOptions));
-  out(spec.restartHint);
+  reportSkills(skills, out);
+
+  if (outcome.changed) {
+    out(describeKeyHandling(spec, clientId, entryOptions));
+    out(spec.restartHint);
+  }
   out(`Check it worked: npx ${PACKAGE_NAME} doctor`);
   return 0;
 }
 
 /**
- * detectClient picks the editor to configure when --client was omitted.
+ * shouldAsk decides whether there is anyone to ask.
  *
- * Requiring the flag means a first-time user has to learn our client ids before
- * they can install anything, and the ids are ours, not theirs. One detected
- * editor is an unambiguous answer. Several is not, and choosing for them would
- * write into an editor they did not mean — so it lists them and stops.
+ * `--json` and `--dry-run` are excluded alongside the terminal check because
+ * both are how a script drives this. A prompt in front of either is not a
+ * question, it is a process that never exits, and the caller is a CI job or an
+ * editor with no way to notice.
  */
-function detectClient(workspace: string): string {
+function shouldAsk(options: Options): boolean {
+  if (options.flags.has("yes") || options.flags.has("json") || options.flags.has("dry-run")) return false;
+  return interactive();
+}
+
+/** prompterFor exists so tests can drive the interview without a terminal. */
+let prompterFor: (options: Options) => Prompter = () => terminalPrompter();
+
+/** usePrompter replaces the prompter, for tests. */
+export function usePrompter(build: (options: Options) => Prompter): void {
+  prompterFor = build;
+}
+
+/**
+ * sharedNamespaceFlag reads the pair of flags that answer the same question.
+ *
+ * Two flags rather than one that takes a value, because `--disable-global-ns`
+ * reads as an instruction and `--disable-global-ns=false` reads as a puzzle.
+ * Passing both is refused rather than resolved: whichever one it picked would
+ * be the opposite of what half the readers of that command line expect.
+ */
+function sharedNamespaceFlag(options: Options): boolean | undefined {
+  const close = options.flags.has("disable-global-ns");
+  const open = options.flags.has("allow-global-ns");
+
+  if (close && open) {
+    throw new Error("--disable-global-ns and --allow-global-ns say opposite things; pass one");
+  }
+  if (close) return true;
+  if (open) return false;
+  return undefined;
+}
+
+/**
+ * chosenSkills reads --skills, which accepts `all`, `none` or a list of names.
+ *
+ * A name that matches nothing is an error rather than a silent omission: a
+ * typo would otherwise report a successful install of a skill that was never
+ * written.
+ */
+function chosenSkills(options: Options, available: readonly SkillDocument[]): string[] | undefined {
+  const raw = stringFlag(options, "skills");
+  if (raw === undefined) return undefined;
+
+  const value = raw.trim().toLowerCase();
+  if (value === "all") return available.map((skill) => skill.name);
+  if (value === "none" || value === "") return [];
+
+  const names = raw.split(",").map((name) => name.trim()).filter(Boolean);
+  const unknown = names.filter((name) => !available.some((skill) => skill.name === name));
+  if (unknown.length > 0) {
+    const offered = available.map((skill) => skill.name).join(", ") || "none for this editor";
+    throw new Error(`unknown skill${unknown.length > 1 ? "s" : ""} ${unknown.join(", ")}; available: ${offered}`);
+  }
+  return names;
+}
+
+/** summarize shortens a skill description to something a list can carry. */
+function summarize(skill: SkillDocument): string {
+  const sentence = skill.description.split(". ")[0] ?? "";
+  return sentence.length > 72 ? `${sentence.slice(0, 69)}...` : sentence;
+}
+
+function reportSkills(outcome: ReturnType<typeof installSkills>, out: Writer): void {
+  if (outcome.unsupported) {
+    out(outcome.unsupported);
+    return;
+  }
+  if (outcome.written.length > 0) {
+    out(`Installed ${outcome.written.length} skill file${outcome.written.length > 1 ? "s" : ""} into ${outcome.target}.`);
+  } else if (outcome.unchanged.length > 0) {
+    out(`Skills at ${outcome.target} are already up to date.`);
+  }
+}
+
+/** optional builds a single-key object, or nothing when the value is unset. */
+function optional<K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } {
+  return (value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
+}
+
+/**
+ * chooseClient picks the editor to configure when --client was omitted.
+ *
+ * Several detected editors is genuinely ambiguous. With a terminal that is a
+ * question worth asking; without one it stays what it was, a refusal listing
+ * the candidates, because picking for someone writes into an editor they did
+ * not mean to configure.
+ */
+async function chooseClient(options: Options, workspace: string): Promise<string> {
   const found = clientIds().filter((id) => isInstalled(clientSpec(id), workspace, existsSync));
 
   if (found.length === 1) return found[0]!;
   if (found.length === 0) {
     throw new Error(`no supported editor was detected here; name one with --client: ${clientIds().join(", ")}`);
   }
-  throw new Error(`several editors are installed; name one with --client: ${found.join(", ")}`);
+  if (!shouldAsk(options)) {
+    throw new Error(`several editors are installed; name one with --client: ${found.join(", ")}`);
+  }
+
+  return await prompterFor(options).select(
+    "Which editor should this configure?",
+    found.map((id) => ({ value: id, label: clientSpec(id).displayName, hint: id })),
+  );
 }
 
 async function uninstall(options: Options, out: Writer): Promise<number> {
   const clientId = requireString(options, "client");
   const spec = clientSpec(clientId);
   const scope = stringFlag(options, "scope") ?? defaultScope(spec);
+  const workspace = process.cwd();
+  const dryRun = options.flags.has("dry-run");
 
-  const outcome = await adapterFor(spec).remove({
-    spec,
-    clientId,
-    scope,
-    workspace: process.cwd(),
-    dryRun: options.flags.has("dry-run"),
-  });
+  const outcome = await adapterFor(spec).remove({ spec, clientId, scope, workspace, dryRun });
+
+  // Skills came in with the entry, so they go out with it. Leaving them behind
+  // means an editor that still loads instructions for tools it no longer has.
+  const skills = removeSkills(spec, scope, workspace, bundledSkills(), { dryRun });
 
   if (options.flags.has("json")) {
-    out(JSON.stringify({ client: clientId, scope, ...outcome }, null, 2));
+    out(JSON.stringify({ client: clientId, scope, ...outcome, skills }, null, 2));
     return 0;
   }
 
   out(outcome.changed ? `Removed ${SERVER_NAME} from ${outcome.target}.` : `${SERVER_NAME} was not configured at ${outcome.target}.`);
+  for (const dir of skills.written) {
+    out(dryRun ? `  would remove ${dir}` : `  removed ${dir}`);
+  }
   return 0;
 }
 
@@ -261,7 +399,7 @@ async function doctor(options: Options, out: Writer): Promise<number> {
       detail:
         found.length > 0
           ? found.map((f) => `${f.scope}: ${f.target}`).join(", ")
-          : `not configured — npx ${PACKAGE_NAME} init --client ${id}`,
+          : `not configured; run: npx ${PACKAGE_NAME} init --client ${id}`,
     });
   }
 
@@ -272,7 +410,7 @@ async function doctor(options: Options, out: Writer): Promise<number> {
     checks.push({
       name: "editors",
       status: "fail",
-      detail: `no editor is configured — npx ${PACKAGE_NAME} init --client ${clientIds()[0]}`,
+      detail: `no editor is configured; run: npx ${PACKAGE_NAME} init --client ${clientIds()[0]}`,
     });
   }
 
@@ -363,10 +501,14 @@ export type Writer = (line: string) => void;
  */
 export function parse(argv: readonly string[]): Options {
   const known = new Set([
-    "client", "scope", "api-key", "namespace", "model", "dimensions",
+    "client", "scope", "api-key", "namespace", "model", "dimensions", "skills",
+    "disable-global-ns", "allow-global-ns", "yes",
     "dry-run", "json", "version", "help",
   ]);
-  const boolean = new Set(["dry-run", "json", "version", "help"]);
+  const boolean = new Set([
+    "disable-global-ns", "allow-global-ns", "yes",
+    "dry-run", "json", "version", "help",
+  ]);
 
   const flags = new Map<string, string | boolean>();
   let command = "help";

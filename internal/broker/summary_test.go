@@ -31,7 +31,7 @@ func TestSearchSummaryCountsMatchesAtEachBoundary(t *testing.T) {
 			}
 
 			stub := &stubBroker{searchResp: semantik.SearchResponse{Results: results}}
-			_, handler := broker.SearchTool(stub, complete)
+			_, handler := broker.SearchTool(stub, configured)
 
 			got := text(t, call(t, handler, map[string]any{"query": "MATCH"}))
 			if !strings.Contains(got, sc.wants) {
@@ -116,7 +116,7 @@ func TestSubscribeSummaryDistinguishesWhyItStopped(t *testing.T) {
 
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
-			_, handler := broker.SubscribeTool(&stubBroker{stream: sc.stream}, complete)
+			_, handler := broker.SubscribeTool(&stubBroker{stream: sc.stream}, configured)
 
 			got := text(t, call(t, handler, sc.args))
 			if !strings.Contains(got, sc.wants) {
@@ -142,7 +142,7 @@ func TestWatchBoundsAreClampedAtBothEnds(t *testing.T) {
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
 			stream := &fakeStream{id: "sub", events: []semantik.MatchEvent{{MessageID: "a"}}}
-			_, handler := broker.SubscribeTool(&stubBroker{stream: stream}, complete)
+			_, handler := broker.SubscribeTool(&stubBroker{stream: stream}, configured)
 
 			got := text(t, call(t, handler, sc.args))
 			if !strings.Contains(got, sc.wants) {
@@ -156,7 +156,7 @@ func TestWatchBoundsAreClampedAtBothEnds(t *testing.T) {
 // would have to guess about.
 func TestPublishWithoutMetadataSendsAnEmptyMap(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	call(t, handler, map[string]any{"text": "hello"})
 
@@ -173,7 +173,7 @@ func TestPublishWithoutMetadataSendsAnEmptyMap(t *testing.T) {
 // labelled and which no later search can find by that label.
 func TestPublishRefusesMetadataThatIsNotAnObject(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	requireError(t, call(t, handler, map[string]any{"text": "hello", "metadata": []any{"topic"}}))
 
@@ -187,7 +187,7 @@ func TestPublishRefusesMetadataThatIsNotAnObject(t *testing.T) {
 // the caller never chose.
 func TestOmittedAckLeavesTheServerInCharge(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	call(t, handler, map[string]any{"text": "hello"})
 
@@ -202,7 +202,7 @@ func TestBothAckModesReachTheWire(t *testing.T) {
 	for _, mode := range []semantik.AckMode{semantik.AckStored, semantik.AckDurable} {
 		t.Run(string(mode), func(t *testing.T) {
 			stub := &stubBroker{}
-			_, handler := broker.PublishTool(stub, complete)
+			_, handler := broker.PublishTool(stub, configured)
 
 			call(t, handler, map[string]any{"text": "hello", "ack": string(mode)})
 

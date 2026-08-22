@@ -37,7 +37,7 @@ type searchResults struct {
 //
 //	tool, handler := broker.SearchTool(client, configured)
 //	srv.AddTool(tool, handler)
-func SearchTool(s Searcher, fallback targeting.Target) (mcp.Tool, mcpserver.ToolHandlerFunc) {
+func SearchTool(s Searcher, policy targeting.Policy) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	options := []mcp.ToolOption{
 		mcp.WithDescription("Search a Noetive Semantik namespace with a SemQL query and get back ranked messages with their content and metadata. Use this to find what other agents already learned instead of rediscovering it. Run noetive_lint first if you are unsure the query parses."),
 		mcp.WithString("query",
@@ -50,7 +50,7 @@ func SearchTool(s Searcher, fallback targeting.Target) (mcp.Tool, mcpserver.Tool
 		),
 		mcp.WithReadOnlyHintAnnotation(true),
 	}
-	options = append(options, targetingOptions()...)
+	options = append(options, targetingOptions(policy)...)
 
 	tool := mcp.NewTool("noetive_search", options...)
 
@@ -64,7 +64,7 @@ func SearchTool(s Searcher, fallback targeting.Target) (mcp.Tool, mcpserver.Tool
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("noetive_search: invalid arguments", err), nil
 		}
-		target, err := targeting.Resolve(requested, fallback)
+		target, err := policy.Resolve(requested)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("noetive_search", err), nil
 		}

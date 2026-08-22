@@ -7,6 +7,14 @@ import (
 	"github.com/noetive/noetive-sdk-go/semantik"
 )
 
+// APIKeyEnv is the one credential the server reads.
+//
+// Named here rather than in the command because three places have to spell it
+// identically: the message a user sees when it is missing, the placeholder
+// shape PlaceholderKey looks for, and the packaging check that server.json
+// documents every variable the server reads.
+const APIKeyEnv = "NOETIVE_KEY_SECRET"
+
 // PlaceholderKey reports whether value is an unexpanded variable reference
 // rather than an API key.
 //

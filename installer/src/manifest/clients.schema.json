@@ -106,6 +106,15 @@
             }
           }
         },
+        "skills": {
+          "type": "object",
+          "description": "Directory this editor reads skill documents from, keyed by the same scope names as `scopes`. Omitted where the editor has no such directory: an editor that reads a different instruction format is told so rather than given files in a shape it ignores.",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "description": "Supports a leading ~ for the home directory and ${workspace} for the current directory."
+          }
+        },
         "restartHint": { "type": "string" },
         "quirks": { "type": "array", "items": { "type": "string" } }
       }

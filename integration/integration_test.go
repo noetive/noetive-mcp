@@ -30,6 +30,11 @@ import (
 // rather than defaulted, exactly as a caller must.
 var global = targeting.Target{Namespace: "global", Model: "Qwen3-Embedding-4B", Dimensions: 1024}
 
+// shared is a server configured to reach the shared namespace, which is what
+// these tests target. Leaving it open is the point: the suite exists to prove
+// calls reach the real broker, and closing it would refuse every one of them.
+var shared = targeting.Policy{Fallback: global}
+
 // session drives the assembled server the way an editor does, so these tests
 // exercise registration and argument decoding rather than the SDK alone.
 type session struct {
@@ -50,7 +55,7 @@ func newSession(t *testing.T) *session {
 		t.Fatalf("could not build the client: %v", err)
 	}
 
-	srv := mcpserver.New("integration", client, global)
+	srv := mcpserver.New("integration", client, shared)
 	ctx := context.Background()
 	srv.HandleMessage(ctx, json.RawMessage(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"integration","version":"1"}}}`))
 	srv.HandleMessage(ctx, json.RawMessage(`{"jsonrpc":"2.0","method":"notifications/initialized"}`))

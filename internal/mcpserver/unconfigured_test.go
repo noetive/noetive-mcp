@@ -19,7 +19,7 @@ import (
 // no tools to call and nothing to ask, including the health tool whose job is to
 // say what is wrong.
 func TestUnconfiguredServerStillOffersItsTools(t *testing.T) {
-	srv := mcpserver.New("test", mcpserver.Unconfigured("NOETIVE_KEY_SECRET is not set"), targeting.Target{})
+	srv := mcpserver.New("test", mcpserver.Unconfigured("NOETIVE_KEY_SECRET is not set"), targeting.Policy{})
 
 	srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 	srv.HandleMessage(context.Background(), json.RawMessage(initialized))
@@ -40,7 +40,7 @@ func TestUnconfiguredServerStillOffersItsTools(t *testing.T) {
 // The refusal has to name the missing variable. A generic "unauthorized" would
 // send the user looking at their account rather than their environment.
 func TestUnconfiguredCallsExplainWhatIsMissing(t *testing.T) {
-	srv := mcpserver.New("test", mcpserver.Unconfigured("NOETIVE_KEY_SECRET is not set for this editor"), targeting.Target{})
+	srv := mcpserver.New("test", mcpserver.Unconfigured("NOETIVE_KEY_SECRET is not set for this editor"), targeting.Policy{})
 
 	srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 	srv.HandleMessage(context.Background(), json.RawMessage(initialized))

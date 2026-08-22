@@ -23,10 +23,6 @@ import (
 
 var version = "dev"
 
-// apiKeyEnv is the one credential the server reads. Named here because the
-// message a user sees when it is missing has to spell it exactly.
-const apiKeyEnv = "NOETIVE_KEY_SECRET"
-
 func main() {
 	// stdio is the protocol channel; anything written to stdout that is not a
 	// JSON-RPC frame corrupts the session, so all diagnostics go to stderr.
@@ -60,6 +56,20 @@ func run(argv []string, stdout io.Writer, serve func(*mcpgo.MCPServer) error) er
 	model := flags.String("model", "", "embedding model to use when a tool call does not name one")
 	dimensions := flags.Uint("dimensions", 0, "embedding dimensionality to use when a tool call does not name one")
 
+	// BoolFunc rather than Bool so "not passed" stays distinguishable from
+	// "passed false". A plain bool flag defaults to false, which would make an
+	// unpassed flag indistinguishable from -disable-global-ns=false and so
+	// silently override an environment that closed the shared namespace.
+	var disableGlobal, disableGlobalSet bool
+	flags.BoolFunc("disable-global-ns", "refuse calls that route to the shared \"global\" namespace", func(raw string) error {
+		parsed, err := targeting.ParseDisableGlobal(raw)
+		if err != nil {
+			return err
+		}
+		disableGlobal, disableGlobalSet = parsed, true
+		return nil
+	})
+
 	if err := flags.Parse(withoutServeVerb(argv)); err != nil {
 		return err
 	}
@@ -71,12 +81,12 @@ func run(argv []string, stdout io.Writer, serve func(*mcpgo.MCPServer) error) er
 		return nil
 	}
 
-	fallback, err := resolveFallback(*namespace, *model, *dimensions)
+	policy, err := resolvePolicy(*namespace, *model, *dimensions, disableGlobal, disableGlobalSet)
 	if err != nil {
 		return err
 	}
 
-	return serve(mcpserver.New(version, connect(), fallback))
+	return serve(mcpserver.New(version, connect(), policy))
 }
 
 // withoutServeVerb drops a leading `serve`, which the npm wrapper passes when
@@ -107,8 +117,8 @@ func connect() mcpserver.Broker {
 	// alone it reaches the server and returns "unauthorized", pointing the user
 	// at their account when the fault is an environment their editor could not
 	// read.
-	if raw := os.Getenv(apiKeyEnv); mcpserver.PlaceholderKey(raw) {
-		return unconfigured("Your editor passed the literal text %q as the API key instead of substituting it, which means %s is not set in the environment your editor was launched from. Desktop launchers do not read your shell profile. Either launch the editor from a terminal where %s is exported, or re-run: npx @noetive/mcp-server init --client <editor> --api-key <key>", raw, apiKeyEnv, apiKeyEnv)
+	if raw := os.Getenv(mcpserver.APIKeyEnv); mcpserver.PlaceholderKey(raw) {
+		return unconfigured("Your editor passed the literal text %q as the API key instead of substituting it, which means %s is not set in the environment your editor was launched from. Desktop launchers do not read your shell profile. Either launch the editor from a terminal where %s is exported, or re-run: npx @noetive/mcp-server init --client <editor> --api-key <key>", raw, mcpserver.APIKeyEnv, mcpserver.APIKeyEnv)
 	}
 
 	client, err := semantik.NewFromEnv()
@@ -116,7 +126,7 @@ func connect() mcpserver.Broker {
 		return client
 	}
 
-	return unconfigured("%s is not set for this editor. Get an API key from https://noetive.io/dashboard, then either export it in the environment your editor launches from, or re-run: npx @noetive/mcp-server init --client <editor> --api-key <key>", apiKeyEnv)
+	return unconfigured("%s is not set for this editor. Get an API key from https://noetive.io/dashboard, then either export it in the environment your editor launches from, or re-run: npx @noetive/mcp-server init --client <editor> --api-key <key>", mcpserver.APIKeyEnv)
 }
 
 // unconfigured logs the reason once to stderr, where an editor collects server
@@ -128,27 +138,38 @@ func unconfigured(format string, args ...any) mcpserver.Broker {
 	return mcpserver.Unconfigured(reason)
 }
 
-// resolveFallback layers flags over the environment. Flags win because they are
+// resolvePolicy layers flags over the environment. Flags win because they are
 // written into the editor's own config by the installer and are the more
 // specific statement of intent; the environment is the ambient fallback.
 //
-// The result is deliberately not validated. A server with nothing configured is
-// the normal case — the Add to Kiro deeplink launches it with no arguments at
-// all — and the missing fields arrive on each tool call, where an omission is
-// reported to the agent rather than to a log nobody reads. Refusing to start
-// here would leave the editor with no tools and no explanation.
-func resolveFallback(namespace, model string, dimensions uint) (targeting.Target, error) {
-	fromEnv, err := targeting.FromEnv(os.Getenv)
+// The routing triple is deliberately not validated. A server with nothing
+// configured is the normal case, since the Add to Kiro deeplink launches it
+// with no arguments at all, and the missing fields arrive on each tool call
+// where an omission is reported to the agent rather than to a log nobody reads.
+// Refusing to start here would leave the editor with no tools and no
+// explanation.
+//
+// The shared-namespace decision is layered the same way but has no such
+// tolerance: an unreadable value in either layer stopped the process before it
+// got here, because a server that fails open on this one has nothing left to
+// report the failure to.
+func resolvePolicy(namespace, model string, dimensions uint, disableGlobal, disableGlobalSet bool) (targeting.Policy, error) {
+	policy, err := targeting.FromEnv(os.Getenv)
 	if err != nil {
-		return targeting.Target{}, err
+		return targeting.Policy{}, err
 	}
 
 	if dimensions > math.MaxUint16 {
-		return targeting.Target{}, fmt.Errorf("-dimensions must be between 1 and %d, got %d", math.MaxUint16, dimensions)
+		return targeting.Policy{}, fmt.Errorf("-dimensions must be between 1 and %d, got %d", math.MaxUint16, dimensions)
 	}
 
-	return targeting.Layer(
+	policy.Fallback = targeting.Layer(
 		targeting.Target{Namespace: namespace, Model: model, Dimensions: uint16(dimensions)},
-		fromEnv,
-	), nil
+		policy.Fallback,
+	)
+	if disableGlobalSet {
+		policy.GlobalDisabled = disableGlobal
+	}
+
+	return policy, nil
 }

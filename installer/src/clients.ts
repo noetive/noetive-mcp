@@ -45,6 +45,17 @@ export interface ClientSpec {
   readonly entryExtras?: Readonly<Record<string, unknown>>;
   readonly cli?: CliSpec;
   readonly scopes: Readonly<Record<string, ScopeSpec>>;
+  /**
+   * Where this editor reads skill documents, keyed by the same scope names as
+   * `scopes`.
+   *
+   * Absent where an editor has no such directory. The instruction formats in
+   * circulation are not interchangeable, and translating a skill into each
+   * one would make this installer the owner of four dialects it does not
+   * control. An editor with no entry here is told so rather than being given
+   * files in a shape it ignores.
+   */
+  readonly skills?: Readonly<Record<string, string>>;
   readonly restartHint: string;
   readonly quirks?: readonly string[];
 }
@@ -118,6 +129,25 @@ function expandPath(template: string, workspace: string): string {
   path = path.replace("${workspace}", workspace);
 
   return normalize(isAbsolute(path) ? path : resolve(workspace, path));
+}
+
+/**
+ * skillsPath resolves the directory a scope installs skills into, or undefined
+ * where this editor has nowhere to put them.
+ *
+ * Falls back to any scope the editor does declare when the requested one has no
+ * entry. Scopes exist to say which config file to edit, and an editor that
+ * reads skills from one place regardless is not served by refusing to write
+ * them because the user picked a different config scope.
+ */
+export function skillsPath(spec: ClientSpec, scope: string, workspace: string): string | undefined {
+  const declared = spec.skills;
+  if (!declared) return undefined;
+
+  const template = declared[scope] ?? Object.values(declared)[0];
+  if (!template) return undefined;
+
+  return expandPath(template, workspace);
 }
 
 /**

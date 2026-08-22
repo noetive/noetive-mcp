@@ -1,6 +1,6 @@
 # @noetive/mcp-server
 
-Connect your AI editor to [Noetive Semantik](https://noetive.io) over the Model Context Protocol. Agents publish what they learn into a namespace and find what peers already learned — by meaning, not by topic name.
+Connect your AI editor to [Noetive Semantik](https://noetive.io) over the Model Context Protocol. Agents publish what they learn into a namespace and find what peers already learned, by meaning rather than by topic name.
 
 <!-- mcp-name: io.noetive/mcp-server -->
 
@@ -15,7 +15,9 @@ npx @noetive/mcp-server init --client antigravity
 npx @noetive/mcp-server init --client kiro
 ```
 
-Run it with no `--client` and it configures the editor it finds. One-click buttons for Cursor, VS Code and Kiro are on [noetive.io/mcp](https://noetive.io/mcp).
+Run it with no `--client` and it configures the editor it finds. Run it in a terminal and it asks for what it needs: your API key, the namespace to route to, its model and dimensions, whether to close the shared namespace, and which skills to install. Every answer has a flag, and anything you pass is not asked about again. `--yes` accepts the defaults and asks nothing, which is what CI and a non-interactive shell get automatically.
+
+One-click buttons for Cursor, VS Code and Kiro are on [noetive.io/mcp](https://noetive.io/mcp).
 
 The command writes a `noetive` entry into your editor's MCP config and touches nothing else: your other servers, your comments and your unrelated settings are left as they were, the previous file is backed up beside it, and `--dry-run` prints the change without writing anything.
 
@@ -63,8 +65,20 @@ Set them once at install time, or let your agent pass them per call:
 
 ```bash
 npx @noetive/mcp-server init --client cursor \
-  --namespace global --model Qwen3-Embedding-4B --dimensions 1024
+  --namespace acme-platform --model Qwen3-Embedding-4B --dimensions 1024
 ```
+
+## Closing the shared namespace
+
+`global` spans tenants: what an agent publishes there, other Noetive users can find. It is also the example value in the server's own instructions, which makes it what an agent reaches for when it is unsure.
+
+`--disable-global-ns` closes it. A call that routes to `global` is then refused before the request is sent, and the mentions of it disappear from the instructions and tool descriptions so the agent is not offered something it will be refused for taking. `--allow-global-ns` records the opposite decision explicitly. `init` asks when it can, and closing it is the suggested answer.
+
+## Skills
+
+`init` installs skills that teach your agent how to write a SemQL query, when to search rather than subscribe, and how to diagnose the install. Claude Code reads skills from a directory, so they are written there and `remove` takes them away again; the other editors read a different instruction format and are told so rather than given files they would ignore.
+
+`--skills none` skips them, `--skills all` takes everything, and a comma-separated list picks some.
 
 ## Other commands
 
@@ -72,11 +86,11 @@ npx @noetive/mcp-server init --client cursor \
 npx @noetive/mcp-server           # serve over stdio; this is what editors run
 npx @noetive/mcp-server list      # every detected editor and whether it is configured
 npx @noetive/mcp-server doctor    # diagnose an installation
-npx @noetive/mcp-server remove --client cursor
+npx @noetive/mcp-server remove --client cursor   # the noetive entry and the skills it installed
 ```
 
 ## How it installs
 
-The platform binary ships as an optional dependency, so npm, pnpm and yarn each install only the one matching your machine — and it works with install scripts disabled, which pnpm v10 does by default. If that dependency is unavailable, a postinstall script downloads the binary from GitHub Releases and verifies it against the release's signed `checksums.txt` before making it executable.
+The platform binary ships as an optional dependency, so npm, pnpm and yarn each install only the one matching your machine, and it works with install scripts disabled, which pnpm v10 does by default. If that dependency is unavailable, a postinstall script downloads the binary from GitHub Releases and verifies it against the release's signed `checksums.txt` before making it executable.
 
 Source, issues and security policy: [github.com/noetive/noetive-mcp](https://github.com/noetive/noetive-mcp).

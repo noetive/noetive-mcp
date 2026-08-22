@@ -11,6 +11,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
+	"github.com/noetive/noetive-mcp/internal/mcpserver"
 	"github.com/noetive/noetive-mcp/internal/targeting"
 )
 
@@ -18,7 +19,7 @@ import (
 // degrades a working setup, every tool silently stops reaching the broker while
 // the editor still reports a healthy server.
 func TestConnectReturnsALiveClientWhenTheKeyIsUsable(t *testing.T) {
-	t.Setenv(apiKeyEnv, "keyu_3xAmPl3Base58Value")
+	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
 
 	broker := connect()
 
@@ -33,7 +34,7 @@ func TestConnectReturnsALiveClientWhenTheKeyIsUsable(t *testing.T) {
 // sending the user to check their account when the fault is an environment
 // their editor never read.
 func TestConnectRefusesAnUnexpandedPlaceholderBeforeBuildingAClient(t *testing.T) {
-	t.Setenv(apiKeyEnv, "${NOETIVE_KEY_SECRET}")
+	t.Setenv(mcpserver.APIKeyEnv, "${NOETIVE_KEY_SECRET}")
 
 	broker := connect()
 
@@ -45,8 +46,8 @@ func TestConnectRefusesAnUnexpandedPlaceholderBeforeBuildingAClient(t *testing.T
 	if err == nil {
 		t.Fatal("expected every call to be refused")
 	}
-	if !strings.Contains(err.Error(), apiKeyEnv) {
-		t.Errorf("expected the refusal to name %s, got: %v", apiKeyEnv, err)
+	if !strings.Contains(err.Error(), mcpserver.APIKeyEnv) {
+		t.Errorf("expected the refusal to name %s, got: %v", mcpserver.APIKeyEnv, err)
 	}
 	if !strings.Contains(err.Error(), "substituting") {
 		t.Errorf("expected the refusal to explain the substitution failure, got: %v", err)
@@ -57,7 +58,7 @@ func TestConnectRefusesAnUnexpandedPlaceholderBeforeBuildingAClient(t *testing.T
 // editor shows tools and the agent can read out what is wrong. Exiting instead
 // leaves only "server failed to launch".
 func TestConnectDegradesRatherThanFailingWhenNoKeyIsSet(t *testing.T) {
-	t.Setenv(apiKeyEnv, "")
+	t.Setenv(mcpserver.APIKeyEnv, "")
 
 	err := connect().Health(context.Background())
 	if err == nil {
@@ -75,14 +76,93 @@ func TestFlagsOverrideTheEnvironment(t *testing.T) {
 	t.Setenv(targeting.EnvModel, "model-env")
 	t.Setenv(targeting.EnvDimensions, "512")
 
-	got, err := resolveFallback("from-flag", "", 0)
+	got, err := resolvePolicy("from-flag", "", 0, false, false)
 	if err != nil {
-		t.Fatalf("resolveFallback returned error: %v", err)
+		t.Fatalf("resolvePolicy returned error: %v", err)
 	}
 
 	want := targeting.Target{Namespace: "from-flag", Model: "model-env", Dimensions: 512}
-	if got != want {
+	if got.Fallback != want {
 		t.Errorf("expected %+v, got %+v", want, got)
+	}
+}
+
+// The shared-namespace switch layers like every other setting, and both
+// directions matter. An editor config that closes it must not be reopened by an
+// ambient environment variable, and an operator debugging on the command line
+// must be able to reopen it without editing their config.
+func TestTheSharedNamespaceSwitchLayersLikeEverythingElse(t *testing.T) {
+	scenarios := []struct {
+		name             string
+		env              string
+		flag, flagSet    bool
+		wantGlobalClosed bool
+	}{
+		{name: "nothing set"},
+		{name: "environment closes it", env: "1", wantGlobalClosed: true},
+		{name: "flag closes it", flag: true, flagSet: true, wantGlobalClosed: true},
+		{name: "flag reopens what the environment closed", env: "true", flag: false, flagSet: true},
+		{name: "flag closes what the environment left open", env: "false", flag: true, flagSet: true, wantGlobalClosed: true},
+		{name: "an unpassed flag does not override the environment", env: "yes", wantGlobalClosed: true},
+	}
+
+	for _, sc := range scenarios {
+		t.Run(sc.name, func(t *testing.T) {
+			t.Setenv(targeting.EnvDisableGlobal, sc.env)
+
+			got, err := resolvePolicy("", "", 0, sc.flag, sc.flagSet)
+			if err != nil {
+				t.Fatalf("resolvePolicy returned error: %v", err)
+			}
+			if got.GlobalDisabled != sc.wantGlobalClosed {
+				t.Errorf("expected GlobalDisabled to be %v, got %v", sc.wantGlobalClosed, got.GlobalDisabled)
+			}
+		})
+	}
+}
+
+// A value nobody recognises has to stop startup. A server that fails open on
+// this one permits exactly what its operator told it to forbid, and the only
+// place it could report that is a log the operator is not reading.
+func TestAnUnreadableSharedNamespaceSwitchStopsStartup(t *testing.T) {
+	t.Setenv(targeting.EnvDisableGlobal, "ture")
+
+	if _, err := resolvePolicy("", "", 0, false, false); err == nil {
+		t.Fatal("expected an unreadable switch value to stop startup")
+	}
+}
+
+// The flag has to be reachable through the same argument parsing every editor
+// uses, not just through resolvePolicy. A flag that is declared but never wired
+// into run() is a flag that silently does nothing.
+func TestTheSharedNamespaceFlagIsAcceptedOnTheCommandLine(t *testing.T) {
+	for _, argv := range [][]string{
+		{"-disable-global-ns"},
+		{"-disable-global-ns=true"},
+		{"serve", "-disable-global-ns=false"},
+	} {
+		t.Run(strings.Join(argv, " "), func(t *testing.T) {
+			var served bool
+			err := run(argv, io.Discard, func(*mcpgo.MCPServer) error {
+				served = true
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("expected %v to be accepted, got: %v", argv, err)
+			}
+			if !served {
+				t.Error("expected the server to be served")
+			}
+		})
+	}
+
+	// A value the flag cannot read must be refused rather than treated as
+	// "off", for the same reason the environment variable is.
+	if err := run([]string{"-disable-global-ns=ture"}, io.Discard, func(*mcpgo.MCPServer) error {
+		t.Fatal("expected the server not to start")
+		return nil
+	}); err == nil {
+		t.Fatal("expected an unreadable flag value to be refused")
 	}
 }
 
@@ -94,12 +174,12 @@ func TestStartupSucceedsWithNothingConfigured(t *testing.T) {
 	t.Setenv(targeting.EnvModel, "")
 	t.Setenv(targeting.EnvDimensions, "")
 
-	got, err := resolveFallback("", "", 0)
+	got, err := resolvePolicy("", "", 0, false, false)
 	if err != nil {
 		t.Fatalf("expected an unconfigured server to start, got: %v", err)
 	}
-	if got != (targeting.Target{}) {
-		t.Errorf("expected an empty fallback, got %+v", got)
+	if got != (targeting.Policy{}) {
+		t.Errorf("expected an empty policy, got %+v", got)
 	}
 }
 
@@ -107,7 +187,7 @@ func TestStartupSucceedsWithNothingConfigured(t *testing.T) {
 // wrapping 65537 to 1 would start the server with a plausible-looking but wrong
 // value that only surfaces as a server-side rejection much later.
 func TestOutOfRangeDimensionsAreRefusedAtStartup(t *testing.T) {
-	if _, err := resolveFallback("", "", 70000); err == nil {
+	if _, err := resolvePolicy("", "", 70000, false, false); err == nil {
 		t.Fatal("expected out-of-range dimensions to be refused")
 	}
 }
@@ -118,7 +198,7 @@ func TestOutOfRangeDimensionsAreRefusedAtStartup(t *testing.T) {
 func TestUnparseableEnvironmentDimensionsStopStartup(t *testing.T) {
 	t.Setenv(targeting.EnvDimensions, "1024d")
 
-	if _, err := resolveFallback("", "", 0); err == nil {
+	if _, err := resolvePolicy("", "", 0, false, false); err == nil {
 		t.Fatal("expected an unparseable dimensions value to be refused")
 	}
 }
@@ -128,7 +208,7 @@ func TestUnparseableEnvironmentDimensionsStopStartup(t *testing.T) {
 // editor config written by `init` spawns it the same way, so a regression here
 // breaks install paths that are already advertised in public.
 func TestBareAndExplicitInvocationsBothServe(t *testing.T) {
-	t.Setenv(apiKeyEnv, "keyu_3xAmPl3Base58Value")
+	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
 
 	scenarios := []struct {
 		name string
@@ -192,7 +272,7 @@ func TestOnlyALeadingServeVerbIsStripped(t *testing.T) {
 // a version string to stdout and exits — which for a stdio protocol means the
 // editor sees a corrupt frame and a server that immediately died.
 func TestVersionIsOnlyPrintedWhenAsked(t *testing.T) {
-	t.Setenv(apiKeyEnv, "keyu_3xAmPl3Base58Value")
+	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
 
 	var asked strings.Builder
 	served := false
@@ -247,7 +327,7 @@ func TestAConfigurationErrorPreventsServing(t *testing.T) {
 // A failure from the transport has to reach the caller, or the process exits
 // zero on a server that never ran and the editor reports nothing at all.
 func TestAServeFailureIsReturned(t *testing.T) {
-	t.Setenv(apiKeyEnv, "keyu_3xAmPl3Base58Value")
+	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
 
 	sentinel := errors.New("stdio closed")
 	err := run(nil, io.Discard, func(*mcpgo.MCPServer) error { return sentinel })
@@ -260,11 +340,11 @@ func TestAServeFailureIsReturned(t *testing.T) {
 // The largest usable dimensionality must be accepted. Rejecting at the boundary
 // would refuse a legitimate model for being exactly as large as allowed.
 func TestTheLargestUsableDimensionalityIsAccepted(t *testing.T) {
-	got, err := resolveFallback("", "", math.MaxUint16)
+	got, err := resolvePolicy("", "", math.MaxUint16, false, false)
 	if err != nil {
 		t.Fatalf("expected %d dimensions to be accepted, got: %v", math.MaxUint16, err)
 	}
-	if got.Dimensions != math.MaxUint16 {
-		t.Errorf("expected the value to survive, got %d", got.Dimensions)
+	if got.Fallback.Dimensions != math.MaxUint16 {
+		t.Errorf("expected the value to survive, got %d", got.Fallback.Dimensions)
 	}
 }

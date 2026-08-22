@@ -136,7 +136,19 @@ export function diff(before: string, after: string, path: string): string {
     `--- ${path}`,
     `+++ ${path}`,
     `@@ line ${head + 1} @@`,
-    ...removed.map((line) => `-${line}`),
-    ...added.map((line) => `+${line}`),
+    ...removed.map((line) => redactKey(`-${line}`)),
+    ...added.map((line) => redactKey(`+${line}`)),
   ].join("\n");
+}
+
+/**
+ * redactKey hides an embedded API key in output.
+ *
+ * `--api-key --dry-run` is exactly what a careful person runs to see what would
+ * happen before it happens, and printing the key there puts it in their
+ * scrollback, their terminal history and any screen share that is running. The
+ * key is still written to the file; this only keeps it off the screen.
+ */
+function redactKey(line: string): string {
+  return line.replace(/("NOETIVE_KEY_SECRET"\s*:\s*")(?!\$\{)[^"]+(")/g, "$1<your key>$2");
 }

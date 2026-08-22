@@ -28,6 +28,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/noetive/noetive-mcp/internal/mcpserver"
+	"github.com/noetive/noetive-mcp/internal/targeting"
 )
 
 func main() {
@@ -55,6 +56,13 @@ func main() {
 	// publish on any disagreement — at the last step of a release, after the
 	// GitHub Release, npm and the image have all already gone out.
 	if err := model.registryNameIsConsistent(root); err != nil {
+		log.Fatal(err)
+	}
+
+	// server.json is what registry-aware clients read to know what to set. It
+	// lists the environment three times over, and a variable the server reads
+	// but server.json omits is one a user is never told to set.
+	if err := documentedEnvironmentIsComplete(root); err != nil {
 		log.Fatal(err)
 	}
 
@@ -118,10 +126,23 @@ type toolDoc struct {
 	Summary string `yaml:"summary" json:"summary"`
 }
 
+// document is a skill or a steering file: a body written once in tools/prompts
+// and emitted into every format that carries it.
+//
+// References are the files a skill loads only when it needs them. Keeping the
+// grammar, the pattern catalogue and anything else long behind them is what
+// lets a skill stay short enough to be read on every load while still carrying
+// the detail that makes it correct.
 type document struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Source      string `yaml:"source"`
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description"`
+	Source      string   `yaml:"source"`
+	References  []string `yaml:"references"`
+}
+
+// sources lists every prompt file this document is built from.
+func (d document) sources() []string {
+	return append([]string{d.Source}, d.References...)
 }
 
 // load reads the manifest and every prompt body it references. A referenced
@@ -153,11 +174,13 @@ func load(dir string) (authoring, error) {
 
 	model.prompts = map[string]string{}
 	for _, doc := range append(append([]document{}, model.Skills...), model.Steering...) {
-		body, err := os.ReadFile(filepath.Join(dir, "prompts", doc.Source))
-		if err != nil {
-			return authoring{}, fmt.Errorf("%s references prompts/%s: %w", doc.Name, doc.Source, err)
+		for _, source := range doc.sources() {
+			body, err := os.ReadFile(filepath.Join(dir, "prompts", source))
+			if err != nil {
+				return authoring{}, fmt.Errorf("%s references prompts/%s: %w", doc.Name, source, err)
+			}
+			model.prompts[source] = string(body)
 		}
-		model.prompts[doc.Source] = string(body)
 	}
 
 	return model, nil
@@ -398,6 +421,14 @@ func emitRepositoryPlugin(a authoring, root string) error {
 		return err
 	}
 
+	// The npm wrapper installs these into editors that read skills from a
+	// directory, and npm cannot pack a path above the package root. A second
+	// copy inside installer/ is the only way the published tarball carries
+	// them, and emitting it here is what keeps the two identical.
+	if err := a.writeSkills(filepath.Join(root, "installer", "skills")); err != nil {
+		return err
+	}
+
 	// Written last, after everything it points at exists. A plugin whose MCP
 	// entry lands before its skills is briefly installable and broken.
 	return writeJSON(filepath.Join(root, ".mcp.json"), a.serverEntry())
@@ -533,15 +564,133 @@ func loadClients(root string) (clientManifest, error) {
 	return manifest, nil
 }
 
+// writeSkills emits every skill into one directory, each as a SKILL.md with the
+// frontmatter its host reads, plus whatever reference files it loads on demand.
+//
+// The directory is cleared first. Skills are addressed by name, so a renamed or
+// deleted skill leaves its old directory behind, and a stale SKILL.md is worse
+// than a missing one: it still loads, still triggers, and still teaches whatever
+// it said before someone decided it was wrong.
 func (a authoring) writeSkills(dir string) error {
+	if err := reset(dir); err != nil {
+		return err
+	}
+
 	for _, doc := range a.Skills {
-		body := a.prompts[doc.Source]
-		front := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n", doc.Name, doc.Description)
-		if err := writeFile(filepath.Join(dir, doc.Name, "SKILL.md"), front+body); err != nil {
+		front, err := frontmatter(doc)
+		if err != nil {
+			return fmt.Errorf("%s: %w", doc.Name, err)
+		}
+		if err := writeFile(filepath.Join(dir, doc.Name, "SKILL.md"), front+a.prompts[doc.Source]); err != nil {
 			return err
+		}
+
+		for _, ref := range doc.References {
+			// Flattened to a basename: the manifest paths group prompt files by
+			// skill in tools/prompts, but a skill reads its own references as
+			// references/<file>, and a nested path there is a link its host
+			// resolves differently in each format.
+			target := filepath.Join(dir, doc.Name, "references", filepath.Base(ref))
+			if err := writeFile(target, a.prompts[ref]); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// documentedEnvironmentIsComplete checks server.json against the variables the
+// server actually reads.
+//
+// The file describes the same environment three times: once for the npm package,
+// once for the container image, and once more as the -e arguments docker needs
+// to forward them. Adding a variable means editing all three, and the two
+// failure modes are silent in opposite directions. A variable the server reads
+// but server.json omits is one a registry-aware client never offers to set, so
+// the feature ships invisible. A variable server.json lists but the server no
+// longer reads sends users to configure something that does nothing.
+//
+// The API key is checked separately: it is a credential rather than a routing
+// setting, and it is owned by the command rather than by package targeting.
+func documentedEnvironmentIsComplete(root string) error {
+	path := filepath.Join(root, "server.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var document struct {
+		Packages []struct {
+			EnvironmentVariables []struct {
+				Name string `json:"name"`
+			} `json:"environmentVariables"`
+			RuntimeArguments []struct {
+				Name  string `json:"name"`
+				Value string `json:"value"`
+			} `json:"runtimeArguments"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("server.json: %w", err)
+	}
+	if len(document.Packages) == 0 {
+		return fmt.Errorf("server.json lists no packages")
+	}
+
+	want := append([]string{mcpserver.APIKeyEnv}, targeting.EnvNames()...)
+	slices.Sort(want)
+
+	for i, pkg := range document.Packages {
+		declared := make([]string, 0, len(pkg.EnvironmentVariables))
+		for _, v := range pkg.EnvironmentVariables {
+			declared = append(declared, v.Name)
+		}
+		slices.Sort(declared)
+
+		if !slices.Equal(declared, want) {
+			return fmt.Errorf("server.json packages[%d].environmentVariables is %v, but the server reads %v", i, declared, want)
+		}
+
+		// Only the image needs forwarding arguments; the npm package inherits
+		// the environment it was spawned in.
+		if len(pkg.RuntimeArguments) == 0 {
+			continue
+		}
+		forwarded := make([]string, 0, len(want))
+		for _, arg := range pkg.RuntimeArguments {
+			if arg.Name == "-e" && arg.Value != "" {
+				forwarded = append(forwarded, arg.Value)
+			}
+		}
+		slices.Sort(forwarded)
+
+		if !slices.Equal(forwarded, want) {
+			return fmt.Errorf("server.json packages[%d] forwards %v with -e, but the server reads %v", i, forwarded, want)
+		}
+	}
+
+	return nil
+}
+
+// frontmatter renders the YAML header a skill host parses.
+//
+// Marshalled rather than interpolated. A description is a sentence written for
+// a human, and the sentences that make a skill trigger well are long and full
+// of commas and colons; pasted raw after "description:" the first colon ends the
+// document and the host reads a skill with no description at all.
+func frontmatter(doc document) (string, error) {
+	// A struct rather than a map so the fields keep the order a reader expects
+	// rather than yaml's alphabetical one.
+	header := struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+	}{Name: doc.Name, Description: doc.Description}
+
+	body, err := yaml.Marshal(header)
+	if err != nil {
+		return "", err
+	}
+	return "---\n" + string(body) + "---\n\n", nil
 }
 
 // reset clears a generated directory so a removed entry actually disappears

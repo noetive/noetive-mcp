@@ -7,6 +7,7 @@ import (
 
 	json "github.com/goccy/go-json"
 	"github.com/mark3labs/mcp-go/mcp"
+	mcpgo "github.com/mark3labs/mcp-go/server"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
 	"github.com/noetive/noetive-mcp/internal/mcpserver"
@@ -23,7 +24,7 @@ const (
 // nothing else. A tool added to broker but never registered is invisible, and a
 // renamed tool silently breaks every agent that learned the old name.
 func TestEveryToolIsRegisteredUnderItsPublishedName(t *testing.T) {
-	srv := mcpserver.New("test", &stubBroker{}, targeting.Target{})
+	srv := mcpserver.New("test", &stubBroker{}, targeting.Policy{})
 
 	srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 	srv.HandleMessage(context.Background(), json.RawMessage(initialized))
@@ -55,7 +56,7 @@ func TestEveryToolIsRegisteredUnderItsPublishedName(t *testing.T) {
 // A tool description is the only thing that tells a model when to reach for a
 // tool. An empty one makes the tool dead weight in every editor.
 func TestEveryToolDescribesItself(t *testing.T) {
-	srv := mcpserver.New("test", &stubBroker{}, targeting.Target{})
+	srv := mcpserver.New("test", &stubBroker{}, targeting.Policy{})
 
 	srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 	srv.HandleMessage(context.Background(), json.RawMessage(initialized))
@@ -77,10 +78,41 @@ func TestEveryToolDescribesItself(t *testing.T) {
 
 // The instructions are how an agent learns the routing triple is mandatory and
 // what the shared namespace is provisioned with. Without them, a server started
-// with no configuration — exactly how the Kiro deeplink launches it — leaves the
-// agent unable to make a single successful call.
+// with no configuration, which is exactly how the Kiro deeplink launches it,
+// leaves the agent unable to make a single successful call.
 func TestInstructionsTellTheAgentHowToTarget(t *testing.T) {
-	srv := mcpserver.New("test", &stubBroker{}, targeting.Target{})
+	instructions := instructionsOf(t, mcpserver.New("test", &stubBroker{}, targeting.Policy{}))
+
+	for _, want := range []string{"namespace", "global", "Qwen3-Embedding-4B", "1024"} {
+		if !strings.Contains(instructions, want) {
+			t.Errorf("expected the instructions to mention %q", want)
+		}
+	}
+}
+
+// Closing the shared namespace has to reach the instructions too. They are the
+// first and most persuasive thing an agent reads, so a server that refuses
+// "global" while its instructions recommend it teaches the agent to make a call
+// that will always fail.
+func TestInstructionsStopRecommendingAClosedNamespace(t *testing.T) {
+	instructions := instructionsOf(t, mcpserver.New("test", &stubBroker{}, targeting.Policy{GlobalDisabled: true}))
+
+	if strings.Contains(instructions, "The shared namespace is") {
+		t.Errorf("expected the shared namespace not to be recommended, got: %s", instructions)
+	}
+	if !strings.Contains(instructions, "closed") {
+		t.Errorf("expected the instructions to say the shared namespace is closed, got: %s", instructions)
+	}
+	// The rest of the guidance must survive; closing a namespace is not a
+	// reason to stop telling the agent how to target a call at all.
+	if !strings.Contains(instructions, "namespace, an embedding model and its dimensions") {
+		t.Errorf("expected the targeting rule to survive, got: %s", instructions)
+	}
+}
+
+// instructionsOf reads the instructions a client receives from initialize.
+func instructionsOf(t *testing.T, srv *mcpgo.MCPServer) string {
+	t.Helper()
 
 	resp := srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 
@@ -88,12 +120,7 @@ func TestInstructionsTellTheAgentHowToTarget(t *testing.T) {
 		Result mcp.InitializeResult `json:"result"`
 	}
 	decode(t, resp, &envelope)
-
-	for _, want := range []string{"namespace", "global", "Qwen3-Embedding-4B", "1024"} {
-		if !strings.Contains(envelope.Result.Instructions, want) {
-			t.Errorf("expected the instructions to mention %q", want)
-		}
-	}
+	return envelope.Result.Instructions
 }
 
 // End-to-end through the assembled server: a tool call has to travel the real
@@ -101,7 +128,7 @@ func TestInstructionsTellTheAgentHowToTarget(t *testing.T) {
 // would go unnoticed.
 func TestToolCallReachesTheBrokerThroughTheAssembledServer(t *testing.T) {
 	stub := &stubBroker{}
-	srv := mcpserver.New("test", stub, targeting.Target{})
+	srv := mcpserver.New("test", stub, targeting.Policy{})
 
 	srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 	srv.HandleMessage(context.Background(), json.RawMessage(initialized))
@@ -125,7 +152,7 @@ func TestToolCallReachesTheBrokerThroughTheAssembledServer(t *testing.T) {
 // its version makes `doctor` unable to detect drift between the npm package and
 // the binary it resolved.
 func TestServerReportsItsVersion(t *testing.T) {
-	srv := mcpserver.New("1.2.3", &stubBroker{}, targeting.Target{})
+	srv := mcpserver.New("1.2.3", &stubBroker{}, targeting.Policy{})
 
 	resp := srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 
@@ -183,7 +210,7 @@ func (s *stubBroker) Health(context.Context) error {
 // that believes it will be told about changes has no reason to re-list, and one
 // that subscribes to a notification that never arrives is waiting forever.
 func TestTheServerDoesNotPromiseToolListNotifications(t *testing.T) {
-	srv := mcpserver.New("test", &stubBroker{}, targeting.Target{})
+	srv := mcpserver.New("test", &stubBroker{}, targeting.Policy{})
 
 	resp := srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 

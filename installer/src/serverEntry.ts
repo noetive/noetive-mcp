@@ -13,6 +13,13 @@ export const TARGETING_ENV = {
   dimensions: "NOETIVE_DIMENSIONS",
 } as const;
 
+/**
+ * Variables that state what the server may do rather than where it routes.
+ */
+export const POLICY_ENV = {
+  disableGlobalNamespace: "NOETIVE_DISABLE_GLOBAL_NS",
+} as const;
+
 export interface Targeting {
   readonly namespace?: string;
   readonly model?: string;
@@ -27,6 +34,15 @@ export interface EntryOptions {
    */
   readonly apiKey?: string;
   readonly targeting?: Targeting;
+  /**
+   * Whether to close the shared `global` namespace on this server.
+   *
+   * Written whichever way it was answered, rather than only when closing. The
+   * answer is a decision someone made, and leaving the variable out when they
+   * said "leave it open" would let an exported variable elsewhere close it
+   * behind their back.
+   */
+  readonly disableGlobalNamespace?: boolean;
 }
 
 export interface ServerEntry {
@@ -63,6 +79,10 @@ export function entryEnv(spec: ClientSpec, options: EntryOptions = {}): Record<s
   if (targeting.namespace) env[TARGETING_ENV.namespace] = targeting.namespace;
   if (targeting.model) env[TARGETING_ENV.model] = targeting.model;
   if (targeting.dimensions) env[TARGETING_ENV.dimensions] = targeting.dimensions;
+
+  if (options.disableGlobalNamespace !== undefined) {
+    env[POLICY_ENV.disableGlobalNamespace] = options.disableGlobalNamespace ? "1" : "0";
+  }
 
   return env;
 }
@@ -114,7 +134,7 @@ export function describeKeyHandling(spec: ClientSpec, clientId: string, options:
       ``,
       `    export ${API_KEY_ENV}=keyu_...`,
       ``,
-      `Launching ${spec.displayName} from a desktop icon will not pick that up — desktop launchers do not read your shell profile.`,
+      `Launching ${spec.displayName} from a desktop icon will not pick that up, because desktop launchers do not read your shell profile.`,
       `Start it from that same terminal, or re-run this command with --api-key to write the key into the config instead.`,
     ].join("\n");
   }

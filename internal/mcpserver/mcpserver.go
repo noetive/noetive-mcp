@@ -15,18 +15,30 @@ import (
 	"github.com/noetive/noetive-mcp/internal/targeting"
 )
 
-// instructions tell the agent the two things it cannot infer from the tool
+// instructionsFor tells the agent the two things it cannot infer from the tool
 // schemas: that the routing triple is mandatory with no default, and what the
 // shared namespace is actually provisioned with. Naming the concrete values
 // here is what lets an agent call a tool successfully on a server started with
 // no configuration, which is exactly how the Kiro deeplink launches it.
-const instructions = `Noetive Semantik is a semantic broker: agents publish messages and find each other's messages by meaning rather than by topic name.
+//
+// An operator who closed the shared namespace gets the opposite sentence. The
+// instructions are the first thing an agent reads and the strongest suggestion
+// it receives, so advertising a namespace every call will be refused for would
+// spend the agent's first attempt on a destination it cannot use.
+func instructionsFor(policy targeting.Policy) string {
+	shared := `The shared namespace is "global", provisioned with model "Qwen3-Embedding-4B" at 1024 dimensions.`
+	if policy.GlobalDisabled {
+		shared = `The shared "global" namespace is closed on this server: name the namespace your work belongs in, and never fall back to a shared one.`
+	}
 
-Publish what a peer would want to find later — a conclusion, a root cause, a decision — and search before rediscovering something a peer may already have written.
+	return `Noetive Semantik is a semantic broker: agents publish messages and find each other's messages by meaning rather than by topic name.
 
-Every publish, search and subscribe must name a namespace, an embedding model and its dimensions. There is no default. If this server was started without them configured, pass them on each call. The shared namespace is "global", provisioned with model "Qwen3-Embedding-4B" at 1024 dimensions.
+Publish what a peer would want to find later, such as a conclusion, a root cause or a decision, and search before rediscovering something a peer may already have written.
+
+Every publish, search and subscribe must name a namespace, an embedding model and its dimensions. There is no default. If this server was started without them configured, pass them on each call. ` + shared + `
 
 Queries use SemQL. When a query is unfamiliar or a search reports invalid_request, check it with noetive_lint before retrying.`
+}
 
 // Broker is the set of Semantik operations the server exposes as tools.
 // *semantik.Client satisfies it.
@@ -41,21 +53,21 @@ type Broker interface {
 
 // New builds the MCP server with every Noetive tool registered.
 //
-// fallback carries the routing fields an operator configured; fields it leaves
-// unset must arrive on each tool call.
+// policy carries the routing fields an operator configured and the namespaces
+// they closed; fields the fallback leaves unset must arrive on each tool call.
 //
 //	srv := mcpserver.New(version, client, configured)
 //	mcpserver.ServeStdio(srv)
-func New(version string, b Broker, fallback targeting.Target) *mcpserver.MCPServer {
+func New(version string, b Broker, policy targeting.Policy) *mcpserver.MCPServer {
 	srv := mcpserver.NewMCPServer("noetive-mcp", version,
 		mcpserver.WithToolCapabilities(false),
-		mcpserver.WithInstructions(instructions),
+		mcpserver.WithInstructions(instructionsFor(policy)),
 		mcpserver.WithRecovery(),
 	)
 
-	srv.AddTool(broker.PublishTool(b, fallback))
-	srv.AddTool(broker.SearchTool(b, fallback))
-	srv.AddTool(broker.SubscribeTool(broker.SubscriberFrom(b), fallback))
+	srv.AddTool(broker.PublishTool(b, policy))
+	srv.AddTool(broker.SearchTool(b, policy))
+	srv.AddTool(broker.SubscribeTool(broker.SubscriberFrom(b), policy))
 	srv.AddTool(broker.LintTool(b))
 	srv.AddTool(broker.HealthTool(b))
 

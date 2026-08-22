@@ -18,6 +18,14 @@ import (
 // configured every routing field at startup.
 var complete = targeting.Target{Namespace: "incidents", Model: "model-a", Dimensions: 512}
 
+// configured is a server an operator fully set up and left the shared namespace
+// open on, which is what most tests want to hold still while they exercise
+// something else.
+var configured = targeting.Policy{Fallback: complete}
+
+// closedGlobal is the same server with the shared namespace closed.
+var closedGlobal = targeting.Policy{Fallback: complete, GlobalDisabled: true}
+
 // call invokes a handler with the given arguments, as the MCP server would.
 func call(t *testing.T, handler mcpserver.ToolHandlerFunc, args map[string]any) *mcp.CallToolResult {
 	t.Helper()
@@ -78,8 +86,8 @@ func TestBrokerFailuresAreResultsNotProtocolErrors(t *testing.T) {
 		handler mcpserver.ToolHandlerFunc
 		args    map[string]any
 	}{
-		{"publish", handlerOf(broker.PublishTool(&stubBroker{publishErr: apiErr}, complete)), map[string]any{"text": "hello"}},
-		{"search", handlerOf(broker.SearchTool(&stubBroker{searchErr: apiErr}, complete)), map[string]any{"query": "MATCH"}},
+		{"publish", handlerOf(broker.PublishTool(&stubBroker{publishErr: apiErr}, configured)), map[string]any{"text": "hello"}},
+		{"search", handlerOf(broker.SearchTool(&stubBroker{searchErr: apiErr}, configured)), map[string]any{"query": "MATCH"}},
 		{"lint", handlerOf(broker.LintTool(&stubBroker{lintErr: apiErr})), map[string]any{"query": "MATCH"}},
 		{"health", handlerOf(broker.HealthTool(&stubBroker{healthErr: apiErr})), map[string]any{}},
 	}
@@ -112,7 +120,7 @@ func TestServerErrorFieldsReachTheAgent(t *testing.T) {
 		HTTPStatus: 503,
 	}
 
-	_, handler := broker.SearchTool(&stubBroker{searchErr: apiErr}, complete)
+	_, handler := broker.SearchTool(&stubBroker{searchErr: apiErr}, configured)
 	message := requireError(t, call(t, handler, map[string]any{"query": "MATCH"}))
 
 	for _, want := range []string{semantik.CodeUnavailable, "budget", "req_01hz", "250ms"} {
@@ -128,7 +136,7 @@ func TestServerErrorFieldsReachTheAgent(t *testing.T) {
 func TestPreflightRejectionIsDistinguishedFromServerFailure(t *testing.T) {
 	preflight := &semantik.Error{Code: semantik.CodeInvalidRequest, Message: "namespace is required"}
 
-	_, handler := broker.SearchTool(&stubBroker{searchErr: preflight}, complete)
+	_, handler := broker.SearchTool(&stubBroker{searchErr: preflight}, configured)
 	message := requireError(t, call(t, handler, map[string]any{"query": "MATCH"}))
 
 	if !strings.Contains(message, "before the request was sent") {

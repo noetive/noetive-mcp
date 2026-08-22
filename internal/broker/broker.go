@@ -38,10 +38,20 @@ const (
 // targetingOptions describes the routing triple identically on every tool.
 // Declared once because three tools carry the same three arguments and a
 // divergent description would teach the agent contradictory rules.
-func targetingOptions() []mcp.ToolOption {
+//
+// The namespace example tracks the policy. "global" is the obvious thing to
+// name in a description, and an agent reads a description as a suggestion, so
+// leaving it in place on a server that closes the shared namespace would send
+// every unconfigured call straight into a refusal.
+func targetingOptions(policy targeting.Policy) []mcp.ToolOption {
+	namespace := "Namespace to route this call to, for example \"global\". Required unless the server was started with one configured. There is no default: an unnamed namespace is an error, never a shared space."
+	if policy.GlobalDisabled {
+		namespace = "Namespace to route this call to. Required unless the server was started with one configured. There is no default: an unnamed namespace is an error, never a shared space. The shared \"global\" namespace is closed on this server."
+	}
+
 	return []mcp.ToolOption{
 		mcp.WithString("namespace",
-			mcp.Description("Namespace to route this call to, for example \"global\". Required unless the server was started with one configured. There is no default: an unnamed namespace is an error, never a shared space."),
+			mcp.Description(namespace),
 		),
 		mcp.WithString("model",
 			mcp.Description("Embedding model provisioned on the namespace, for example \"Qwen3-Embedding-4B\". Required unless the server was started with one configured."),

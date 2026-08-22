@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { clientIds, clientSpec, defaultScope, PACKAGE_NAME } from "../src/clients";
-import { API_KEY_ENV, buildEntry, describeKeyHandling } from "../src/serverEntry";
+import { clientIds, clientSpec, defaultScope, PACKAGE_NAME, skillsPath } from "../src/clients";
+import { API_KEY_ENV, buildEntry, describeKeyHandling, entryEnv, POLICY_ENV } from "../src/serverEntry";
 
 // The package name is a public contract: it appears in the commands on
 // noetive.io/mcp, in dev-docs, and inside the Add to Kiro deeplink. If the
@@ -112,4 +112,51 @@ test("every delegated install has a way to pass the environment", () => {
 test("copilot writes under servers, not mcpServers", () => {
   assert.equal(clientSpec("copilot").topLevelKey, "servers");
   assert.equal(clientSpec("cursor").topLevelKey, "mcpServers");
+});
+
+// The decision is written whichever way it was answered. Writing the variable
+// only when closing would leave "keep it open" indistinguishable from "nobody
+// asked", so an exported variable elsewhere could close it behind the user's
+// back.
+test("both answers about the shared namespace reach the environment", () => {
+  const spec = clientSpec("cursor");
+
+  assert.equal(entryEnv(spec, { disableGlobalNamespace: true })[POLICY_ENV.disableGlobalNamespace], "1");
+  assert.equal(entryEnv(spec, { disableGlobalNamespace: false })[POLICY_ENV.disableGlobalNamespace], "0");
+});
+
+// An install that never asked must not acquire a setting nobody chose. This is
+// what every release before the interview wrote.
+test("an unanswered shared-namespace question sets no variable", () => {
+  assert.equal(POLICY_ENV.disableGlobalNamespace in entryEnv(clientSpec("cursor"), {}), false);
+});
+
+// The Go server parses this variable strictly and refuses a value it does not
+// recognise, so the installer has to write one of the spellings it accepts.
+test("the shared-namespace variable is written as a value the server accepts", () => {
+  for (const disabled of [true, false]) {
+    const value = entryEnv(clientSpec("cursor"), { disableGlobalNamespace: disabled })[POLICY_ENV.disableGlobalNamespace];
+    assert.ok(["0", "1"].includes(value!), `${value} is not one of the accepted spellings`);
+  }
+});
+
+// Every editor that has a skills directory has to declare one path per scope it
+// supports, or an install with --scope picks a directory the editor never reads.
+test("a declared skills path resolves for every scope its editor supports", () => {
+  for (const id of clientIds()) {
+    const spec = clientSpec(id);
+    if (!spec.skills) continue;
+
+    for (const scope of Object.keys(spec.scopes)) {
+      assert.ok(skillsPath(spec, scope, "/tmp/project"), `${id} has no skills path for scope ${scope}`);
+    }
+  }
+});
+
+// An editor with no entry gets no directory rather than a guessed one. The
+// instruction formats in circulation are not interchangeable, and writing a
+// SKILL.md into a directory that expects another shape leaves a file the editor
+// silently ignores.
+test("an editor that declares no skills directory resolves to none", () => {
+  assert.equal(skillsPath(clientSpec("cursor"), "global", "/tmp/project"), undefined);
 });

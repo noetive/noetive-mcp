@@ -15,7 +15,7 @@ import (
 // but the operator's namespace.
 func TestPublishRoutesToTheNamespaceTheCallNames(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	call(t, handler, map[string]any{
 		"text":       "the gateway returns 202 before the write lands",
@@ -40,7 +40,7 @@ func TestPublishRoutesToTheNamespaceTheCallNames(t *testing.T) {
 // process — never quietly routed to a shared space.
 func TestPublishWithoutATargetNeverReachesTheBroker(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, targeting.Target{})
+	_, handler := broker.PublishTool(stub, targeting.Policy{})
 
 	message := requireError(t, call(t, handler, map[string]any{"text": "hello"}))
 
@@ -56,7 +56,7 @@ func TestPublishWithoutATargetNeverReachesTheBroker(t *testing.T) {
 // call; the fallback is a human's explicit choice, not a guess.
 func TestPublishFallsBackToTheConfiguredTarget(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	call(t, handler, map[string]any{"text": "hello"})
 
@@ -69,7 +69,7 @@ func TestPublishFallsBackToTheConfiguredTarget(t *testing.T) {
 // nothing. Refusing it costs one publish; accepting it pollutes the namespace.
 func TestPublishRefusesBlankText(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	requireError(t, call(t, handler, map[string]any{"text": "   \t\n "}))
 
@@ -83,7 +83,7 @@ func TestPublishRefusesBlankText(t *testing.T) {
 // agent believes it wrote, so a non-string value is refused and named.
 func TestPublishRefusesNonStringMetadataAndNamesTheKey(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	message := requireError(t, call(t, handler, map[string]any{
 		"text":     "hello",
@@ -100,7 +100,7 @@ func TestPublishRefusesNonStringMetadataAndNamesTheKey(t *testing.T) {
 
 func TestPublishPassesStringMetadataThrough(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	call(t, handler, map[string]any{
 		"text":     "hello",
@@ -116,7 +116,7 @@ func TestPublishPassesStringMetadataThrough(t *testing.T) {
 // turn a retried publish into a duplicate message.
 func TestPublishForwardsTheIdempotencyKey(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	call(t, handler, map[string]any{"text": "hello", "idempotency_key": "session-0001"})
 
@@ -129,7 +129,7 @@ func TestPublishForwardsTheIdempotencyKey(t *testing.T) {
 // would come back as an opaque invalid_request the agent cannot attribute.
 func TestPublishRefusesAnUnknownAckMode(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	requireError(t, call(t, handler, map[string]any{"text": "hello", "ack": "eventually"}))
 
@@ -143,7 +143,7 @@ func TestPublishRefusesAnUnknownAckMode(t *testing.T) {
 // content rather than only as prose.
 func TestPublishReturnsTheServerAssignedIdentifiers(t *testing.T) {
 	stub := &stubBroker{publishResp: semantik.PublishResponse{MessageID: "msg_01hz", Epoch: 7, Seq: 42}}
-	_, handler := broker.PublishTool(stub, complete)
+	_, handler := broker.PublishTool(stub, configured)
 
 	result := call(t, handler, map[string]any{"text": "hello"})
 	requireSuccess(t, result)

@@ -9,13 +9,22 @@
       "topLevelKey": "mcpServers",
       "install": "file-merge",
       "expandsVariables": true,
-      "detect": ["~/.cursor"],
+      "detect": [
+        "~/.cursor"
+      ],
       "scopes": {
-        "global": { "path": "~/.cursor/mcp.json", "default": true },
-        "project": { "path": "${workspace}/.cursor/mcp.json" }
+        "global": {
+          "path": "~/.cursor/mcp.json",
+          "default": true
+        },
+        "project": {
+          "path": "${workspace}/.cursor/mcp.json"
+        }
       },
       "restartHint": "Reload Cursor to pick up the new server.",
-      "quirks": ["Expands ${VAR} in command, args, env, url and headers."]
+      "quirks": [
+        "Expands ${VAR} in command, args, env, url and headers."
+      ]
     },
     "claude-code": {
       "displayName": "Claude Code",
@@ -23,22 +32,55 @@
       "topLevelKey": "mcpServers",
       "install": "cli-delegate",
       "expandsVariables": true,
-      "detect": ["~/.claude"],
+      "detect": [
+        "~/.claude"
+      ],
       "cli": {
         "command": "claude",
-        "args": ["mcp", "add", "--scope", "${scope}", "--transport", "stdio", "${env}", "${serverName}", "--", "npx", "-y", "${packageName}"],
-        "removeArgs": ["mcp", "remove", "--scope", "${scope}", "${serverName}"],
+        "args": [
+          "mcp",
+          "add",
+          "--scope",
+          "${scope}",
+          "--transport",
+          "stdio",
+          "${serverName}",
+          "${env}",
+          "--",
+          "npx",
+          "-y",
+          "${packageName}"
+        ],
+        "removeArgs": [
+          "mcp",
+          "remove",
+          "--scope",
+          "${scope}",
+          "${serverName}"
+        ],
         "envArg": "--env",
         "fallback": "file-merge"
       },
       "scopes": {
-        "local": { "path": "~/.claude.json", "default": true },
-        "project": { "path": "${workspace}/.mcp.json" },
-        "user": { "path": "~/.claude.json" }
+        "local": {
+          "path": "~/.claude.json",
+          "default": true
+        },
+        "project": {
+          "path": "${workspace}/.mcp.json"
+        },
+        "user": {
+          "path": "~/.claude.json"
+        }
+      },
+      "skills": {
+        "local": "~/.claude/skills",
+        "user": "~/.claude/skills",
+        "project": "${workspace}/.claude/skills"
       },
       "restartHint": "Start a new Claude Code session.",
       "quirks": [
-        "The CLI needs -- before the stdio command, so --env has to be spliced in ahead of the server name.",
+        "--env is variadic (`--env <env...>`), so it keeps consuming arguments until the next flag. Spliced in ahead of the server name it swallows the name itself and the CLI refuses with \"Invalid environment variable format\". It goes after the name and before the -- that terminates it, which is the order the CLI's own help gives.",
         "Project-scope servers require approval on first use.",
         "User-scope entries are keyed per project inside ~/.claude.json, which is why the CLI is preferred over editing the file."
       ]
@@ -49,17 +91,39 @@
       "topLevelKey": "mcp_servers",
       "install": "cli-delegate",
       "expandsVariables": false,
-      "detect": ["~/.codex"],
+      "detect": [
+        "~/.codex"
+      ],
       "cli": {
         "command": "codex",
-        "args": ["mcp", "add", "${serverName}", "${env}", "--", "npx", "-y", "${packageName}"],
-        "removeArgs": ["mcp", "remove", "${serverName}"],
-        "statusArgs": ["mcp", "get", "${serverName}"],
+        "args": [
+          "mcp",
+          "add",
+          "${serverName}",
+          "${env}",
+          "--",
+          "npx",
+          "-y",
+          "${packageName}"
+        ],
+        "removeArgs": [
+          "mcp",
+          "remove",
+          "${serverName}"
+        ],
+        "statusArgs": [
+          "mcp",
+          "get",
+          "${serverName}"
+        ],
         "envArg": "--env",
         "fallback": "none"
       },
       "scopes": {
-        "user": { "path": "~/.codex/config.toml", "default": true }
+        "user": {
+          "path": "~/.codex/config.toml",
+          "default": true
+        }
       },
       "restartHint": "Start a new Codex session.",
       "quirks": [
@@ -74,11 +138,20 @@
       "topLevelKey": "mcpServers",
       "install": "file-merge",
       "expandsVariables": true,
-      "detect": ["~/.gemini"],
-      "entryExtras": { "disabled": false },
+      "detect": [
+        "~/.gemini"
+      ],
+      "entryExtras": {
+        "disabled": false
+      },
       "scopes": {
-        "global": { "path": "~/.gemini/config/mcp_config.json", "default": true },
-        "workspace": { "path": "${workspace}/.agents/mcp_config.json" }
+        "global": {
+          "path": "~/.gemini/config/mcp_config.json",
+          "default": true
+        },
+        "workspace": {
+          "path": "${workspace}/.agents/mcp_config.json"
+        }
       },
       "restartHint": "Restart Antigravity to pick up the new server.",
       "quirks": [
@@ -92,10 +165,18 @@
       "topLevelKey": "servers",
       "install": "file-merge",
       "expandsVariables": true,
-      "detect": ["${workspace}/.vscode", "~/.vscode"],
-      "entryExtras": { "type": "stdio" },
+      "detect": [
+        "${workspace}/.vscode",
+        "~/.vscode"
+      ],
+      "entryExtras": {
+        "type": "stdio"
+      },
       "scopes": {
-        "workspace": { "path": "${workspace}/.vscode/mcp.json", "default": true }
+        "workspace": {
+          "path": "${workspace}/.vscode/mcp.json",
+          "default": true
+        }
       },
       "restartHint": "Switch Copilot Chat to Agent mode — MCP tools are only available there.",
       "quirks": [
@@ -109,11 +190,21 @@
       "topLevelKey": "mcpServers",
       "install": "file-merge",
       "expandsVariables": false,
-      "detect": ["~/.kiro"],
-      "entryExtras": { "disabled": false, "autoApprove": [] },
+      "detect": [
+        "~/.kiro"
+      ],
+      "entryExtras": {
+        "disabled": false,
+        "autoApprove": []
+      },
       "scopes": {
-        "user": { "path": "~/.kiro/settings/mcp.json", "default": true },
-        "workspace": { "path": "${workspace}/.kiro/settings/mcp.json" }
+        "user": {
+          "path": "~/.kiro/settings/mcp.json",
+          "default": true
+        },
+        "workspace": {
+          "path": "${workspace}/.kiro/settings/mcp.json"
+        }
       },
       "restartHint": "Kiro reloads mcp.json on save.",
       "quirks": [

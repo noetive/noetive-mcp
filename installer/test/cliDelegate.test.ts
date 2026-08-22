@@ -28,7 +28,7 @@ const claudeCode: ClientSpec = {
   expandsVariables: true,
   cli: {
     command: "claude",
-    args: ["mcp", "add", "--scope", "${scope}", "--transport", "stdio", "${env}", "${serverName}", "--", "npx", "-y", "${packageName}"],
+    args: ["mcp", "add", "--scope", "${scope}", "--transport", "stdio", "${serverName}", "${env}", "--", "npx", "-y", "${packageName}"],
     removeArgs: ["mcp", "remove", "--scope", "${scope}", "${serverName}"],
     envArg: "--env",
     fallback: "file-merge",
@@ -82,8 +82,8 @@ test("the editor's own CLI is used when it is available", async () => {
   assert.ok(add, `expected an mcp add call, got ${JSON.stringify(calls)}`);
   assert.deepEqual(add, [
     "claude", "mcp", "add", "--scope", "local", "--transport", "stdio",
-    "--env", `${API_KEY_ENV}=\${${API_KEY_ENV}}`,
-    SERVER_NAME, "--", "npx", "-y", "@noetive/mcp-server",
+    SERVER_NAME, "--env", `${API_KEY_ENV}=\${${API_KEY_ENV}}`,
+    "--", "npx", "-y", "@noetive/mcp-server",
   ]);
 });
 
@@ -307,3 +307,53 @@ test("the fallback still backs up an existing file", async () => {
 function adjacent(argv: readonly string[], flag: string, value: string): boolean {
   return argv.some((arg, i) => arg === flag && argv[i + 1] === value);
 }
+
+// The real `claude mcp add` declares `-e, --env <env...>`, which is variadic:
+// it keeps consuming arguments until the next flag. Spliced in ahead of the
+// server name it swallows the name itself, and the CLI refuses the whole
+// install with "Invalid environment variable format: noetive". Every editor
+// config written through this path depends on the order being the other way
+// round, and nothing else in the suite would notice it flipping back.
+test("environment pairs come after the server name, never before it", async () => {
+  const { run, calls } = recorder();
+  await new CliDelegateAdapter(run).install({
+    spec: claudeCode,
+    clientId: "claude-code",
+    scope: "local",
+    workspace: mkdtempSync(join(tmpdir(), "noetive-claude-")),
+    entryOptions: { targeting: { namespace: "team" }, disableGlobalNamespace: true },
+    dryRun: false,
+  });
+
+  const add = addCall(calls)!;
+  const name = add.indexOf(SERVER_NAME);
+  const firstEnv = add.indexOf("--env");
+  const terminator = add.indexOf("--");
+
+  assert.ok(name >= 0, `the server name is missing: ${JSON.stringify(add)}`);
+  assert.ok(firstEnv >= 0, `no environment was passed: ${JSON.stringify(add)}`);
+  assert.ok(name < firstEnv, `the server name must precede --env: ${JSON.stringify(add)}`);
+  assert.ok(firstEnv < terminator, `--env must be terminated by --: ${JSON.stringify(add)}`);
+});
+
+// The shared-namespace decision reaches the CLI path as well as the file path.
+// Deriving the environment twice is how the CLI path came to silently drop
+// settings while reporting that it had written them.
+test("the shared-namespace decision reaches the CLI as an environment pair", async () => {
+  for (const [disabled, expected] of [[true, "1"], [false, "0"]] as const) {
+    const { run, calls } = recorder();
+    await new CliDelegateAdapter(run).install({
+      spec: claudeCode,
+      clientId: "claude-code",
+      scope: "local",
+      workspace: mkdtempSync(join(tmpdir(), "noetive-claude-")),
+      entryOptions: { disableGlobalNamespace: disabled },
+      dryRun: false,
+    });
+
+    assert.ok(
+      adjacent(addCall(calls)!, "--env", `NOETIVE_DISABLE_GLOBAL_NS=${expected}`),
+      `expected NOETIVE_DISABLE_GLOBAL_NS=${expected}`,
+    );
+  }
+});

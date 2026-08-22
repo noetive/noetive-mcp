@@ -20,7 +20,7 @@ func TestSearchReturnsContentAndMetadata(t *testing.T) {
 		Namespace: "incidents",
 		Score:     0.87,
 	}}}}
-	_, handler := broker.SearchTool(stub, complete)
+	_, handler := broker.SearchTool(stub, configured)
 
 	result := call(t, handler, map[string]any{"query": "MATCH DISTANCE(\"gateway\") WITHIN 0.4"})
 	if requireSuccess(t, result) == nil {
@@ -36,7 +36,7 @@ func TestSearchReturnsContentAndMetadata(t *testing.T) {
 // failed", so an empty result set has to say so in words.
 func TestSearchSaysSoWhenNothingMatched(t *testing.T) {
 	stub := &stubBroker{searchResp: semantik.SearchResponse{}}
-	_, handler := broker.SearchTool(stub, complete)
+	_, handler := broker.SearchTool(stub, configured)
 
 	result := call(t, handler, map[string]any{"query": "MATCH"})
 	requireSuccess(t, result)
@@ -50,7 +50,7 @@ func TestSearchSaysSoWhenNothingMatched(t *testing.T) {
 // namespace would read someone else's space.
 func TestSearchWithoutATargetNeverReachesTheBroker(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.SearchTool(stub, targeting.Target{})
+	_, handler := broker.SearchTool(stub, targeting.Policy{})
 
 	message := requireError(t, call(t, handler, map[string]any{"query": "MATCH"}))
 
@@ -64,7 +64,7 @@ func TestSearchWithoutATargetNeverReachesTheBroker(t *testing.T) {
 
 func TestSearchForwardsTheLimit(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.SearchTool(stub, complete)
+	_, handler := broker.SearchTool(stub, configured)
 
 	call(t, handler, map[string]any{"query": "MATCH", "limit": float64(5)})
 
@@ -78,7 +78,7 @@ func TestSearchForwardsTheLimit(t *testing.T) {
 // more.
 func TestOmittedLimitLeavesTheQueryInCharge(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.SearchTool(stub, complete)
+	_, handler := broker.SearchTool(stub, configured)
 
 	call(t, handler, map[string]any{"query": "MATCH DISTANCE(\"x\") WITHIN 0.4 LIMIT 50"})
 
@@ -89,7 +89,7 @@ func TestOmittedLimitLeavesTheQueryInCharge(t *testing.T) {
 
 func TestSearchRefusesANegativeLimit(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.SearchTool(stub, complete)
+	_, handler := broker.SearchTool(stub, configured)
 
 	requireError(t, call(t, handler, map[string]any{"query": "MATCH", "limit": float64(-1)}))
 

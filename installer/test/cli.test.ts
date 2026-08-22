@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -239,4 +239,209 @@ test("add is an alias for init", async () => {
   } finally {
     process.chdir(cwd);
   }
+});
+
+
+/**
+ * withoutEditorCLIs runs body with PATH emptied, so an editor's own CLI is
+ * never invoked.
+ *
+ * Delegating to a real `claude` on the runner's PATH would make these tests
+ * depend on which version of it happens to be installed, and would write into
+ * that machine's own configuration. Emptying PATH takes the documented
+ * file-merge fallback instead, which is the path with something to assert
+ * about.
+ */
+async function withoutEditorCLIs<T>(body: () => Promise<T>): Promise<T> {
+  const previous = process.env.PATH;
+  process.env.PATH = mkdtempSync(join(tmpdir(), "noetive-nopath-"));
+  try {
+    return await body();
+  } finally {
+    process.env.PATH = previous;
+  }
+}
+
+/** inWorkspace runs body from a scratch project directory. */
+async function inWorkspace<T>(body: (dir: string) => Promise<T>): Promise<T> {
+  const dir = mkdtempSync(join(tmpdir(), "noetive-cli-"));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    return await body(dir);
+  } finally {
+    process.chdir(cwd);
+  }
+}
+
+// The flags exist so a scripted install never has to answer a question. An
+// unknown flag is an error rather than being ignored, so each of these has to
+// be declared or the documented command line stops working.
+test("every documented init flag is accepted", () => {
+  const flags = parse([
+    "init", "--client", "cursor", "--namespace", "acme", "--model", "m", "--dimensions", "1024",
+    "--disable-global-ns", "--skills", "semql,doctor", "--yes",
+  ]).flags;
+
+  assert.equal(flags.get("namespace"), "acme");
+  assert.equal(flags.get("dimensions"), "1024");
+  assert.equal(flags.get("skills"), "semql,doctor");
+  assert.equal(flags.get("disable-global-ns"), true);
+  assert.equal(flags.get("yes"), true);
+});
+
+// Two flags that answer the same question in opposite directions. Resolving one
+// of them silently would be the opposite of what half the readers of that
+// command line expect.
+test("asking to both close and open the shared namespace is refused", async () => {
+  await inWorkspace(async () => {
+    const { code, err } = await capture([
+      "init", "--client", "cursor", "--scope", "project", "--disable-global-ns", "--allow-global-ns",
+    ]);
+
+    assert.equal(code, 1);
+    assert.match(err, /opposite things/);
+  });
+});
+
+// The decision is written whichever way it went. Omitting the variable when
+// someone said "leave it open" would let an exported variable elsewhere close
+// it behind their back.
+test("both answers about the shared namespace reach the config", async () => {
+  for (const [flag, expected] of [["--disable-global-ns", "1"], ["--allow-global-ns", "0"]] as const) {
+    await inWorkspace(async (dir) => {
+      const { code } = await capture(["init", "--client", "cursor", "--scope", "project", flag]);
+      assert.equal(code, 0);
+
+      const config = JSON.parse(readFileSync(join(dir, ".cursor", "mcp.json"), "utf8"));
+      assert.equal(config.mcpServers.noetive.env.NOETIVE_DISABLE_GLOBAL_NS, expected);
+    });
+  }
+});
+
+// Neither flag means neither answer, which is what every release before the
+// interview wrote. An install nobody could be asked about must not acquire a
+// setting nobody chose.
+test("an unanswered shared-namespace question writes no variable", async () => {
+  await inWorkspace(async (dir) => {
+    await capture(["init", "--client", "cursor", "--scope", "project"]);
+
+    const config = JSON.parse(readFileSync(join(dir, ".cursor", "mcp.json"), "utf8"));
+    assert.equal("NOETIVE_DISABLE_GLOBAL_NS" in config.mcpServers.noetive.env, false);
+  });
+});
+
+// A typo in --skills would otherwise report a successful install of a skill
+// that was never written.
+test("a skill nobody ships is refused by name", async () => {
+  await withoutEditorCLIs(async () => await inWorkspace(async () => {
+    const { code, err } = await capture([
+      "init", "--client", "claude-code", "--scope", "project", "--skills", "semql,nonsense",
+    ]);
+
+    assert.equal(code, 1);
+    assert.match(err, /nonsense/);
+  }));
+});
+
+// --skills none is how a scripted install says "configure the server only".
+test("skills none installs the server and no skills", async () => {
+  await withoutEditorCLIs(async () => await inWorkspace(async (dir) => {
+    const { code } = await capture([
+      "init", "--client", "claude-code", "--scope", "project", "--skills", "none",
+    ]);
+
+    assert.equal(code, 0);
+    assert.equal(existsSync(join(dir, ".claude", "skills")), false);
+  }));
+});
+
+test("skills all installs every skill the package ships", async () => {
+  await withoutEditorCLIs(async () => await inWorkspace(async (dir) => {
+    const { code, out } = await capture([
+      "init", "--client", "claude-code", "--scope", "project", "--skills", "all",
+    ]);
+
+    assert.equal(code, 0);
+    assert.match(out, /Installed \d+ skill file/);
+    assert.ok(existsSync(join(dir, ".claude", "skills", "semql", "SKILL.md")));
+    assert.ok(existsSync(join(dir, ".claude", "skills", "semql", "references")));
+  }));
+});
+
+// remove is documented as reversing what init did. Skills that came in with the
+// entry go out with it, or the editor keeps loading instructions for tools it
+// no longer has.
+test("remove takes the installed skills with it", async () => {
+  await withoutEditorCLIs(async () => await inWorkspace(async (dir) => {
+    await capture(["init", "--client", "claude-code", "--scope", "project", "--skills", "all"]);
+    const { code } = await capture(["remove", "--client", "claude-code", "--scope", "project"]);
+
+    assert.equal(code, 0);
+    assert.equal(existsSync(join(dir, ".claude", "skills", "semql")), false);
+  }));
+});
+
+// An editor with nowhere to put skills is told so, rather than being given
+// files in a shape it silently ignores.
+test("an editor with no skills directory says so", async () => {
+  await inWorkspace(async () => {
+    const { out } = await capture(["init", "--client", "cursor", "--scope", "project", "--skills", "all"]);
+
+    assert.match(out, /no skills directory/);
+  });
+});
+
+// --dry-run is what a careful person runs to see what would happen before it
+// happens. Printing the key there puts it in their scrollback, their shell
+// history and any screen share that is running.
+test("a dry run does not print the API key it would write", async () => {
+  await inWorkspace(async () => {
+    const { out } = await capture([
+      "init", "--client", "cursor", "--scope", "project", "--api-key", "keyu_notInTheOutput", "--dry-run",
+    ]);
+
+    assert.equal(out.includes("keyu_notInTheOutput"), false, "the key reached the terminal");
+    assert.match(out, /<your key>/);
+  });
+});
+
+// The variable reference is not a secret, and hiding it would leave a dry run
+// unable to show the one thing it is meant to show.
+test("the variable reference survives a dry run intact", async () => {
+  await inWorkspace(async () => {
+    const { out } = await capture(["init", "--client", "cursor", "--scope", "project", "--dry-run"]);
+
+    assert.match(out, /\$\{NOETIVE_KEY_SECRET\}/);
+  });
+});
+
+// This is load-bearing. postinstall, CI and editors all invoke init with no
+// terminal, and a prompt in front of any of them is not a question but a
+// process that never exits.
+test("an install with no terminal asks nothing and still writes", async () => {
+  await inWorkspace(async (dir) => {
+    // The test runner has no TTY on stdin, which is the same condition CI and
+    // an editor present. Anything that tried to prompt here would hang.
+    const { code } = await capture(["init", "--client", "cursor", "--scope", "project", "--namespace", "acme"]);
+
+    assert.equal(code, 0);
+    const config = JSON.parse(readFileSync(join(dir, ".cursor", "mcp.json"), "utf8"));
+    assert.equal(config.mcpServers.noetive.env.NOETIVE_NAMESPACE, "acme");
+  });
+});
+
+// Several editors installed is genuinely ambiguous. Without a terminal it stays
+// a refusal listing the candidates, because picking writes into an editor the
+// user did not mean to configure.
+test("ambiguous detection with no terminal refuses and names the candidates", async () => {
+  await withHome([".cursor", ".kiro"], async () => {
+    await inWorkspace(async () => {
+      const { code, err } = await capture(["init"]);
+
+      assert.equal(code, 1);
+      assert.match(err, /several editors/);
+      assert.match(err, /cursor/);
+    });
+  });
 });

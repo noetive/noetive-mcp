@@ -22,7 +22,7 @@ func TestSubscribeStopsAtTheRequestedCount(t *testing.T) {
 		{MessageID: "msg_3", Score: 0.7},
 	}}
 	stub := &stubBroker{stream: stream}
-	_, handler := broker.SubscribeTool(stub, complete)
+	_, handler := broker.SubscribeTool(stub, configured)
 
 	result := call(t, handler, map[string]any{"query": "MATCH", "max_matches": float64(2), "wait_seconds": float64(60)})
 	requireSuccess(t, result)
@@ -45,7 +45,7 @@ func TestInterruptedStreamKeepsWhatArrivedAndSaysSo(t *testing.T) {
 		err:    &semantik.SubscribeStreamError{Cause: context.Canceled},
 	}
 	stub := &stubBroker{stream: stream}
-	_, handler := broker.SubscribeTool(stub, complete)
+	_, handler := broker.SubscribeTool(stub, configured)
 
 	result := call(t, handler, map[string]any{"query": "MATCH", "wait_seconds": float64(60)})
 	requireSuccess(t, result)
@@ -65,7 +65,7 @@ func TestSetupFailureIsDistinguishedFromAStreamFailure(t *testing.T) {
 	stub := &stubBroker{subErr: &semantik.SubscribeSetupError{
 		Err: &semantik.Error{Code: semantik.CodeUnavailable, Message: "setup budget exceeded", HTTPStatus: 503},
 	}}
-	_, handler := broker.SubscribeTool(stub, complete)
+	_, handler := broker.SubscribeTool(stub, configured)
 
 	message := requireError(t, call(t, handler, map[string]any{"query": "MATCH"}))
 
@@ -79,7 +79,7 @@ func TestSetupFailureIsDistinguishedFromAStreamFailure(t *testing.T) {
 func TestSubscriptionIsClosedWhenTheCallReturns(t *testing.T) {
 	stream := &fakeStream{id: "sub_01hz", events: []semantik.MatchEvent{{MessageID: "msg_1"}}}
 	stub := &stubBroker{stream: stream}
-	_, handler := broker.SubscribeTool(stub, complete)
+	_, handler := broker.SubscribeTool(stub, configured)
 
 	call(t, handler, map[string]any{"query": "MATCH", "max_matches": float64(1)})
 
@@ -94,7 +94,7 @@ func TestSubscriptionIsClosedWhenTheCallReturns(t *testing.T) {
 func TestOversizedWindowIsClampedNotRefused(t *testing.T) {
 	stream := &fakeStream{id: "sub_01hz", events: []semantik.MatchEvent{{MessageID: "msg_1"}}}
 	stub := &stubBroker{stream: stream}
-	_, handler := broker.SubscribeTool(stub, complete)
+	_, handler := broker.SubscribeTool(stub, configured)
 
 	result := call(t, handler, map[string]any{
 		"query":        "MATCH",
@@ -112,7 +112,7 @@ func TestOversizedWindowIsClampedNotRefused(t *testing.T) {
 // namespace would stream someone else's traffic.
 func TestSubscribeWithoutATargetNeverReachesTheBroker(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.SubscribeTool(stub, targeting.Target{})
+	_, handler := broker.SubscribeTool(stub, targeting.Policy{})
 
 	requireError(t, call(t, handler, map[string]any{"query": "MATCH"}))
 
@@ -137,7 +137,7 @@ func (f *fakeStream) ID() string { return f.id }
 
 func (f *fakeStream) Next(ctx context.Context) (semantik.MatchEvent, error) {
 	if err := ctx.Err(); err != nil {
-		return semantik.MatchEvent{}, err
+		return semantik.MatchEvent{}, &semantik.SubscribeStreamError{Cause: err}
 	}
 
 	f.mu.Lock()
@@ -155,8 +155,15 @@ func (f *fakeStream) Next(ctx context.Context) (semantik.MatchEvent, error) {
 		}
 		// A quiet namespace: block until the window closes, holding no lock so
 		// Close stays callable.
+		//
+		// The cancellation comes back wrapped, because that is what the real
+		// *semantik.Subscription does — wrapSubscribeStreamError wraps any
+		// mid-stream error, cancellation included, so the type cannot tell an
+		// ended window from a dropped connection. A double that returned the bare
+		// context error would let collect distinguish them for free and hide the
+		// very defect this shape exists to catch.
 		<-ctx.Done()
-		return semantik.MatchEvent{}, ctx.Err()
+		return semantik.MatchEvent{}, &semantik.SubscribeStreamError{Cause: ctx.Err()}
 	}
 	return event, nil
 }

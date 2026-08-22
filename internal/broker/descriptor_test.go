@@ -17,8 +17,8 @@ import (
 // be gated behind a confirmation prompt, which turns a search an agent should
 // make freely into one that interrupts the user.
 func TestReadOnlyToolsAreAnnotatedAsSuch(t *testing.T) {
-	searchTool, _ := broker.SearchTool(&stubBroker{}, complete)
-	subscribeTool, _ := broker.SubscribeTool(&stubBroker{}, complete)
+	searchTool, _ := broker.SearchTool(&stubBroker{}, configured)
+	subscribeTool, _ := broker.SubscribeTool(&stubBroker{}, configured)
 	lintTool, _ := broker.LintTool(&stubBroker{})
 	healthTool, _ := broker.HealthTool(&stubBroker{})
 
@@ -34,7 +34,7 @@ func TestReadOnlyToolsAreAnnotatedAsSuch(t *testing.T) {
 // Publish writes. Annotating it read-only would tell an editor it is safe to
 // call without asking, which is the opposite of true.
 func TestPublishIsNotAnnotatedReadOnly(t *testing.T) {
-	tool, _ := broker.PublishTool(&stubBroker{}, complete)
+	tool, _ := broker.PublishTool(&stubBroker{}, configured)
 
 	if tool.Annotations.ReadOnlyHint != nil && *tool.Annotations.ReadOnlyHint {
 		t.Error("publish writes but is annotated read-only")
@@ -56,7 +56,7 @@ func TestHealthIsAnnotatedIdempotent(t *testing.T) {
 // wire format allows.
 func TestTheLargestDimensionalityIsAccepted(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.SearchTool(stub, targeting.Target{})
+	_, handler := broker.SearchTool(stub, targeting.Policy{})
 
 	result := call(t, handler, map[string]any{
 		"query":      "MATCH",
@@ -78,7 +78,7 @@ func TestTheLargestDimensionalityIsAccepted(t *testing.T) {
 // wrong value to the server.
 func TestANegativeDimensionalityIsRefused(t *testing.T) {
 	stub := &stubBroker{}
-	_, handler := broker.SearchTool(stub, targeting.Target{})
+	_, handler := broker.SearchTool(stub, targeting.Policy{})
 
 	requireError(t, call(t, handler, map[string]any{
 		"query":      "MATCH",
@@ -100,7 +100,7 @@ func TestNoRetryHintIsShownWhenTheServerSentNone(t *testing.T) {
 		Code:       semantik.CodeInvalidRequest,
 		Message:    "malformed query",
 		HTTPStatus: 400,
-	}}, complete)
+	}}, configured)
 
 	message := requireError(t, call(t, handler, map[string]any{"query": "MATCH"}))
 
@@ -116,7 +116,7 @@ func TestARetryHintSurvivesWhenTheServerSendsOne(t *testing.T) {
 		Code:       semantik.CodeUnavailable,
 		RetryAfter: 250_000_000, // 250ms
 		HTTPStatus: 503,
-	}}, complete)
+	}}, configured)
 
 	message := requireError(t, call(t, handler, map[string]any{"query": "MATCH"}))
 

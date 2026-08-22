@@ -23,7 +23,7 @@ func FuzzPublishArguments(f *testing.F) {
 	f.Add("text", "ns", "m", 65536, "k", "durable")
 
 	f.Fuzz(func(t *testing.T, text, namespace, model string, dimensions int, key, ack string) {
-		_, handler := broker.PublishTool(&stubBroker{}, targeting.Target{})
+		_, handler := broker.PublishTool(&stubBroker{}, targeting.Policy{})
 		mustNotPanic(t, handler, map[string]any{
 			"text":            text,
 			"namespace":       namespace,
@@ -42,7 +42,7 @@ func FuzzSearchArguments(f *testing.F) {
 	f.Add("MATCH", "ns", "m", 2147483647, 2147483647)
 
 	f.Fuzz(func(t *testing.T, query, namespace, model string, dimensions, limit int) {
-		_, handler := broker.SearchTool(&stubBroker{}, targeting.Target{})
+		_, handler := broker.SearchTool(&stubBroker{}, targeting.Policy{})
 		mustNotPanic(t, handler, map[string]any{
 			"query":      query,
 			"namespace":  namespace,
@@ -75,7 +75,7 @@ func FuzzArgumentTypeConfusion(f *testing.F) {
 	f.Add("\x00", "[]")
 
 	f.Fuzz(func(t *testing.T, text, dimensions string) {
-		_, handler := broker.PublishTool(&stubBroker{}, targeting.Target{})
+		_, handler := broker.PublishTool(&stubBroker{}, targeting.Policy{})
 		mustNotPanic(t, handler, map[string]any{
 			"text":       text,
 			"dimensions": dimensions,       // string where a number belongs
