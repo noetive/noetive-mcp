@@ -198,6 +198,10 @@ integration/payload/cache/
 installer/bin/*
 !installer/bin/*.js
 
+# The repository's own bin/ is developer tooling, not build output. Anchored so
+# `bin/` keeps ignoring compiled output wherever else it appears.
+!/bin/
+
 # npm build output and dependencies
 installer/node_modules/
 installer/dist/
