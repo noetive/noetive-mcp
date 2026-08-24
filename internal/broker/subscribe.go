@@ -170,9 +170,9 @@ func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.T
 		if err != nil {
 			var setup *semantik.SubscribeSetupError
 			if errors.As(err, &setup) {
-				return failure("noetive_subscribe could not start the subscription", err), nil
+				return failure("noetive_subscribe could not start the subscription", setupBudget+wait, err), nil
 			}
-			return failure("noetive_subscribe", err), nil
+			return failure("noetive_subscribe", setupBudget+wait, err), nil
 		}
 		// Ignored deliberately: the collect window is over either way, and a
 		// close error tells the agent nothing it can act on.

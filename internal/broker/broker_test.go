@@ -2,6 +2,7 @@ package broker_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -146,12 +147,51 @@ func TestPreflightRejectionIsDistinguishedFromServerFailure(t *testing.T) {
 
 // Transport failures are not wrapped in *semantik.Error by the SDK. They still
 // have to reach the agent rather than being swallowed into a bare "failed".
+//
+// A plain error rather than a context one: those two are reported by their own
+// branches below, so using one here would test that path twice and leave the
+// generic one uncovered.
 func TestTransportFailuresStillCarryTheirCause(t *testing.T) {
+	cause := errors.New("dial tcp 10.0.0.1:443: connect: connection refused")
+	_, handler := broker.HealthTool(&stubBroker{healthErr: cause})
+	message := requireError(t, call(t, handler, map[string]any{}))
+
+	if !strings.Contains(message, cause.Error()) {
+		t.Errorf("expected the underlying cause in the message, got: %s", message)
+	}
+}
+
+// "context deadline exceeded" names no deadline, no duration and no side, so a
+// tool reporting it verbatim leaves the reader unable to tell our budget from
+// the server's answer. It is the shape a stalled embedder takes — a text-bearing
+// call blocks on it and nothing comes back — and naming the budget is what
+// distinguishes that from a rejection, which arrives at once with a code.
+func TestOurOwnBudgetExpiringSaysSoAndNamesIt(t *testing.T) {
 	_, handler := broker.HealthTool(&stubBroker{healthErr: context.DeadlineExceeded})
 	message := requireError(t, call(t, handler, map[string]any{}))
 
-	if !strings.Contains(message, context.DeadlineExceeded.Error()) {
-		t.Errorf("expected the underlying cause in the message, got: %s", message)
+	if !strings.Contains(message, "no response within") {
+		t.Errorf("expected the message to say nothing came back, got: %s", message)
+	}
+	// The duration, not just the fact. "no response within 10s" tells a reader
+	// which call this was and how long it waited; without it they cannot tell a
+	// probe from a query.
+	if !strings.Contains(message, "10s") {
+		t.Errorf("expected the message to name the budget that expired, got: %s", message)
+	}
+}
+
+// An editor closing a session cancels every request in flight. Reporting that
+// as a failure against Noetive sends people to check a service that was fine.
+func TestACancelledCallIsNotReportedAsABrokerFailure(t *testing.T) {
+	_, handler := broker.HealthTool(&stubBroker{healthErr: context.Canceled})
+	message := requireError(t, call(t, handler, map[string]any{}))
+
+	if !strings.Contains(message, "cancelled") {
+		t.Errorf("expected the message to name the caller, got: %s", message)
+	}
+	if strings.Contains(message, "no response within") {
+		t.Errorf("a cancellation was reported as a timeout: %s", message)
 	}
 }
 

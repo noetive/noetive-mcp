@@ -85,7 +85,7 @@ func SearchTool(s Searcher, policy targeting.Policy) (mcp.Tool, mcpserver.ToolHa
 			Dimensions: target.Dimensions,
 		})
 		if err != nil {
-			return failure("noetive_search", err), nil
+			return failure("noetive_search", queryTimeout, err), nil
 		}
 
 		results := searchResults{Results: make([]match, 0, len(resp.Results))}

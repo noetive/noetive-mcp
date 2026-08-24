@@ -65,7 +65,7 @@ func LintTool(l Linter) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 
 		resp, err := l.Lint(ctx, semantik.LintRequest{Query: query, Cursor: cursor})
 		if err != nil {
-			return failure("noetive_lint", err), nil
+			return failure("noetive_lint", probeTimeout, err), nil
 		}
 
 		result := linted{

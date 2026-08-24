@@ -101,7 +101,7 @@ func PublishTool(p Publisher, policy targeting.Policy) (mcp.Tool, mcpserver.Tool
 			Dimensions:     target.Dimensions,
 		})
 		if err != nil {
-			return failure("noetive_publish", err), nil
+			return failure("noetive_publish", queryTimeout, err), nil
 		}
 
 		published := publication{MessageID: resp.MessageID, Epoch: resp.Epoch, Seq: resp.Seq}

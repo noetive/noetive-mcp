@@ -33,7 +33,7 @@ func HealthTool(h HealthChecker) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		defer cancel()
 
 		if err := h.Health(ctx); err != nil {
-			return failure("noetive_health", err), nil
+			return failure("noetive_health", probeTimeout, err), nil
 		}
 		return mcp.NewToolResultText("Noetive Semantik is reachable and the API key was accepted."), nil
 	}

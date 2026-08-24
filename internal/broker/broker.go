@@ -11,6 +11,7 @@
 package broker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -91,10 +92,26 @@ func requestedTarget(request mcp.CallToolRequest) (targeting.Target, error) {
 // request id is what a human quotes to support. Collapsing these into a single
 // opaque string is what makes a transient 503 indistinguishable from a
 // permanent misconfiguration.
-func failure(operation string, err error) *mcp.CallToolResult {
+func failure(operation string, budget time.Duration, err error) *mcp.CallToolResult {
+	// Our own budget expiring is not the server saying anything, and reads
+	// identically to one that did: "context deadline exceeded" names no
+	// deadline, no duration and no side. Saying which budget ran out is what
+	// separates an upstream that never answered — the shape an embedder stall
+	// takes, since a text-bearing call blocks on it — from a rejection, which
+	// arrives in milliseconds carrying a code and a request id.
+	if errors.Is(err, context.DeadlineExceeded) {
+		return mcp.NewToolResultErrorf("%s failed: no response within %s (nothing was returned, so there is no code or request id to quote)", operation, budget)
+	}
+	// The caller withdrawing is not a failure of the call. An editor closing a
+	// session cancels every request in flight, and reporting that as an error
+	// against Noetive sends people to check a service that was fine.
+	if errors.Is(err, context.Canceled) {
+		return mcp.NewToolResultErrorf("%s failed: the caller cancelled the request before it completed", operation)
+	}
+
 	var apiErr *semantik.Error
 	if !errors.As(err, &apiErr) {
-		// Transport, context and preflight-free errors arrive raw from the SDK.
+		// Transport and preflight-free errors arrive raw from the SDK.
 		return mcp.NewToolResultErrorf("%s failed: %s", operation, err)
 	}
 
