@@ -21,7 +21,7 @@ import (
 func TestConnectReturnsALiveClientWhenTheKeyIsUsable(t *testing.T) {
 	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
 
-	broker := connect()
+	broker := connect(nil)
 
 	if _, ok := broker.(*semantik.Client); !ok {
 		t.Fatalf("expected a live *semantik.Client, got %T", broker)
@@ -36,7 +36,7 @@ func TestConnectReturnsALiveClientWhenTheKeyIsUsable(t *testing.T) {
 func TestConnectRefusesAnUnexpandedPlaceholderBeforeBuildingAClient(t *testing.T) {
 	t.Setenv(mcpserver.APIKeyEnv, "${NOETIVE_KEY_SECRET}")
 
-	broker := connect()
+	broker := connect(nil)
 
 	if _, ok := broker.(*semantik.Client); ok {
 		t.Fatal("a placeholder was accepted as a working credential")
@@ -60,7 +60,7 @@ func TestConnectRefusesAnUnexpandedPlaceholderBeforeBuildingAClient(t *testing.T
 func TestConnectDegradesRatherThanFailingWhenNoKeyIsSet(t *testing.T) {
 	t.Setenv(mcpserver.APIKeyEnv, "")
 
-	err := connect().Health(context.Background())
+	err := connect(nil).Health(context.Background())
 	if err == nil {
 		t.Fatal("expected calls to be refused with no credential")
 	}

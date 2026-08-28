@@ -17,6 +17,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
+	"github.com/noetive/noetive-mcp/internal/embedding"
 	"github.com/noetive/noetive-mcp/internal/mcpserver"
 	"github.com/noetive/noetive-mcp/internal/targeting"
 )
@@ -56,6 +57,11 @@ func run(argv []string, stdout io.Writer, serve func(*mcpgo.MCPServer) error) er
 	model := flags.String("model", "", "embedding model to use when a tool call does not name one")
 	dimensions := flags.Uint("dimensions", 0, "embedding dimensionality to use when a tool call does not name one")
 
+	// There is no matching flag for the endpoint's key. A secret in an argument
+	// list is visible to anyone who can run ps, which is why the Noetive key has
+	// no flag either; it is read from the environment or not at all.
+	embeddingsURL := flags.String("embeddings-url", "", "OpenAI-compatible /v1/embeddings endpoint to embed with on this machine, instead of sending text to Noetive")
+
 	// BoolFunc rather than Bool so "not passed" stays distinguishable from
 	// "passed false". A plain bool flag defaults to false, which would make an
 	// unpassed flag indistinguishable from -disable-global-ns=false and so
@@ -86,7 +92,32 @@ func run(argv []string, stdout io.Writer, serve func(*mcpgo.MCPServer) error) er
 		return err
 	}
 
-	return serve(mcpserver.New(version, connect(), policy))
+	endpoint, err := resolveEmbedder(*embeddingsURL)
+	if err != nil {
+		return err
+	}
+
+	return serve(mcpserver.New(version, connect(endpoint), policy))
+}
+
+// resolveEmbedder builds the embeddings endpoint an operator pointed this
+// server at, or nil when they pointed it at nothing.
+//
+// Flags win over the environment, for the same reason they do in resolvePolicy:
+// the installer writes them into the editor's own config, which is the more
+// specific statement of intent.
+//
+// A value that cannot be used stops the process rather than starting a server
+// that quietly embeds through Noetive instead. Nothing else here fails that
+// way, and the asymmetry is the point: a missing API key can be reported on
+// every tool call, whereas a server that silently gave up on local embedding
+// would keep working and keep sending the text its operator arranged to keep.
+func resolveEmbedder(flagURL string) (*embedding.Endpoint, error) {
+	url := flagURL
+	if url == "" {
+		url = os.Getenv(embedding.EnvURL)
+	}
+	return embedding.At(url, os.Getenv(embedding.EnvKey))
 }
 
 // withoutServeVerb drops a leading `serve`, which the npm wrapper passes when
@@ -104,14 +135,18 @@ func withoutServeVerb(argv []string) []string {
 }
 
 // connect builds the Semantik client, or a broker that explains why it could
-// not.
+// not, and wraps it to embed on this machine when an endpoint was configured.
 //
 // Exiting on a missing credential would leave the editor reporting a server
 // that failed to launch, with no tools registered and nothing to ask — not even
 // noetive_health, whose whole job is to say what is wrong. Starting degraded
 // keeps the tools visible and turns an opaque launch failure into a message the
 // agent can read out.
-func connect() mcpserver.Broker {
+//
+// The degraded broker is deliberately not wrapped. It refuses every call
+// already, and wrapping it would report a missing Noetive key as a problem with
+// the embeddings service.
+func connect(e *embedding.Endpoint) mcpserver.Broker {
 	// Checked before the client is built, because an unexpanded placeholder is
 	// a non-empty string that passes every validation the SDK applies. Left
 	// alone it reaches the server and returns "unauthorized", pointing the user
@@ -123,7 +158,10 @@ func connect() mcpserver.Broker {
 
 	client, err := semantik.NewFromEnv()
 	if err == nil {
-		return client
+		if e == nil {
+			return client
+		}
+		return embedding.Precomputed(client, e)
 	}
 
 	return unconfigured("%s is not set for this editor. Get an API key from https://noetive.io/dashboard, then either export it in the environment your editor launches from, or re-run: npx @noetive/mcp-server init --client <editor> --api-key <key>", mcpserver.APIKeyEnv)

@@ -39,7 +39,7 @@ type searchResults struct {
 //	srv.AddTool(tool, handler)
 func SearchTool(s Searcher, policy targeting.Policy) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	options := []mcp.ToolOption{
-		mcp.WithDescription("Search a Noetive Semantik namespace with a SemQL query and get back ranked messages with their content and metadata. Use this to find what other agents already learned instead of rediscovering it. Run noetive_lint first if you are unsure the query parses."),
+		mcp.WithDescription("Search a Noetive Semantik namespace with a SemQL query and get back ranked messages with their content and metadata. Use this to find what other agents already learned instead of rediscovering it. Run noetive_lint first if you are unsure the query parses. A hit whose content is empty was published as a vector with no text behind it; it is a real match, and its metadata is all there is to read."),
 		mcp.WithString("query",
 			mcp.Required(),
 			mcp.Description("SemQL query, for example: MATCH DISTANCE(\"payment reconciliation\") WITHIN 0.4 LIMIT 10"),

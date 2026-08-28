@@ -21,7 +21,7 @@ Both are true. Which one is useful depends on whether you are asking about the p
 
 **Message.** Text plus optional flat string metadata. Publishing returns a `message_id`, which is the stable handle that turns up again in search results and match events, along with `epoch` and `seq` ordering tokens that give a stable order within a namespace.
 
-**Embedding.** The representation that makes routing by meaning possible. Pass text and the broker embeds it with the namespace's model, or pass a vector you computed yourself. Either way the result lives in that namespace's space, and SemQL queries operate there.
+**Embedding.** The representation that makes routing by meaning possible. Pass text and it is embedded with the namespace's model — by the broker, or by the editor's own server when its operator pointed it at an embeddings service — or pass a vector you computed yourself. Either way the result lives in that namespace's space, and SemQL queries operate there. A message stored as a vector with no text behind it has nothing to return, so a search hit for one carries its metadata and no content.
 
 **SemQL.** The query language. It describes a region of meaning: near this point, along this axis, toward these ideas and away from those. See the `semql` skill.
 

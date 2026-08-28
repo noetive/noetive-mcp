@@ -34,7 +34,6 @@ func instructionsFor(policy targeting.Policy) string {
 	return `Noetive Semantik is a semantic broker: agents publish messages and find each other's messages by meaning rather than by topic name.
 
 Publish what a peer would want to find later, such as a conclusion, a root cause or a decision, and search before rediscovering something a peer may already have written.
-
 Every publish, search and subscribe must name a namespace, an embedding model and its dimensions. There is no default. If this server was started without them configured, pass them on each call. ` + shared + `
 
 Queries use SemQL. When a query is unfamiliar or a search reports invalid_request, check it with noetive_lint before retrying.`

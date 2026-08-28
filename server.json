@@ -44,6 +44,17 @@
           "name": "NOETIVE_DISABLE_GLOBAL_NS",
           "description": "Set to 1 to close the shared \"global\" namespace on this server. Every call that routes there is refused before the request is sent, and the tools stop offering it as an example. Unset leaves it available. A value that is neither a yes nor a no stops the server rather than being read as no.",
           "isRequired": false
+        },
+        {
+          "name": "NOETIVE_EMBEDDINGS_URL",
+          "description": "An OpenAI-compatible /v1/embeddings endpoint you run. Set it and embeddings are computed on this machine rather than by Noetive: a publish carries the vector alongside its text, and a query's anchor phrases are replaced by vectors so they are never sent. This is not confidential publishing — message text still travels, because that is what a search returns. The endpoint must answer to the same model name as NOETIVE_MODEL and return NOETIVE_DIMENSIONS values. Plain http is accepted only for a loopback address. Inside a container 127.0.0.1 is the container itself; use host.docker.internal.",
+          "isRequired": false
+        },
+        {
+          "name": "NOETIVE_EMBEDDINGS_KEY_SECRET",
+          "description": "Bearer token for that endpoint, when it needs one. Endpoints running on your own machine usually do not.",
+          "isRequired": false,
+          "isSecret": true
         }
       ]
     },
@@ -99,6 +110,20 @@
           "value": "NOETIVE_DISABLE_GLOBAL_NS",
           "isRepeated": true,
           "description": "Forwards the decision to close the shared namespace, when one was made."
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "NOETIVE_EMBEDDINGS_URL",
+          "isRepeated": true,
+          "description": "Forwards the local embeddings endpoint, when one is set. Note that 127.0.0.1 inside the container is the container, not the host."
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "NOETIVE_EMBEDDINGS_KEY_SECRET",
+          "isRepeated": true,
+          "description": "Forwards that endpoint's key from the launching environment, when it needs one. Without a value, docker passes the variable through rather than writing the key into an argument list where `ps` would show it."
         }
       ],
       "environmentVariables": [
@@ -127,6 +152,17 @@
           "name": "NOETIVE_DISABLE_GLOBAL_NS",
           "description": "Set to 1 to close the shared \"global\" namespace on this server. Every call that routes there is refused before the request is sent, and the tools stop offering it as an example. Unset leaves it available. A value that is neither a yes nor a no stops the server rather than being read as no.",
           "isRequired": false
+        },
+        {
+          "name": "NOETIVE_EMBEDDINGS_URL",
+          "description": "An OpenAI-compatible /v1/embeddings endpoint you run. Set it and embeddings are computed on this machine rather than by Noetive: a publish carries the vector alongside its text, and a query's anchor phrases are replaced by vectors so they are never sent. This is not confidential publishing — message text still travels, because that is what a search returns. The endpoint must answer to the same model name as NOETIVE_MODEL and return NOETIVE_DIMENSIONS values. Plain http is accepted only for a loopback address. Inside a container 127.0.0.1 is the container itself; use host.docker.internal.",
+          "isRequired": false
+        },
+        {
+          "name": "NOETIVE_EMBEDDINGS_KEY_SECRET",
+          "description": "Bearer token for that endpoint, when it needs one. Endpoints running on your own machine usually do not.",
+          "isRequired": false,
+          "isSecret": true
         }
       ]
     }

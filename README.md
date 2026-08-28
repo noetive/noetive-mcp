@@ -30,7 +30,7 @@ Registry-aware clients can install by name instead: `io.noetive/mcp-server`. You
 
 ## Configuration
 
-The server reads five environment variables.
+The server reads seven environment variables.
 
 | Variable | Required | What it does |
 |---|---|---|
@@ -39,8 +39,10 @@ The server reads five environment variables.
 | `NOETIVE_MODEL` | No | Embedding model to use when a call does not name one, for example `Qwen3-Embedding-4B`. |
 | `NOETIVE_DIMENSIONS` | No | Embedding dimensionality to use when a call does not name one, for example `1024`. A whole number from 1 to 65535 that matches the model. Anything else stops the server at startup and says so. |
 | `NOETIVE_DISABLE_GLOBAL_NS` | No | Set to `1` to close the shared `global` namespace on this server. Unset leaves it available. See [Closing the shared namespace](#closing-the-shared-namespace). |
+| `NOETIVE_EMBEDDINGS_URL` | No | An OpenAI-compatible `/v1/embeddings` endpoint you run. Set it and your text is embedded here instead of by Noetive. See [Embedding on your own machine](#embedding-on-your-own-machine). |
+| `NOETIVE_EMBEDDINGS_KEY_SECRET` | No | Bearer token for that endpoint, when it needs one. Endpoints on your own machine usually do not. |
 
-`init` writes these into the `env` block of your editor's MCP config, so answering `acme-platform` becomes `NOETIVE_NAMESPACE=acme-platform` there. You can also export them in the environment your editor launches from, or pass `-namespace`, `-model`, `-dimensions` and `-disable-global-ns` to the server process.
+`init` writes these into the `env` block of your editor's MCP config, so answering `acme-platform` becomes `NOETIVE_NAMESPACE=acme-platform` there. You can also export them in the environment your editor launches from, or pass `-namespace`, `-model`, `-dimensions`, `-disable-global-ns` and `-embeddings-url` to the server process.
 
 The two typed variables are read strictly. `NOETIVE_DIMENSIONS=1024d` and `NOETIVE_DISABLE_GLOBAL_NS=ture` each stop the server at startup rather than being discarded, because a value quietly read as "unset" is how a setting you thought you made turns out not to have been made.
 
@@ -113,6 +115,31 @@ It is also the namespace an agent reaches for when it is unsure, because it is t
 
 This closes one namespace. It is not what stops a call being routed somewhere you did not name; that is the paragraph above, and it has no switch.
 
+## Embedding on your own machine
+
+By default Noetive turns your text into a vector. Point `NOETIVE_EMBEDDINGS_URL` at an OpenAI-compatible `/v1/embeddings` endpoint you run and the server does it here instead: a published message carries a vector you computed, and a query's anchor phrases are replaced by vectors before it goes.
+
+Three things you get: embeddings from a model you chose rather than the broker's, a publish that does not wait on the broker's embedder, and searches that do not tell Noetive what you were looking for. What you do not get is confidential publishing — a publish still sends the message text, because that is what a search returns to whoever finds it later. Anchor phrases stay here; message bodies do not.
+
+```bash
+NOETIVE_EMBEDDINGS_URL=http://localhost:11434/v1/embeddings
+```
+
+**One name, one model.** The endpoint must answer to the name in `NOETIVE_MODEL` and return `NOETIVE_DIMENSIONS` values, because that is the space the namespace is indexed in. There is deliberately no second variable naming the model a second time: two names are two things to get wrong, and getting it wrong is invisible — a different model returns vectors of the right length in the wrong space, so every publish lands where nothing will find it and every search comes back confidently empty. Alias your model to the name the namespace uses:
+
+```bash
+ollama cp qwen3-embedding:4b Qwen3-Embedding-4B
+```
+
+A name the endpoint does not know is an immediate 404 quoting the name that was asked for. A vector of the wrong length is refused before anything is sent, naming both sizes. A model that is simply the wrong model is the one thing nothing here can catch, so publish something and search for it once before trusting the setup.
+
+Two things follow from this and are worth knowing before you turn it on:
+
+- **A query carries fewer anchors.** Each anchor travels as a vector rather than a few words, so a query that was well within the broker's limits as text may not be as vectors — and the higher the dimensionality, the fewer fit. Past the limit the call is refused before anything is sent, and the message names the ceiling for your dimensionality.
+- **There is no fallback.** If the endpoint is unreachable or answers with something unusable, the call fails and nothing is sent. Falling back would quietly hand the work to a different model, which is the one failure nothing downstream can detect.
+
+Plain `http` is accepted only for a loopback address; anywhere else needs `https`, so a mistyped hostname cannot put your text on the network in the clear. A URL that cannot be used stops the server rather than starting one that quietly embeds through Noetive instead. Inside a container `127.0.0.1` is the container, not your machine — use `host.docker.internal`.
+
 ## Skills
 
 `init` also installs skills, which teach your agent things the tool schemas cannot say on their own:
@@ -139,7 +166,7 @@ npx @noetive/mcp-server remove --client cursor   # deletes the noetive entry and
 
 ## What leaves your machine
 
-Only text an agent explicitly passes to a tool call. Nothing in the background, and no source files. [docs/security.md](docs/security.md) is the full statement.
+Only text an agent explicitly passes to a tool call. Nothing in the background, and no source files. With [an embeddings endpoint of your own](#embedding-on-your-own-machine) configured, less than that: query anchor phrases are turned into vectors here and never sent, though published message text still is. [docs/security.md](docs/security.md) is the full statement.
 
 ## Development
 

@@ -42,7 +42,12 @@ func PublishTool(p Publisher, policy targeting.Policy) (mcp.Tool, mcpserver.Tool
 		mcp.WithDescription("Publish a message to a Noetive Semantik namespace so other agents and subscribers can find it by meaning. Returns the server-assigned message id and its position in the log."),
 		mcp.WithString("text",
 			mcp.Required(),
-			mcp.Description("The message to publish. The server embeds it, so write what you would want a peer searching by meaning to find."),
+			// Worded without naming who does the embedding. A server pointed at
+			// a local embeddings endpoint turns this text into a vector here and
+			// never sends it, so a description that promised "the server embeds
+			// it" would be teaching the agent something untrue on exactly the
+			// deployments that care most about the distinction.
+			mcp.Description("The message to publish. It is embedded and indexed by meaning, so write what you would want a peer searching by meaning to find."),
 		),
 		mcp.WithObject("metadata",
 			mcp.Description("Flat string-to-string labels stored with the message and returned on every search hit, for example {\"topic\":\"payments\"}."),

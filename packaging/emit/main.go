@@ -27,6 +27,7 @@ import (
 	json "github.com/goccy/go-json"
 	"gopkg.in/yaml.v3"
 
+	"github.com/noetive/noetive-mcp/internal/embedding"
 	"github.com/noetive/noetive-mcp/internal/mcpserver"
 	"github.com/noetive/noetive-mcp/internal/targeting"
 )
@@ -610,8 +611,12 @@ func (a authoring) writeSkills(dir string) error {
 // the feature ships invisible. A variable server.json lists but the server no
 // longer reads sends users to configure something that does nothing.
 //
-// The API key is checked separately: it is a credential rather than a routing
-// setting, and it is owned by the command rather than by package targeting.
+// Three packages own names between them, and the list is assembled from all
+// three rather than written out here, so a variable added anywhere shows up in
+// this check without anyone remembering to come back. The API key belongs to
+// the command because it is a credential rather than a setting; routing belongs
+// to package targeting; the local embeddings endpoint belongs to package
+// embedding.
 func documentedEnvironmentIsComplete(root string) error {
 	path := filepath.Join(root, "server.json")
 	raw, err := os.ReadFile(path)
@@ -637,7 +642,7 @@ func documentedEnvironmentIsComplete(root string) error {
 		return fmt.Errorf("server.json lists no packages")
 	}
 
-	want := append([]string{mcpserver.APIKeyEnv}, targeting.EnvNames()...)
+	want := slices.Concat([]string{mcpserver.APIKeyEnv}, targeting.EnvNames(), embedding.EnvNames())
 	slices.Sort(want)
 
 	for i, pkg := range document.Packages {

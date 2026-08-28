@@ -62,7 +62,9 @@ The two formats are equivalent and convert losslessly. Write text in explanation
 
 ## Prefer text anchors
 
-An anchor can be natural language or a raw vector. Use text: the broker embeds it with the model the namespace is pinned to, it stays readable, and it survives a model change. Reach for a raw vector only when you already have one, such as when you want the neighbours of a message you just read.
+An anchor can be natural language or a raw vector. Use text: it is embedded with the model the namespace is pinned to, it stays readable, and it survives a model change. Reach for a raw vector only when you already have one, such as when you want the neighbours of a message you just read.
+
+Some servers embed on the machine they run on and replace each text anchor with a vector before sending the query. Writing text anchors is still right there — that is what gets replaced — but each one then costs its dimensionality rather than a few characters, so such a server refuses a query carrying too many. The refusal names the ceiling for that namespace, and the higher the dimensionality the lower it is. Fewer, better anchors is the fix, not a raw vector.
 
 ## Writing a query
 

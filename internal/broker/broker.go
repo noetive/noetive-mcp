@@ -26,8 +26,11 @@ import (
 
 // Per-call deadlines. An MCP tool call blocks the agent's turn, so an
 // unbounded call reads to the user as a hung editor. The values differ by
-// what the server actually does: health and lint are local to the querybroker,
-// while publish and search fan out across shards and may wait on the embedder.
+// what each call costs: health and lint are answered without reaching into a
+// namespace, while publish and search reach across a whole one and wait on
+// whichever embedder is in play — Noetive's, or one on this machine when the
+// operator configured an endpoint, in which case both the embed and the broker
+// call share this one budget.
 //
 // Subscribe is excluded — its bound is the caller's collect window, see
 // subscribe.go.
@@ -96,9 +99,13 @@ func failure(operation string, budget time.Duration, err error) *mcp.CallToolRes
 	// Our own budget expiring is not the server saying anything, and reads
 	// identically to one that did: "context deadline exceeded" names no
 	// deadline, no duration and no side. Saying which budget ran out is what
-	// separates an upstream that never answered — the shape an embedder stall
+	// separates an upstream that never answered — the shape a stalled embedder
 	// takes, since a text-bearing call blocks on it — from a rejection, which
 	// arrives in milliseconds carrying a code and a request id.
+	//
+	// A stall in an embedder on this machine does not reach here: it arrives as
+	// an *embedding.Error naming the endpoint, which falls through to the raw
+	// branch below rather than being reported against Noetive.
 	if errors.Is(err, context.DeadlineExceeded) {
 		return mcp.NewToolResultErrorf("%s failed: no response within %s (nothing was returned, so there is no code or request id to quote)", operation, budget)
 	}
