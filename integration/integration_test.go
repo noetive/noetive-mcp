@@ -215,11 +215,22 @@ func TestIdempotentPublishAgainstProduction(t *testing.T) {
 
 	first := s.call("noetive_publish", args)
 	if first.IsError {
+		// The probe text is constant so a warm production cache should spare it
+		// the embedder, but that is an assumption about a system this repository
+		// does not control — and a broker-wide stall would block this call
+		// regardless of whether the text was cached. Tolerated the same way the
+		// publish above is: a stall says nothing about whether idempotency held.
+		if stalled(s.text(first)) {
+			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", s.text(first))
+		}
 		t.Fatalf("first publish failed: %s", s.text(first))
 	}
 
 	second := s.call("noetive_publish", args)
 	if second.IsError {
+		if stalled(s.text(second)) {
+			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", s.text(second))
+		}
 		t.Fatalf("second publish failed: %s", s.text(second))
 	}
 
