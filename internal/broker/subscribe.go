@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -77,12 +78,21 @@ func (o *subscriptionOpener) Subscribe(ctx context.Context, req semantik.Subscri
 // discarded here, while the same detail was surfaced faithfully for a setup
 // failure a few lines away.
 //
-// Field ordering: strings (16 B each) > slice (24 B) > bools.
+// WindowSeconds is the window after clamping and WatchedSeconds is how long it
+// was actually open. They are separate because they disagree whenever anything
+// ends the watch early, and reporting only the first told an agent it had seen
+// a minute of live traffic when it had seen a millisecond of it. The pair is
+// also the only way a caller learns its requested window was clamped.
+//
+// Field ordering: strings (16 B each) > slice (24 B) > float64s (8 B each) >
+// bools.
 type collected struct {
 	SubscriptionID  string        `json:"subscription_id"`
 	InterruptReason string        `json:"interrupt_reason,omitempty"`
 	RequestID       string        `json:"request_id,omitempty"`
 	Matches         []streamMatch `json:"matches"`
+	WindowSeconds   float64       `json:"window_seconds"`
+	WatchedSeconds  float64       `json:"watched_seconds"`
 	ReachedLimit    bool          `json:"reached_limit"`
 	Interrupted     bool          `json:"interrupted"`
 }
@@ -185,8 +195,8 @@ func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.T
 		windowOver := time.AfterFunc(wait, cancel)
 		defer windowOver.Stop()
 
-		result := collect(ctx, sub, limit, closesAt)
-		return mcp.NewToolResultStructured(result, describe(target.Namespace, wait, result)), nil
+		result := collect(ctx, sub, limit, wait, closesAt)
+		return mcp.NewToolResultStructured(result, describe(target.Namespace, result)), nil
 	}
 
 	return tool, handler
@@ -203,11 +213,19 @@ func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.T
 // cannot distinguish "we stopped listening" from "the connection failed".
 // Classifying on it is what stops an ordinary quiet window being reported as an
 // interruption, which is what every idle call used to say.
-func collect(ctx context.Context, sub Stream, limit int, closesAt time.Time) collected {
-	result := collected{
+//
+// Every other error ends the watch early and is reported as one. The window
+// closing is the single exception, identified by the clock rather than by type:
+// an error is not evidence of a healthy window just because this package has no
+// branch for it.
+func collect(ctx context.Context, sub Stream, limit int, window time.Duration, closesAt time.Time) (result collected) {
+	started := time.Now()
+	result = collected{
 		Matches:        make([]streamMatch, 0, limit),
 		SubscriptionID: sub.ID(),
+		WindowSeconds:  window.Seconds(),
 	}
+	defer func() { result.WatchedSeconds = time.Since(started).Seconds() }()
 
 	for len(result.Matches) < limit {
 		// The per-read context is deliberately the stream context itself. Passing
@@ -217,14 +235,11 @@ func collect(ctx context.Context, sub Stream, limit int, closesAt time.Time) col
 		if err != nil {
 			// A cancellation at or after the window's end is the window closing,
 			// not a failure — including the wrapped form the SDK produces for it.
-			// Anything else really did break the stream.
-			if !isWindowClose(err, closesAt) {
-				var stream *semantik.SubscribeStreamError
-				if errors.As(err, &stream) {
-					result.Interrupted = true
-					result.InterruptReason, result.RequestID = describeStreamError(stream)
-				}
+			if isWindowClose(err, closesAt) {
+				return result
 			}
+			result.Interrupted = true
+			result.InterruptReason, result.RequestID = describeInterruption(err)
 			return result
 		}
 
@@ -253,6 +268,27 @@ func isWindowClose(err error, closesAt time.Time) bool {
 // window closing rather than a failure.
 const windowCloseSlack = 250 * time.Millisecond
 
+// describeInterruption says why the watch ended early, for any error the SDK
+// can end a read with.
+//
+// Only a *SubscribeStreamError is structured. io.EOF is what Subscription.Next
+// returns for a clean server-side close — a broker draining during a deploy —
+// and it arrives raw, so a type switch alone treated it as an ordinary quiet
+// window and reported a watch that had already ended as still running. Anything
+// else falls back to the error's own words rather than to silence.
+func describeInterruption(err error) (reason, requestID string) {
+	var stream *semantik.SubscribeStreamError
+	if errors.As(err, &stream) {
+		if reason, requestID = describeStreamError(stream); reason != "" {
+			return reason, requestID
+		}
+	}
+	if errors.Is(err, io.EOF) {
+		return "the server closed the stream", ""
+	}
+	return err.Error(), ""
+}
+
 // describeStreamError extracts what an operator needs from a mid-stream failure:
 // why it broke, and the request id to quote when asking.
 //
@@ -276,7 +312,13 @@ func describeStreamError(stream *semantik.SubscribeStreamError) (reason, request
 
 // describe renders the text fallback, stating what bounded the call so an agent
 // can tell "nothing is happening" from "I stopped looking".
-func describe(namespace string, wait time.Duration, result collected) string {
+//
+// The leading duration is the one the watch actually ran for, never the one
+// requested. An agent reads this sentence as evidence of how much live traffic
+// it has seen, and a stream that ended after a millisecond is not evidence
+// about a minute. The window it fell short of is named alongside it, which is
+// also where a caller sees that an over-large request was clamped.
+func describe(namespace string, result collected) string {
 	var b strings.Builder
 	b.Grow(len(namespace) + len(result.SubscriptionID) + len(streamNotice) + 64)
 
@@ -284,7 +326,16 @@ func describe(namespace string, wait time.Duration, result collected) string {
 	b.WriteString(" matches in ")
 	b.WriteString(namespace)
 	b.WriteString(" over ")
-	b.WriteString(wait.String())
+	b.WriteString(readableSeconds(result.WatchedSeconds))
+	// Named only when the watch ended early, which is when the shortfall is the
+	// point. A window that ran to the end already says so in its closing
+	// sentence, and repeating the figure there would read as a discrepancy
+	// rather than as the same number twice.
+	if result.Interrupted || result.ReachedLimit {
+		b.WriteString(" of a ")
+		b.WriteString(readableSeconds(result.WindowSeconds))
+		b.WriteString(" window")
+	}
 	b.WriteString(" (subscription ")
 	b.WriteString(result.SubscriptionID)
 	b.WriteString(").")
@@ -313,6 +364,13 @@ func describe(namespace string, wait time.Duration, result collected) string {
 	}
 
 	return b.String()
+}
+
+// readableSeconds renders a duration held as seconds the way Go writes
+// durations, so "1m0s" and "250ms" read as one scale rather than as 60 and
+// 0.25 of an unstated unit.
+func readableSeconds(seconds float64) string {
+	return time.Duration(seconds * float64(time.Second)).Round(time.Millisecond).String()
 }
 
 // bound clamps v into [low, high]. Arguments are clamped rather than rejected

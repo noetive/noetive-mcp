@@ -2,6 +2,7 @@ package broker_test
 
 import (
 	"context"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -56,6 +57,48 @@ func TestInterruptedStreamKeepsWhatArrivedAndSaysSo(t *testing.T) {
 	}
 	if !strings.Contains(got, "interrupted") {
 		t.Errorf("expected the interruption to be reported, got: %s", got)
+	}
+}
+
+// A clean server-side close is what Subscription.Next returns io.EOF for — a
+// broker draining during a deploy — and it arrives raw rather than wrapped in a
+// *SubscribeStreamError. Classifying on that type alone let it fall through to
+// the healthy path, so a watch that had already ended was reported as still
+// running over a quiet namespace. The two are the opposite advice: one says
+// nothing is being published, the other says reconnect.
+func TestCleanServerCloseIsReportedRatherThanReadAsQuiet(t *testing.T) {
+	stream := &fakeStream{
+		id:     "sub_01hz",
+		events: []semantik.MatchEvent{{MessageID: "msg_1", Score: 0.9}},
+		err:    io.EOF,
+	}
+	_, handler := broker.SubscribeTool(&stubBroker{stream: stream}, configured)
+
+	result := call(t, handler, map[string]any{"query": "MATCH", "wait_seconds": float64(60)})
+	requireSuccess(t, result)
+
+	got := text(t, result)
+	if !strings.Contains(got, "interrupted") {
+		t.Errorf("a stream the server closed was reported as a healthy window, got: %s", got)
+	}
+	if !strings.Contains(got, "closed the stream") {
+		t.Errorf("expected the reason to name the close, got: %s", got)
+	}
+}
+
+// The duration in the summary is what an agent weighs the result by: "nothing
+// arrived" means something different over a minute than over a millisecond.
+// Reporting the requested window regardless of when the watch ended made every
+// early end read as a full, quiet minute.
+func TestTheReportedDurationIsTheOneActuallyWatched(t *testing.T) {
+	stream := &fakeStream{id: "sub_01hz", err: io.EOF}
+	_, handler := broker.SubscribeTool(&stubBroker{stream: stream}, configured)
+
+	result := call(t, handler, map[string]any{"query": "MATCH", "wait_seconds": float64(60)})
+	requireSuccess(t, result)
+
+	if got := text(t, result); !strings.Contains(got, "over 0s of a 1m0s window") {
+		t.Errorf("expected the watch to be reported as far shorter than the window it asked for, got: %s", got)
 	}
 }
 
