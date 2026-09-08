@@ -103,14 +103,20 @@ jobs:
           restore-keys: fuzz-
 
       # Ten minutes each against the accumulated corpus. A crasher is written to
-      # internal/broker/testdata/fuzz — commit it as a seed alongside the fix.
+      # that package's testdata/fuzz — commit it as a seed alongside the fix.
+      # Packages are enumerated for the reason `make fuzz` gives.
       - name: Fuzz campaign
         run: |
-          targets=$(go test -list '^Fuzz' ./internal/broker | grep '^Fuzz')
-          test -n "$targets"
-          for target in $targets; do
-            go test -run "^$" -fuzz "^${target}$" -fuzztime 10m ./internal/broker
+          ran=0
+          for pkg in $(go list ./...); do
+            listing=$(go test -list '^Fuzz' "$pkg") || exit 1
+            targets=$(printf '%s\n' "$listing" | grep '^Fuzz' || true)
+            for target in $targets; do
+              ran=1
+              go test -run "^$" -fuzz "^${target}$" -fuzztime 10m "$pkg"
+            done
           done
+          test "$ran" -eq 1
 
       - if: always()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -122,7 +128,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crashers
-          path: internal/broker/testdata/fuzz/
+          path: internal/*/testdata/fuzz/
 
   report:
     needs: [vulnerabilities, integration, fuzz]

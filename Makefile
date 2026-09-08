@@ -31,9 +31,9 @@ test: hooks
 	go clean -testcache
 	go test -race ./...
 
-# Replays the seeds and every input a campaign has already promoted into
-# internal/broker/testdata/fuzz. Deterministic, which is what makes it a gate:
-# the same commit gives the same verdict on every machine and every run.
+# Replays the seeds and every input a campaign has already promoted into a
+# package's testdata/fuzz. Deterministic, which is what makes it a gate: the
+# same commit gives the same verdict on every machine and every run.
 #
 # It deliberately does not search. `-fuzz` does, and a search is not a check —
 # it explores random inputs, so the same command legitimately passes now and
@@ -43,36 +43,50 @@ test: hooks
 # subsequent runs could not reproduce. `make fuzz-live` is the search, named as
 # what it is.
 #
-# The list is captured and checked before running: `go test -list` exits 0 and
-# writes the build error to stderr when the package does not compile, so trusting
-# its output reports a broken package as fuzzing that passed.
+# Packages are enumerated rather than named, for the same reason the targets
+# inside them are: a hand-written list silently stops covering the package
+# somebody added a target to last week, and it did — the query parser that makes
+# this server's confidentiality promise went a release with no target at all
+# because the list said ./internal/broker.
+#
+# The listing is a convenience, not the gate. `go test -list` exits 0 and writes
+# the build error to stderr when a package does not compile, so a package that
+# is broken rather than target-free lists as empty; the replay below runs over
+# ./... and fails on the build error the listing swallowed.
 fuzz:
-	@targets=$$(go test -list '^Fuzz' ./internal/broker | grep '^Fuzz') || exit 1; \
-	 test -n "$$targets" || { echo "no fuzz targets found in ./internal/broker" >&2; exit 1; }; \
+	@listing=$$(go test -list '^Fuzz' ./...) || exit 1; \
+	 targets=$$(printf '%s\n' "$$listing" | grep '^Fuzz' || true); \
+	 test -n "$$targets" || { echo "no fuzz targets found" >&2; exit 1; }; \
 	 echo "replaying: $$(echo $$targets | tr '\n' ' ')"; \
-	 go test -run '^Fuzz' -count=1 ./internal/broker
+	 go test -run '^Fuzz' -count=1 ./...
 
 # The search, opt-in and time-boxed. A green run here proves only that nothing
 # turned up inside FUZZTIME, which is why it gates nothing.
 #
-# When it does find something, Go writes the offending input to
-# internal/broker/testdata/fuzz/<Target>/. Commit that file: `make fuzz` replays
-# it from then on, which is how a one-off discovery becomes a permanent
-# regression test. CI runs the same search per push, and a weekly campaign at a
-# far longer budget.
+# When it does find something, Go writes the offending input to that package's
+# testdata/fuzz/<Target>/. Commit that file: `make fuzz` replays it from then
+# on, which is how a one-off discovery becomes a permanent regression test. CI
+# runs the same search per push, and a weekly campaign at a far longer budget.
 #
-# Enumerated rather than listed: a hand-written list silently stops covering the
-# target somebody added last week, and a new tool argument is exactly when
-# fuzzing earns its keep. CI enumerates the same way.
+# Package by package, because -fuzz takes one target in one package. Both are
+# enumerated for the reason `make fuzz` gives. CI enumerates the same way.
+#
+# grep's no-match exit is absorbed deliberately: most packages have no targets,
+# and treating "none here" as a failure stopped the sweep at the first one.
 FUZZTIME ?= 30s
 
 fuzz-live:
-	@targets=$$(go test -list '^Fuzz' ./internal/broker | grep '^Fuzz') || exit 1; \
-	 test -n "$$targets" || { echo "no fuzz targets found in ./internal/broker" >&2; exit 1; }; \
-	 for target in $$targets; do \
-	   echo "fuzz: $$target ($(FUZZTIME))"; \
-	   go test -run "^$$" -fuzz "^$$target$$" -fuzztime $(FUZZTIME) ./internal/broker || exit 1; \
-	 done
+	@ran=0; \
+	 for pkg in $$(go list ./...); do \
+	   listing=$$(go test -list '^Fuzz' $$pkg) || exit 1; \
+	   targets=$$(printf '%s\n' "$$listing" | grep '^Fuzz' || true); \
+	   for target in $$targets; do \
+	     ran=1; \
+	     echo "fuzz: $$pkg $$target ($(FUZZTIME))"; \
+	     go test -run "^$$" -fuzz "^$$target$$" -fuzztime $(FUZZTIME) $$pkg || exit 1; \
+	   done; \
+	 done; \
+	 test $$ran -eq 1 || { echo "no fuzz targets found" >&2; exit 1; }
 
 lint:
 	golangci-lint run --config ./.golangci.yml ./...

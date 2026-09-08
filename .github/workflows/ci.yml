@@ -73,19 +73,25 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # Enumerated, not listed: a hand-written list silently stops covering the
-      # target somebody added last week, and a new tool argument is exactly when
-      # fuzzing earns its keep. `make fuzz` enumerates the same way.
+      # Packages and targets are both enumerated, not listed: a hand-written list
+      # silently stops covering what somebody added last week, and it did — the
+      # query parser behind the confidentiality promise sat outside a list that
+      # named ./internal/broker. `make fuzz-live` enumerates the same way.
       #
       # Short by design — the point here is that the corpus still replays and no
       # seed panics. Campaigns run on a schedule.
       - name: Fuzz seeds
         run: |
-          targets=$(go test -list '^Fuzz' ./internal/broker | grep '^Fuzz')
-          test -n "$targets"
-          for target in $targets; do
-            go test -run "^$" -fuzz "^${target}$" -fuzztime 30s ./internal/broker
+          ran=0
+          for pkg in $(go list ./...); do
+            listing=$(go test -list '^Fuzz' "$pkg") || exit 1
+            targets=$(printf '%s\n' "$listing" | grep '^Fuzz' || true)
+            for target in $targets; do
+              ran=1
+              go test -run "^$" -fuzz "^${target}$" -fuzztime 30s "$pkg"
+            done
           done
+          test "$ran" -eq 1
 
   installer:
     runs-on: ${{ matrix.os }}
