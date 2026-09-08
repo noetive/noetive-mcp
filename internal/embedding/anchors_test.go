@@ -160,9 +160,10 @@ func TestTheNamespaceKeywordIsRecognisedExactly(t *testing.T) {
 		// phrase after it is a phrase.
 		{"a longer word ending in the keyword", `MATCH DISTANCE("a") WITHIN 0.4 MYNAMESPACE "acme"`, true},
 		{"a longer word starting with the keyword", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACES "acme"`, true},
-		// LIMIT closes the selector, so what follows is no longer a name — but
-		// only when LIMIT is the keyword rather than part of something else.
-		{"a longer word ending in limit", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACE "acme" NOLIMIT "beta"`, false},
+		// The selector is a list of names, so any word that is not one closes it.
+		// A word nobody can parse closes it too: a phrase sitting after some
+		// unrecognised token is a query that does not parse, not a second name.
+		{"an unrecognised word closes the selector", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACE "acme" NOLIMIT "beta"`, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			b, e := &stubBroker{}, &stubEmbedder{}
@@ -174,6 +175,30 @@ func TestTheNamespaceKeywordIsRecognisedExactly(t *testing.T) {
 			searchWith(t, b, e, c.query)
 			if !strings.Contains(b.searchReq.Query, `"acme"`) {
 				t.Errorf("expected the namespace name to survive, got %s", b.searchReq.Query)
+			}
+		})
+	}
+}
+
+// The namespace selector must not leave a hole behind it. It used to stay open
+// from NAMESPACE until WINDOW or LIMIT, so a phrase that landed anywhere in
+// between — which is what a forgotten bracket after a namespace produces — was
+// read as a second namespace name and forwarded with its text intact. The
+// broker rejects the query either way; the phrase had already travelled, which
+// is the one outcome this package exists to prevent.
+func TestAPhraseAfterANamespaceIsNeverForwardedAsAName(t *testing.T) {
+	for _, query := range []string{
+		`MATCH DISTANCE("a") NAMESPACE "acme" AND DISTANCE "acquisition of northwind"`,
+		`MATCH DISTANCE("a") NAMESPACE "acme" WINDOW 7d DISTANCE "acquisition of northwind"`,
+		`MATCH DISTANCE("a") NAMESPACE "acme", NOT "staging" ORDER BY "acquisition of northwind"`,
+	} {
+		t.Run(query, func(t *testing.T) {
+			b, e := &stubBroker{}, &stubEmbedder{}
+
+			searchError(t, b, e, query)
+
+			if strings.Contains(b.searchReq.Query, "northwind") {
+				t.Errorf("the phrase reached the broker: %s", b.searchReq.Query)
 			}
 		})
 	}

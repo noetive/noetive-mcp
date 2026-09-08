@@ -165,6 +165,13 @@ type span struct {
 // words this package exists to keep, on a query the broker was going to reject
 // anyway.
 //
+// Where a namespace ref can appear is narrower than "after NAMESPACE". The
+// selector is `[NOT] name { "," [NOT] name }`, so it runs until the first word
+// that is not part of it, and any word ends it. Ending it only at WINDOW and
+// LIMIT — the clauses the grammar puts next — left the selector open across
+// everything a malformed query can put after a namespace, and a phrase landing
+// there was forwarded with its text intact.
+//
 // Anything else the grammar does not account for is refused for the same
 // reason. A query we did not fully understand may hold text we did not see, and
 // this function's answer is what the caller relies on to claim none is left.
@@ -172,20 +179,22 @@ func textAnchors(query string) ([]span, error) {
 	var spans []span
 
 	depth := 0
-	// Whether the scan has passed NAMESPACE and not yet reached a clause that
-	// ends the selector. Only inside it is a bare quoted string a name.
+	// Whether the scan is inside a namespace selector. Only there is a bare
+	// quoted string a name rather than a phrase.
 	naming := false
 
 	for i := 0; i < len(query); {
 		switch query[i] {
 		case '(':
 			depth++
+			naming = false
 			i++
 		case ')':
 			depth--
 			if depth < 0 {
 				return nil, fmt.Errorf("there is a closing bracket with nothing to close at byte %d", i)
 			}
+			naming = false
 			i++
 		case '"':
 			text, next, err := readLiteral(query, i)
@@ -199,16 +208,36 @@ func textAnchors(query string) ([]span, error) {
 				return nil, fmt.Errorf("there is a phrase at byte %d that is inside no clause and is not a namespace name; check the query with noetive_lint", i)
 			}
 			i = next
+		case ' ', '\t', '\r', '\n', ',':
+			// Whitespace and the list separator sit inside a selector rather than
+			// ending one.
+			i++
 		default:
+			// Words are consumed whole. Stepping a byte at a time would read the
+			// tail of NAMESPACE as some other word and close the selector the
+			// keyword had just opened.
+			if !wordByte(query[i]) {
+				if depth == 0 {
+					naming = false
+				}
+				i++
+				continue
+			}
+			j := i
+			for j < len(query) && wordByte(query[j]) {
+				j++
+			}
 			if depth == 0 {
 				switch {
-				case keywordAt(query, i, "NAMESPACE"):
+				case strings.EqualFold(query[i:j], "NAMESPACE"):
 					naming = true
-				case keywordAt(query, i, "WINDOW"), keywordAt(query, i, "LIMIT"):
+				case strings.EqualFold(query[i:j], "NOT"):
+					// Admitted before a name, so it leaves the selector open.
+				default:
 					naming = false
 				}
 			}
-			i++
+			i = j
 		}
 	}
 	if depth != 0 {
@@ -216,22 +245,6 @@ func textAnchors(query string) ([]span, error) {
 	}
 
 	return spans, nil
-}
-
-// keywordAt reports whether keyword stands alone at query[i].
-//
-// SemQL's reserved words are case-insensitive, and the boundary check is what
-// stops a clause named in passing — or an identifier that merely starts with
-// one — being read as the keyword itself.
-func keywordAt(query string, i int, keyword string) bool {
-	end := i + len(keyword)
-	if end > len(query) || !strings.EqualFold(query[i:end], keyword) {
-		return false
-	}
-	if i > 0 && wordByte(query[i-1]) {
-		return false
-	}
-	return end == len(query) || !wordByte(query[end])
 }
 
 func wordByte(b byte) bool {
