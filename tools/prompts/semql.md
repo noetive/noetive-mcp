@@ -52,7 +52,7 @@ Thematically about payments, specifically the failure side of it, and close to o
 
 Through these tools, the `namespace` argument on `noetive_search` or `noetive_subscribe` decides where the query runs. Set it there.
 
-SemQL has a `NAMESPACE` clause, and `references/grammar.md` documents it, but it is not how you scope a call made through this server. Use clauses to narrow meaning and the tool argument to choose the namespace.
+SemQL has a `NAMESPACE` clause, and `references/grammar.md` documents it, but it is not how you scope a call made through this server. Use clauses to narrow meaning and the tool argument to choose the namespace. If you do write the clause, it must name the same namespace as the tool argument and no more than one: the broker checks it and answers `400 invalid_request` on a disagreement, on several names, on a `NOT` exclusion, and on `ALL`.
 
 A namespace is an isolation boundary, never a topic label. `NAMESPACE "topic:networking"` is not a thing; narrowing by subject is what `DIRECTION` and `CONTRAST` are for.
 

@@ -23,6 +23,7 @@ distance         = "DISTANCE" "(" anchor ")" [ "WITHIN" number | "TOP" integer ]
 direction        = "DIRECTION" "(" anchor_list ")" [ "CONE" number ] ;
 contrast         = "CONTRAST" "(" "ATTRACT" anchor_list [ "," "REPEL" anchor_list ] ")" [ "WITHIN" number ] ;
 
+(* Plural forms parse but the broker rejects them — see Namespace selector. *)
 namespace_selector = namespace_ref { "," namespace_ref } | "ALL" | "GLOBAL" ;
 namespace_ref      = [ "NOT" ] string_literal ;
 
@@ -152,22 +153,21 @@ A raw vector must have exactly the namespace's dimensionality.
 
 ```sql
 NAMESPACE "acme-corp"
-NAMESPACE "acme-*", NOT "acme-staging"
-NAMESPACE "acme-corp", GLOBAL
-NAMESPACE ALL
+NAMESPACE GLOBAL
 ```
 
 ```json
-{ "include": ["acme-corp", "acme-*"], "exclude": ["acme-staging"], "global": true }
+{ "include": ["acme-corp"] }
 ```
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| `include` | string[] | `[]` | Names to include; `*` globs |
-| `exclude` | string[] | `[]` | Names to exclude |
-| `global` | boolean | `false` | Include the shared namespace |
+| `include` | string[] | `[]` | One name, matched literally — no globs |
+| `global` | boolean | `false` | The shared namespace, on its own |
 
 Namespace names are case-insensitive. `acme-corp`, `Acme-Corp` and `ACME-CORP` are one namespace, not three, and the same is true of `global`.
+
+The clause asserts scope rather than choosing it, and the broker checks it: a clause naming a namespace other than the request's is `400 invalid_request`. Only a single namespace is honoured. The grammar above still admits several names, an `exclude` list and `ALL` — the parser accepts them, and the broker then rejects them with `400 invalid_request` rather than ignoring them. Selecting several namespaces from a query is not supported yet.
 
 Read the note on scope in the skill body before reaching for this: through the Noetive MCP tools, the `namespace` argument on the tool call is what decides where a query runs.
 
