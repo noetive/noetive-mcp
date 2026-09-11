@@ -1,6 +1,6 @@
 # Reporting a vulnerability
 
-Email **security@noetive.io**. Please do not open a public issue, and do not include a working API key in the report.
+Email **security@noetive.eu**. Please do not open a public issue, and do not include a working API key in the report.
 
 Useful to include: what an attacker gains, the smallest reproduction you have, and the version — `npx @noetive/mcp-server --version`.
 

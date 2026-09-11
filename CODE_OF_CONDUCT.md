@@ -12,7 +12,7 @@ This applies in all project spaces, and when someone is representing the project
 
 ## Enforcement
 
-Report a problem to **conduct@noetive.io**. Reports are handled confidentially. Maintainers may edit or remove contributions, and may temporarily or permanently block anyone whose behaviour they judge inappropriate; where the reason is not obvious, they will explain it.
+Report a problem to **security@noetive.eu**. Reports are handled confidentially. Maintainers may edit or remove contributions, and may temporarily or permanently block anyone whose behaviour they judge inappropriate; where the reason is not obvious, they will explain it.
 
 Maintainers who do not uphold this in good faith may face the same consequences as anyone else.
 
