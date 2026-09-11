@@ -59,12 +59,12 @@ const responseHeaderTimeout = 30 * time.Second
 // Field ordering: pointer (8 B) > strings (16 B each).
 type Endpoint struct {
 	http *http.Client
-	// url is where the request goes. shown is the same URL with any userinfo
-	// removed, and is the only one that appears in an error: an operator who
-	// wrote credentials into the URL must not have them echoed back through a
-	// tool result into the model's context.
+	// url is where the request goes, and is also what appears in an error. The
+	// two can be the same string because At refuses a URL carrying userinfo
+	// outright rather than stripping it, so there is no credential here to echo
+	// back through a tool result into the model's context. The key lives in
+	// authHeader, which is never rendered — see String.
 	url        string
-	shown      string
 	authHeader string
 }
 
@@ -120,9 +120,8 @@ func At(baseURL, key string) (*Endpoint, error) {
 	}
 
 	u.Path = resolvePath(u.Path)
-	shown := u.String()
 
-	e := &Endpoint{http: refusingClient(), url: shown, shown: shown}
+	e := &Endpoint{http: refusingClient(), url: u.String()}
 
 	if k := strings.TrimSpace(key); k != "" {
 		if mcpserver.PlaceholderKey(k) {
@@ -189,7 +188,7 @@ func (e *Endpoint) String() string {
 	if e == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("embedding.Endpoint{url:%q, key:REDACTED}", e.shown)
+	return fmt.Sprintf("embedding.Endpoint{url:%q, key:REDACTED}", e.url)
 }
 
 // GoString returns a redacted Go-syntax representation for the %#v verb.
@@ -197,7 +196,7 @@ func (e *Endpoint) GoString() string {
 	if e == nil {
 		return "(*embedding.Endpoint)(nil)"
 	}
-	return fmt.Sprintf("&embedding.Endpoint{url:%q, key:REDACTED}", e.shown)
+	return fmt.Sprintf("&embedding.Endpoint{url:%q, key:REDACTED}", e.url)
 }
 
 // embedRequest is the body of POST /v1/embeddings.
@@ -256,12 +255,12 @@ func (e *Endpoint) Embed(ctx context.Context, model string, dimensions uint16, t
 		Dimensions:     dimensions,
 	})
 	if err != nil {
-		return nil, &Error{Endpoint: e.shown, Model: model, Message: err.Error()}
+		return nil, &Error{Endpoint: e.url, Model: model, Message: err.Error()}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.url, bytes.NewReader(body))
 	if err != nil {
-		return nil, &Error{Endpoint: e.shown, Model: model, Message: err.Error()}
+		return nil, &Error{Endpoint: e.url, Model: model, Message: err.Error()}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -280,7 +279,7 @@ func (e *Endpoint) Embed(ctx context.Context, model string, dimensions uint16, t
 		// Unwrap on purpose: letting a DeadlineExceeded through would make
 		// broker.failure print "no response within 30s" and send the operator
 		// to check Noetive when it was the model on this machine that stalled.
-		return nil, &Error{Endpoint: e.shown, Model: model, Message: err.Error()}
+		return nil, &Error{Endpoint: e.url, Model: model, Message: err.Error()}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -288,16 +287,16 @@ func (e *Endpoint) Embed(ctx context.Context, model string, dimensions uint16, t
 	// hostile endpoint without ever truncating a well-formed reply.
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, int64(len(texts))*int64(dimensions)*24+4096))
 	if err != nil {
-		return nil, &Error{Endpoint: e.shown, Model: model, Status: resp.StatusCode, Message: err.Error()}
+		return nil, &Error{Endpoint: e.url, Model: model, Status: resp.StatusCode, Message: err.Error()}
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, &Error{Endpoint: e.shown, Model: model, Status: resp.StatusCode, Message: describeBody(raw)}
+		return nil, &Error{Endpoint: e.url, Model: model, Status: resp.StatusCode, Message: describeBody(raw)}
 	}
 
 	var decoded embedResponse
 	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, &Error{Endpoint: e.shown, Model: model, Status: resp.StatusCode, Message: "the reply was not an embeddings response: " + err.Error()}
+		return nil, &Error{Endpoint: e.url, Model: model, Status: resp.StatusCode, Message: "the reply was not an embeddings response: " + err.Error()}
 	}
 	// decoded.Model is deliberately not compared against model. Servers echo
 	// filesystem paths, digests, aliases and quantisation suffixes, so a
@@ -344,7 +343,7 @@ func (e *Endpoint) refuseBadInput(model string, dimensions uint16, texts []strin
 func (e *Endpoint) scatter(model string, dimensions uint16, texts []string, data []embedDatum) ([][]float32, error) {
 	if len(data) != len(texts) {
 		return nil, &Error{
-			Endpoint: e.shown, Model: model,
+			Endpoint: e.url, Model: model,
 			Message: fmt.Sprintf("asked for %d embeddings and got %d", len(texts), len(data)),
 		}
 	}
@@ -353,19 +352,19 @@ func (e *Endpoint) scatter(model string, dimensions uint16, texts []string, data
 	for _, d := range data {
 		if d.Index < 0 || d.Index >= len(texts) {
 			return nil, &Error{
-				Endpoint: e.shown, Model: model,
+				Endpoint: e.url, Model: model,
 				Message: fmt.Sprintf("returned an embedding for input %d, but only %d were sent", d.Index, len(texts)),
 			}
 		}
 		if out[d.Index] != nil {
 			return nil, &Error{
-				Endpoint: e.shown, Model: model,
+				Endpoint: e.url, Model: model,
 				Message: fmt.Sprintf("returned two embeddings for input %d, so which text each one belongs to is unknowable", d.Index),
 			}
 		}
 		if len(d.Embedding) != int(dimensions) {
 			return nil, &Error{
-				Endpoint: e.shown, Model: model,
+				Endpoint: e.url, Model: model,
 				Message: fmt.Sprintf("returned a %d-dimensional vector for input %d, but the namespace is %d-dimensional; either the endpoint is serving a different model or %s does not match it", len(d.Embedding), d.Index, dimensions, "NOETIVE_DIMENSIONS"),
 			}
 		}
@@ -375,7 +374,7 @@ func (e *Endpoint) scatter(model string, dimensions uint16, texts []string, data
 			// is not valid JSON and not a valid SemQL number.
 			if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
 				return nil, &Error{
-					Endpoint: e.shown, Model: model,
+					Endpoint: e.url, Model: model,
 					Message: fmt.Sprintf("returned a vector for input %d whose element %d is not a finite number", d.Index, i),
 				}
 			}
@@ -386,7 +385,7 @@ func (e *Endpoint) scatter(model string, dimensions uint16, texts []string, data
 	for i := range out {
 		if out[i] == nil {
 			return nil, &Error{
-				Endpoint: e.shown, Model: model,
+				Endpoint: e.url, Model: model,
 				Message: fmt.Sprintf("returned no embedding for input %d", i),
 			}
 		}

@@ -214,3 +214,8 @@ installer/dist/
 # Per-developer Claude Code state. .claude-plugin/ is the published artifact;
 # this is not, and it is one directory letter away from being mistaken for it.
 .claude/settings.local.json
+
+# Allocation baselines are internal: the numbers are not a published surface and
+# this repo is public. `make bench` reproduces them on demand, so nothing here is
+# lost by keeping it off the tracked tree.
+/BENCH_TRACKER.md

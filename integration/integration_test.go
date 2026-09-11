@@ -140,9 +140,9 @@ func TestLintAgainstProduction(t *testing.T) {
 // Only two shapes qualify, and neither can hide the drift this suite exists to
 // catch. "no response within" is the tool's own budget expiring, which means
 // nothing came back at all — a changed wire shape always produces a response.
-// "[unavailable]" is the server saying so itself, in the one code it collapses
-// every transient cause onto; a shape change surfaces as a different code or a
-// decode error, never as that one.
+// "[unavailable]" is the server reporting a retryable condition in its own
+// words; a shape change surfaces as a different code or a decode error, never as
+// that one.
 //
 // Deliberately not a general "any error is fine" escape. A suite that skips
 // whatever it cannot explain proves nothing and would report a genuinely broken
@@ -239,9 +239,10 @@ func TestIdempotentPublishAgainstProduction(t *testing.T) {
 	}
 }
 
-// Subscribe's handshake is the part that fails in production — the server
-// frequently returns a retryable 503 while installing a subscription. Zero
-// matches in a quiet namespace is a success; a failed setup is not.
+// Subscribe's handshake is the part worth probing: installing a subscription can
+// come back as a retryable `unavailable`, and the client has to surface that as
+// retryable rather than as a client defect. Zero matches in a quiet namespace is
+// a success; a failed setup is not.
 func TestSubscribeSetupAgainstProduction(t *testing.T) {
 	s := newSession(t)
 

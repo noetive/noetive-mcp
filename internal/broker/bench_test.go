@@ -92,8 +92,9 @@ func BenchmarkTargetingResolution(b *testing.B) {
 	})
 }
 
-// Failures are not rare in normal operation — a transient 503 from the broker is
-// routine — so error shaping is a hot path too, not a cold one.
+// Error shaping is a hot path, not a cold one: a retryable failure is something
+// the client must render well every time it happens, and an agent reads that
+// result to decide whether to try again.
 func BenchmarkErrorShaping(b *testing.B) {
 	_, handler := broker.SearchTool(&stubBroker{searchErr: &semantik.Error{
 		Code:       semantik.CodeUnavailable,

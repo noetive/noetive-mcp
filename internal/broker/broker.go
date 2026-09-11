@@ -123,8 +123,8 @@ func failure(operation string, budget time.Duration, err error) *mcp.CallToolRes
 	}
 
 	// Built with direct writes rather than Fprintf. This runs on every failed
-	// tool call, and a transient 503 from the broker is routine rather than
-	// exceptional, so the error path is as hot as the success path. Sizing the
+	// tool call, and a retryable failure is one an agent is expected to act on
+	// and retry, so the error path is as hot as the success path. Sizing the
 	// buffer up front is what keeps it to a single allocation instead of one
 	// per doubling.
 	var b strings.Builder
