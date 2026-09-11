@@ -30,6 +30,13 @@
       "deeplink": "cursor://anysphere.cursor-deeplink/mcp/install?name=noetive&config=eyJhcmdzIjpbIi15IiwiQG5vZXRpdmUvbWNwLXNlcnZlciJdLCJjb21tYW5kIjoibnB4IiwiZW52Ijp7Ik5PRVRJVkVfS0VZX1NFQ1JFVCI6IiR7Tk9FVElWRV9LRVlfU0VDUkVUfSJ9fQ=="
     },
     {
+      "id": "hermes",
+      "displayName": "Hermes",
+      "command": "npx @noetive/mcp-server init --client hermes",
+      "label": "Add to Hermes",
+      "deeplink": "hermes://mcp/install?name=noetive&config=eyJhcmdzIjpbIi15IiwiQG5vZXRpdmUvbWNwLXNlcnZlciJdLCJjb21tYW5kIjoibnB4IiwiZW52Ijp7Ik5PRVRJVkVfS0VZX1NFQ1JFVCI6IiR7Tk9FVElWRV9LRVlfU0VDUkVUfSJ9fQ=="
+    },
+    {
       "id": "kiro",
       "displayName": "Kiro",
       "command": "npx @noetive/mcp-server init --client kiro",

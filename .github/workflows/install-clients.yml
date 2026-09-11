@@ -1,0 +1,214 @@
+name: install-clients
+
+# The unit tests drive a fake CLI, so they prove the installer builds the argv
+# the manifest describes — not that any real editor accepts it. Every install
+# bug that reached users so far was in that gap: a flag spelled the way the
+# vendor's docs spell it and not the way their parser reads it, an entry written
+# under a key the editor ignores, a CLI that exits zero having done nothing.
+# These jobs install the real thing and then read the config back.
+#
+# Deliberately not on every pull request. It downloads third-party CLIs whose
+# availability this repository does not control, and a red build caused by
+# somebody else's npm outage on a change that touched the README teaches people
+# to ignore the colour. It runs where it can actually be about this code —
+# changes to the installer or the manifest — plus weekly and on demand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "installer/**"
+      - ".github/workflows/install-clients.yml"
+  pull_request:
+    paths:
+      - "installer/**"
+      - ".github/workflows/install-clients.yml"
+  schedule:
+    # Weekly. The editors move without this repository changing, and a vendor
+    # renaming a flag is invisible here until someone tries to install.
+    - cron: "23 5 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-clients-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # One job per install strategy rather than per editor. Adding an editor that
+  # merges a JSON file the way Cursor does is covered by the Cursor job; adding
+  # one with a shape none of these has is what deserves a job of its own.
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # file-merge: no third-party binary at all. The editor never runs; what
+          # is under test is the file this installer writes for it to read.
+          - client: cursor
+            strategy: file-merge
+            config: .cursor/mcp.json
+            key: mcpServers
+
+          # cli-delegate with a file fallback. The CLI owns a layout the path
+          # alone does not describe, so this is the one job where the assertion
+          # has to find the entry somewhere in a file we did not write.
+          - client: claude-code
+            strategy: cli-delegate
+            install_cli: npm install -g @anthropic-ai/claude-code
+            probe: claude --version
+            config: .claude.json
+            key: mcpServers
+
+          # cli-delegate with no fallback: TOML, which this installer will not
+          # write. Its CLI is the only way in, and the point of the job is that
+          # the entry really lands when the CLI is present.
+          - client: codex
+            strategy: cli-delegate
+            install_cli: npm install -g @openai/codex
+            probe: codex --version
+            config: .codex/config.toml
+            key: mcp_servers
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer/package-lock.json
+
+      - run: npm ci --ignore-scripts
+        working-directory: installer
+
+      - run: npm run build
+        working-directory: installer
+
+      - name: Install ${{ matrix.client }}'s CLI
+        if: matrix.install_cli != ''
+        run: ${{ matrix.install_cli }}
+
+      # Asserted before the install rather than assumed by it. Without the CLI
+      # on PATH a cli-delegate client falls back or refuses, and both of those
+      # are behaviours this job would then report as the thing it set out to
+      # test — a green run that never exercised the CLI path at all.
+      - name: The CLI is on PATH
+        if: matrix.probe != ''
+        run: ${{ matrix.probe }}
+
+      # A scratch HOME, because these commands write into per-user config and a
+      # runner's home is shared with whatever else the job did.
+      - name: Install into ${{ matrix.client }}
+        run: |
+          HOME="$RUNNER_TEMP/home-${{ matrix.client }}"
+          mkdir -p "$HOME"
+          echo "SCRATCH_HOME=$HOME" >> "$GITHUB_ENV"
+          HOME="$HOME" node installer/bin/noetive-mcp.js init \
+            --client ${{ matrix.client }} --yes --skills none \
+            --api-key keyu_ci_placeholder --namespace ci-probe
+
+      # Read back from the file the editor reads, not from what the installer
+      # said it did. The installer reporting success is the claim under test.
+      #
+      # Searched at any depth rather than at a known path. Claude Code keys
+      # local-scope entries per project inside ~/.claude.json — a private layout
+      # that has already moved once between releases — so pinning the path here
+      # would make this job fail the next time they rearrange it, on an install
+      # that still works perfectly. What is asserted is that the editor's config
+      # now contains the entry, which is the part that has to be true.
+      - name: The entry is in the config the editor reads
+        run: node scripts/find-entry.mjs "$SCRATCH_HOME/${{ matrix.config }}" "${{ matrix.key }}" present
+
+      - name: Remove takes it out again
+        run: |
+          HOME="$SCRATCH_HOME" node installer/bin/noetive-mcp.js remove \
+            --client ${{ matrix.client }} --yes
+          node scripts/find-entry.mjs "$SCRATCH_HOME/${{ matrix.config }}" "${{ matrix.key }}" absent
+
+  # Hermes gets its own job because the thing worth testing is the opposite of
+  # the others: that nothing happens. Its `mcp add` asks which tools to enable
+  # and, prompted down a pipe, reads EOF, takes the cancelling answer and exits
+  # zero having saved nothing. An installer that trusted that exit code would
+  # report a configured editor on every CI run, forever, and be wrong every
+  # time. A runner has no terminal, so this is exactly the shape that fails.
+  refuses-without-a-terminal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer/package-lock.json
+
+      - run: npm ci --ignore-scripts
+        working-directory: installer
+
+      - run: npm run build
+        working-directory: installer
+
+      # A stub, not Hermes. What is under test is this installer's refusal, and
+      # a stub is the only way to have the command on PATH while guaranteeing
+      # the run never reaches an interface that could ask a question. Hermes
+      # answering --version is the whole of the contract relied on here.
+      - name: A hermes on PATH that answers --version
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/hermes" <<'STUB'
+          #!/bin/sh
+          if [ "$1" = "--version" ]; then echo "hermes 0.0.0-stub"; exit 0; fi
+          echo "the installer invoked hermes with no terminal: $*" >&2
+          exit 111
+          STUB
+          chmod +x "$RUNNER_TEMP/bin/hermes"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Refuse, write nothing, and say what to do instead
+        run: |
+          HOME="$RUNNER_TEMP/home-hermes"
+          mkdir -p "$HOME"
+
+          set +e
+          output=$(HOME="$HOME" node installer/bin/noetive-mcp.js init \
+            --client hermes --yes --skills none 2>&1)
+          code=$?
+          set -e
+
+          echo "$output"
+
+          # Exit code first: a zero here is the failure this job exists for.
+          if [ "$code" -eq 0 ]; then
+            echo "::error::init --client hermes succeeded with no terminal to answer it" >&2
+            exit 1
+          fi
+
+          # Asserted against our own output, never against Hermes'. The stub
+          # exits 111 if it is ever reached, which would mean the refusal came
+          # after the CLI had already been handed the install.
+          case "$output" in
+            *"the installer invoked hermes with no terminal"*)
+              echo "::error::the CLI was invoked before the terminal check" >&2
+              exit 1
+              ;;
+          esac
+
+          # A refusal that does not carry the next action is a dead end with
+          # better manners, so the entry to paste is part of the contract.
+          for expected in "needs a terminal" "nothing was written" "mcp_servers:" "NOETIVE_KEY_SECRET"; do
+            case "$output" in
+              *"$expected"*) ;;
+              *) echo "::error::the refusal never mentioned $expected" >&2; exit 1 ;;
+            esac
+          done
+
+          if [ -e "$HOME/.hermes/config.yaml" ]; then
+            echo "::error::a refused install wrote to config.yaml" >&2
+            cat "$HOME/.hermes/config.yaml" >&2
+            exit 1
+          fi

@@ -3,7 +3,7 @@ import { isAbsolute, join, normalize, resolve } from "node:path";
 
 import manifest from "./manifest/clients.json";
 
-export type ConfigFormat = "json" | "jsonc" | "toml";
+export type ConfigFormat = "json" | "jsonc" | "toml" | "yaml";
 export type InstallStrategy = "file-merge" | "cli-delegate";
 
 export interface ScopeSpec {
@@ -16,10 +16,27 @@ export interface CliSpec {
   readonly args: readonly string[];
   readonly removeArgs?: readonly string[];
   /**
-   * The flag this CLI takes one `NAME=value` pair after. Each entry the server
+   * The flag this CLI takes `NAME=value` pairs after. Every entry the server
    * needs is spliced into `args` at the `${env}` placeholder.
    */
   readonly envArg?: string;
+  /**
+   * How that flag is repeated. "repeated" gives it once per pair, which is what
+   * a CLI built on an appending flag expects. "grouped" gives it once followed
+   * by every pair, which is what a CLI built on argparse's `nargs="*"` expects:
+   * there a second `--env` replaces the first rather than adding to it, so the
+   * repeated form silently keeps only the last pair and drops the API key.
+   */
+  readonly envStyle?: "repeated" | "grouped";
+  /**
+   * Whether this CLI asks the user questions.
+   *
+   * A prompting CLI is handed the terminal rather than a pipe, and is refused
+   * outright when there is no terminal to hand it. Piped, its prompt reads EOF
+   * and it takes the cancelling answer — which for Hermes means exiting zero
+   * having written nothing, so the install would report success it never had.
+   */
+  readonly interactive?: boolean;
   /**
    * Args that exit zero when the server is already configured. Used only where
    * there is no file to read; the exit status is the whole answer, so no CLI

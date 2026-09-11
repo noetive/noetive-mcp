@@ -167,7 +167,7 @@ test("status reports an unconfigured editor as unconfigured", async () => {
 
   const report = await new MergeAdapter().status(request(cursor, workspace));
 
-  assert.equal(report.configured, false);
+  assert.equal(report.configured, "no");
 });
 
 // Verification after a write is what makes the backup useful. A write that
@@ -204,7 +204,7 @@ test("status does not report a malformed entry as configured", async () => {
     const workspace = workspaceWith(JSON.stringify(contents));
     const report = await new MergeAdapter().status(request(cursor, workspace));
 
-    assert.equal(report.configured, false, `${name}: reported as configured`);
+    assert.equal(report.configured, "no", `${name}: reported as configured`);
   }
 });
 
@@ -215,7 +215,7 @@ test("status reports a corrupt config as unconfigured with the reason", async ()
 
   const report = await new MergeAdapter().status(request(cursor, workspace));
 
-  assert.equal(report.configured, false);
+  assert.equal(report.configured, "no");
   assert.match(report.detail ?? "", /not valid JSON/);
 });
 

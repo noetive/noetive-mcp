@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { parse, run } from "../src/cli";
-import { clientIds } from "../src/clients";
+import { clientIds, clientSpec } from "../src/clients";
 
 /** capture runs a command and collects everything it wrote. */
 async function capture(argv: string[]): Promise<{ code: number; out: string; err: string }> {
@@ -159,9 +159,31 @@ test("list reports every supported editor", async () => {
   const { code, out } = await capture(["list"]);
 
   assert.equal(code, 0);
-  for (const name of ["Cursor", "Claude Code", "Codex", "GitHub Copilot", "Antigravity", "Kiro"]) {
-    assert.match(out, new RegExp(name));
+
+  // Derived from the manifest, not listed here. A hand-written list is a list
+  // somebody forgets to extend, and this test then keeps passing while quietly
+  // covering one editor fewer than it claims to.
+  for (const id of clientIds()) {
+    assert.match(out, new RegExp(clientSpec(id).displayName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+});
+
+// An editor nothing can answer for must not be reported as unconfigured.
+// Hermes has no command that says whether one server is present, so calling it
+// "not configured" would fail `doctor` on a working install and prescribe the
+// command the user has already run — every run, forever.
+test("an editor whose state cannot be determined says so rather than guessing", async () => {
+  const { out } = await withHome([".hermes"], () => capture(["list"]));
+
+  assert.match(out, /Hermes[^\n]*cannot tell/, `expected Hermes to report an unknown state:\n${out}`);
+  assert.doesNotMatch(out, /Hermes[^\n]*not configured/);
+});
+
+test("an undeterminable editor does not make doctor fail or prescribe a rerun", async () => {
+  const { out } = await withHome([".hermes"], () => capture(["doctor"]));
+
+  assert.doesNotMatch(out, /no editor is configured/, `doctor blamed an editor it cannot read:\n${out}`);
+  assert.match(out, /cannot be checked from here/);
 });
 
 // The JSON output is what a script or an agent reads. It has to parse, and it

@@ -184,6 +184,61 @@
         "The file is JSONC: comments are preserved on write."
       ]
     },
+    "hermes": {
+      "displayName": "Hermes",
+      "configFormat": "yaml",
+      "topLevelKey": "mcp_servers",
+      "install": "cli-delegate",
+      "expandsVariables": true,
+      "detect": [
+        "~/.hermes"
+      ],
+      "cli": {
+        "command": "hermes",
+        "args": [
+          "mcp",
+          "add",
+          "${serverName}",
+          "${env}",
+          "--command",
+          "npx",
+          "--args",
+          "-y",
+          "${packageName}"
+        ],
+        "removeArgs": [
+          "mcp",
+          "remove",
+          "${serverName}"
+        ],
+        "envArg": "--env",
+        "envStyle": "grouped",
+        "interactive": true,
+        "fallback": "none"
+      },
+      "scopes": {
+        "user": {
+          "path": "~/.hermes/config.yaml",
+          "default": true
+        }
+      },
+      "skills": {
+        "user": "~/.hermes/skills"
+      },
+      "restartHint": "Run /reload-mcp in an open session, or start a new one.",
+      "quirks": [
+        "Config is YAML — an mcp_servers.<name> mapping — and the same file holds the model, profiles and approval settings, so there is no file fallback: without the hermes command on PATH the install refuses rather than writing JSON over the whole configuration.",
+        "`mcp add` connects to the server, lists its tools and asks which to enable, so it is run on the user's terminal rather than down a pipe, and is refused where there is no terminal.",
+        "It exits zero whether it saved or the user cancelled, so the install reports what it did and not what Hermes did with it. There is no command that answers whether one server is configured — `mcp list` exits zero whatever it finds — so `list` and `doctor` report Hermes as unknown rather than guessing.",
+        "`--args` takes the remainder of the command line, so it goes last and every argument after it is its own word. `--env` takes all its pairs after a single flag: repeating the flag replaces the previous pairs rather than adding to them, which would drop the API key.",
+        "A stdio server receives only the env this entry declares plus a small baseline; it does not inherit the environment Hermes was launched in. An entry with no env block is a server that connects and then refuses every call.",
+        "Expands ${VAR} and ${env:VAR} when it connects, resolved from ~/.hermes/.env first and the process environment second, so the key can live in either and the placeholder is what stays on disk.",
+        "`mcp add` probes the server before saving. With no key resolvable it may offer to save the entry disabled, which is an install that looks finished and answers nothing.",
+        "Tools reach the model as mcp__noetive__<tool>.",
+        "The Add to Hermes deeplink writes its own entry; running init afterwards overwrites it with this one.",
+        "The React Native JavaScript engine also ships a binary called hermes. It answers --version, so an install run where that one is first on PATH reaches `mcp add` and fails there rather than at detection."
+      ]
+    },
     "kiro": {
       "displayName": "Kiro",
       "configFormat": "json",

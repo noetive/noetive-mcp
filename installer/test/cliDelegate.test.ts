@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { CliDelegateAdapter, RunResult, Runner } from "../src/adapters/cliDelegate";
 import { API_KEY_ENV } from "../src/serverEntry";
-import { ClientSpec, SERVER_NAME } from "../src/clients";
+import { ClientSpec, SERVER_NAME, clientSpec } from "../src/clients";
 
 // A stand-in for the editor's binary. Every test states what the CLI does and
 // then asserts what the adapter did with that, so nothing here shells out.
@@ -171,7 +171,7 @@ test("status reads the file rather than parsing CLI output", async () => {
 
   const report = await new CliDelegateAdapter(run).status(request(workspace));
 
-  assert.equal(report.configured, true);
+  assert.equal(report.configured, "yes");
   assert.ok(
     !calls.some((c) => c.includes("list")),
     "status parsed CLI output, which has no stability promise",
@@ -278,7 +278,7 @@ test("status falls to the CLI's exit code when there is no file to read", async 
   const configured = recorder();
   const report = await new CliDelegateAdapter(configured.run).status(codexRequest(mkdtempSync(join(tmpdir(), "noetive-codex-"))));
 
-  assert.equal(report.configured, true);
+  assert.equal(report.configured, "yes");
   assert.ok(
     configured.calls.some((c) => c[1] === "mcp" && c[2] === "get" && c[3] === SERVER_NAME),
     `status never asked the CLI: ${JSON.stringify(configured.calls)}`,
@@ -287,7 +287,7 @@ test("status falls to the CLI's exit code when there is no file to read", async 
   const absent = recorder({ get: { status: 1, stdout: "", stderr: "no such server" } });
   const missing = await new CliDelegateAdapter(absent.run).status(codexRequest(mkdtempSync(join(tmpdir(), "noetive-codex-"))));
 
-  assert.equal(missing.configured, false);
+  assert.equal(missing.configured, "no");
 });
 
 // The fallback path must leave the same artefacts as any other file edit,
@@ -302,6 +302,203 @@ test("the fallback still backs up an existing file", async () => {
   assert.ok(outcome.backup, "no backup was taken");
   assert.ok(existsSync(outcome.backup!), "the backup path does not exist");
 });
+
+/**
+ * hermesRequest drives the *shipped* Hermes manifest rather than a fixture.
+ *
+ * The argv it produces is the whole of what `init --client hermes` does, so a
+ * manifest edit that breaks it has nowhere else to show up. `HOME` is swapped
+ * for a scratch directory because that manifest's scope is `~/.hermes`, and a
+ * regression in the refusal would otherwise write JSON over the config file of
+ * whoever is running the suite.
+ */
+function hermesRequest(home: string, entryOptions = {}) {
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  return {
+    spec: clientSpec("hermes"),
+    clientId: "hermes",
+    scope: "user",
+    workspace: mkdtempSync(join(tmpdir(), "noetive-hermes-ws-")),
+    entryOptions,
+    dryRun: false,
+  };
+}
+
+async function withScratchHome<T>(body: (home: string) => Promise<T>): Promise<T> {
+  const previous = { home: process.env.HOME, profile: process.env.USERPROFILE };
+  try {
+    return await body(mkdtempSync(join(tmpdir(), "noetive-hermes-home-")));
+  } finally {
+    process.env.HOME = previous.home;
+    process.env.USERPROFILE = previous.profile;
+  }
+}
+
+// Hermes parses `--args` as argparse's REMAINDER, so it takes everything after
+// it and has to come last, with each argument its own word. Joining them into
+// one string is accepted silently and writes args: ["-y @noetive/mcp-server"],
+// which npx resolves as a package by that literal name and never finds — an
+// install that reports success and produces a server that cannot start.
+test("the shipped Hermes entry produces the invocation its CLI parses", async () => {
+  const calls = await withScratchHome(async (home) => {
+    const { run, calls } = recorder();
+    await withTerminal(() => new CliDelegateAdapter(run).install(hermesRequest(home)));
+    return calls;
+  });
+
+  assert.deepEqual(addCall(calls), [
+    "hermes", "mcp", "add", SERVER_NAME,
+    "--env", `${API_KEY_ENV}=\${${API_KEY_ENV}}`,
+    "--command", "npx", "--args", "-y", "@noetive/mcp-server",
+  ]);
+});
+
+// Hermes' --env is argparse nargs="*", which stores rather than appends: a
+// second --env replaces the pairs the first one carried. Repeating the flag
+// therefore keeps only the last pair, and the API key is written first, so it
+// is the one that disappears — into a server that connects and then refuses
+// every call, since Hermes passes a stdio server nothing but its declared env.
+test("Hermes takes every environment pair after one flag, not one flag each", async () => {
+  const calls = await withScratchHome(async (home) => {
+    const { run, calls } = recorder();
+    await withTerminal(() =>
+      new CliDelegateAdapter(run).install(
+        hermesRequest(home, { apiKey: "keyu_example", targeting: { namespace: "team" }, disableGlobalNamespace: true }),
+      ),
+    );
+    return calls;
+  });
+
+  const add = addCall(calls)!;
+  assert.equal(add.filter((arg) => arg === "--env").length, 1, `--env was repeated: ${JSON.stringify(add)}`);
+
+  const pairs = add.slice(add.indexOf("--env") + 1, add.indexOf("--command"));
+  assert.deepEqual(pairs, [
+    `${API_KEY_ENV}=keyu_example`,
+    "NOETIVE_NAMESPACE=team",
+    "NOETIVE_DISABLE_GLOBAL_NS=1",
+  ]);
+});
+
+// ~/.hermes/config.yaml is the whole agent's configuration, not an MCP file.
+// Falling back to the JSON merger would overwrite the model, the profiles and
+// the approval settings with a document Hermes cannot parse, so the absence of
+// the command has to be a refusal.
+test("Hermes refuses rather than writing JSON over the agent's own configuration", async () => {
+  await withScratchHome(async (home) => {
+    const { run } = recorder({ version: { status: 127, stdout: "", stderr: "command not found" } });
+    const request = hermesRequest(home);
+
+    await assert.rejects(
+      () => new CliDelegateAdapter(run).install(request),
+      (err: Error) => {
+        assert.match(err.message, /hermes/);
+        assert.match(err.message, /not on PATH/);
+        return true;
+      },
+    );
+
+    // The scope is ~/.hermes/config.yaml, so the home directory is where a
+    // regression would land. Asserting on the workspace — as the Codex case
+    // legitimately does — would pass no matter what the merger did.
+    assert.equal(existsSync(join(home, ".hermes")), false, "a refused install still wrote to the config directory");
+  });
+});
+
+// A prompting CLI must be given the terminal, or its question goes to a pipe
+// the user cannot see and it answers itself.
+test("an interactive CLI is run on the terminal, and the availability probe is not", async () => {
+  await withScratchHome(async (home) => {
+    const modes: { argv: string[]; interactive: boolean | undefined }[] = [];
+    const run: Runner = (command, args, _env, interactive) => {
+      modes.push({ argv: [command, ...args], interactive });
+      return { status: 0, stdout: "", stderr: "" };
+    };
+
+    await withTerminal(() => new CliDelegateAdapter(run).install(hermesRequest(home)));
+
+    const add = modes.find((m) => m.argv[2] === "add");
+    const probe = modes.find((m) => m.argv[1] === "--version");
+    assert.equal(add?.interactive, true, "mcp add was not given the terminal");
+    assert.ok(!probe?.interactive, "the --version probe took over the terminal");
+  });
+});
+
+// Hermes exits zero whether it saved the server or the user cancelled out of
+// the tool picker. Reading its output to tell the two apart would bind this
+// installer to the layout of somebody else's terminal interface, where a
+// cosmetic change turns a working install into a reported failure. So the
+// outcome says what we did and declines to say what Hermes did.
+test("an interactive install reports what it handed over, not a success it cannot see", async () => {
+  const outcome = await withScratchHome(async (home) => {
+    const { run } = recorder();
+    return withTerminal(() => new CliDelegateAdapter(run).install(hermesRequest(home)));
+  });
+
+  assert.ok(outcome.unverified, "an interactive install claimed an outcome it cannot observe");
+  assert.match(outcome.unverified!, /does not report back/);
+});
+
+// Without a terminal the prompt reads EOF, Hermes takes the cancelling answer
+// and exits zero having written nothing — so a piped run would report a
+// configured editor that was never configured. The refusal has to name what to
+// do instead, or it is just a different way of leaving the user stuck.
+test("no terminal refuses the interactive install and hands back the entry", async () => {
+  await withScratchHome(async (home) => {
+    const { run, calls } = recorder();
+
+    await assert.rejects(
+      () => new CliDelegateAdapter(run).install(hermesRequest(home)),
+      (err: Error) => {
+        assert.match(err.message, /needs a terminal/);
+        assert.match(err.message, /nothing was written/);
+        assert.match(err.message, /mcp_servers:/, "the refusal did not carry the entry to paste");
+        assert.match(err.message, /"-y", "@noetive\/mcp-server"/);
+        assert.match(err.message, new RegExp(`${API_KEY_ENV}`));
+        return true;
+      },
+    );
+
+    assert.deepEqual(calls.filter((c) => c[2] === "add"), [], "the CLI was invoked with no terminal to answer it");
+  });
+});
+
+// --api-key --dry-run is exactly what a careful person runs before committing
+// to anything, and the delegated path put the key straight into their
+// scrollback while the file path had redacted it for releases.
+test("an embedded key is kept off the screen on both the preview and the failure", async () => {
+  const workspace = mkdtempSync(join(tmpdir(), "noetive-claude-"));
+
+  const preview = await new CliDelegateAdapter(recorder().run).install({
+    ...request(workspace, true),
+    entryOptions: { apiKey: "keyu_supersecret" },
+  });
+  assert.ok(!preview.diff!.includes("keyu_supersecret"), `the preview printed the key: ${preview.diff}`);
+  assert.match(preview.diff!, /<your key>/);
+
+  const { run } = recorder({ add: { status: 1, stdout: "", stderr: "nope" } });
+  await assert.rejects(
+    () => new CliDelegateAdapter(run).install({ ...request(workspace), entryOptions: { apiKey: "keyu_supersecret" } }),
+    (err: Error) => {
+      assert.ok(!err.message.includes("keyu_supersecret"), `the failure printed the key: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+/** withTerminal runs body with stdin and stdout claiming to be a terminal. */
+async function withTerminal<T>(body: () => Promise<T>): Promise<T> {
+  const previous = { stdin: process.stdin.isTTY, stdout: process.stdout.isTTY };
+  process.stdin.isTTY = true;
+  process.stdout.isTTY = true;
+  try {
+    return await body();
+  } finally {
+    process.stdin.isTTY = previous.stdin;
+    process.stdout.isTTY = previous.stdout;
+  }
+}
 
 /** adjacent reports whether flag is immediately followed by value in argv. */
 function adjacent(argv: readonly string[], flag: string, value: string): boolean {

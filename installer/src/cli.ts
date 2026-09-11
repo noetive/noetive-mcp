@@ -178,6 +178,11 @@ async function install(options: Options, out: Writer): Promise<number> {
 
   if (!outcome.changed) {
     out(`${spec.displayName} already has ${SERVER_NAME} configured at ${outcome.target}.`);
+  } else if (outcome.unverified) {
+    // Deliberately not "Configured". The editor's own CLI ran and the user
+    // answered it; whether it saved anything is on their screen, not in
+    // anything this command can read without tying itself to that CLI's layout.
+    out(`Handed ${SERVER_NAME} to ${outcome.target}. ${outcome.unverified}`);
   } else {
     out(`Configured ${spec.displayName} at ${outcome.target}.`);
   }
@@ -338,13 +343,14 @@ async function list(options: Options, out: Writer): Promise<number> {
     const spec = clientSpec(id);
     const scope = defaultScope(spec);
     const installed = isInstalled(spec, workspace, existsSync);
-    const found = await configuredScopes(id, workspace);
+    const { found, undetermined } = await configuredScopes(id, workspace);
 
     rows.push({
       client: id,
       displayName: spec.displayName,
       installed,
       configured: found.length > 0,
+      undetermined: found.length === 0 && undetermined.length > 0,
       scopes: found,
       defaultTarget: configPath(spec, scope, workspace),
     });
@@ -356,7 +362,13 @@ async function list(options: Options, out: Writer): Promise<number> {
   }
 
   for (const row of rows) {
-    const state = row.configured ? "configured" : row.installed ? "not configured" : "not detected";
+    const state = row.configured
+      ? "configured"
+      : row.undetermined
+        ? "cannot tell"
+        : row.installed
+          ? "not configured"
+          : "not detected";
     const where = row.configured ? row.scopes.map((s) => `${s.scope}: ${s.target}`).join(", ") : row.defaultTarget;
     out(`${row.displayName.padEnd(26)} ${state.padEnd(15)} ${where}`);
   }
@@ -392,21 +404,37 @@ async function doctor(options: Options, out: Writer): Promise<number> {
     // --scope project is configured, and a report that only looks at the
     // global file tells them they are not — sending them to fix something
     // that already works.
-    const found = await configuredScopes(id, workspace);
+    const { found, undetermined } = await configuredScopes(id, workspace);
+    if (found.length > 0) {
+      editors.push({
+        name: spec.displayName,
+        status: "pass",
+        detail: found.map((f) => `${f.scope}: ${f.target}`).join(", "),
+      });
+      continue;
+    }
+
+    // Never "not configured" for an editor nothing can answer for. Prescribing
+    // init there tells a user whose install already works to run it again, and
+    // keeps telling them, which is how a report teaches people to ignore it.
     editors.push({
       name: spec.displayName,
-      status: found.length > 0 ? "pass" : "info",
+      status: "info",
       detail:
-        found.length > 0
-          ? found.map((f) => `${f.scope}: ${f.target}`).join(", ")
+        undetermined.length > 0
+          ? `cannot be checked from here; look for ${SERVER_NAME} in ${undetermined.map((u) => u.target).join(", ")}`
           : `not configured; run: npx ${PACKAGE_NAME} init --client ${id}`,
+      undetermined: undetermined.length > 0,
     });
   }
 
   // No configured editor at all is a real fault: nothing can reach Noetive.
-  // One configured editor and three ignored ones is a working setup.
+  // One configured editor and three ignored ones is a working setup. An editor
+  // that cannot be checked is not evidence of a fault either way, so it holds
+  // the failure back rather than triggering it.
   const configured = editors.filter((e) => e.status === "pass");
-  if (editors.length > 0 && configured.length === 0) {
+  const unanswerable = editors.filter((e) => e.undetermined);
+  if (editors.length > 0 && configured.length === 0 && unanswerable.length === 0) {
     checks.push({
       name: "editors",
       status: "fail",
@@ -417,7 +445,10 @@ async function doctor(options: Options, out: Writer): Promise<number> {
   // The key is only a fault where it is actually needed. An editor configured
   // with --api-key carries its own, and does not depend on this shell.
   const shellKey = (process.env[API_KEY_ENV] ?? "").trim();
-  checks.push(keyCheck(shellKey, configured.length > 0));
+  // An editor that might be configured needs the key just as much as one that
+  // demonstrably is, so it counts here too: calling the key a fault on a
+  // working install is the same mistake in the other direction.
+  checks.push(keyCheck(shellKey, configured.length > 0 || unanswerable.length > 0));
 
   checks.push(...editors);
 
@@ -438,6 +469,11 @@ interface Check {
   readonly name: string;
   readonly status: "pass" | "fail" | "info";
   readonly detail: string;
+  /**
+   * Set on an editor check that could not be answered either way, which is
+   * neither a pass nor a fault and must not be counted as one.
+   */
+  readonly undetermined?: boolean;
 }
 
 /**
@@ -448,19 +484,36 @@ interface Check {
  * entry and a per-project one — and which of them applies depends on where the
  * editor was opened, not on which this command considers the default.
  */
-export async function configuredScopes(
-  clientId: string,
-  workspace: string,
-): Promise<{ scope: string; target: string }[]> {
+export async function configuredScopes(clientId: string, workspace: string): Promise<EditorStatus> {
   const spec = clientSpec(clientId);
   const adapter = adapterFor(spec);
-  const found: { scope: string; target: string }[] = [];
+  const found: ScopeTarget[] = [];
+  const undetermined: ScopeTarget[] = [];
 
   for (const scope of Object.keys(spec.scopes)) {
     const report = await adapter.status({ spec, clientId, scope, workspace });
-    if (report.configured) found.push({ scope, target: report.target });
+    if (report.configured === "yes") found.push({ scope, target: report.target });
+    else if (report.configured === "unknown") undetermined.push({ scope, target: report.target });
   }
-  return found;
+  return { found, undetermined };
+}
+
+export interface ScopeTarget {
+  readonly scope: string;
+  readonly target: string;
+}
+
+/**
+ * EditorStatus separates the scopes an editor is configured in from the ones
+ * nothing can answer for.
+ *
+ * Folding the second into "not configured" is what makes a report actively
+ * misleading rather than merely incomplete: it sends a user to configure
+ * something that may already be right, and does it every single run.
+ */
+export interface EditorStatus {
+  readonly found: readonly ScopeTarget[];
+  readonly undetermined: readonly ScopeTarget[];
 }
 
 function keyCheck(shellKey: string, anyEditorConfigured: boolean): Check {

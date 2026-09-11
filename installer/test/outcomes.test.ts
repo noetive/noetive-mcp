@@ -76,7 +76,7 @@ test("removal reports a change only when there was something to remove", async (
 test("a missing config is reported as unconfigured", async () => {
   const report = await new MergeAdapter().status(request(cursor, scratch()));
 
-  assert.equal(report.configured, false);
+  assert.equal(report.configured, "no");
 });
 
 // A configured editor has to report the command it will actually run, since
@@ -87,7 +87,7 @@ test("a configured editor reports the command it will run", async () => {
 
   const report = await new MergeAdapter().status(request(cursor, workspace));
 
-  assert.equal(report.configured, true);
+  assert.equal(report.configured, "yes");
   assert.match(report.detail ?? "", /npx -y @noetive\/mcp-server/);
 });
 
@@ -99,7 +99,7 @@ test("a server map that is not an object is not read as configured", async () =>
 
   const report = await new MergeAdapter().status(request(cursor, workspace));
 
-  assert.equal(report.configured, false);
+  assert.equal(report.configured, "no");
 });
 
 // `list` distinguishes configured from not. Reporting everything as configured

@@ -148,7 +148,14 @@ export function diff(before: string, after: string, path: string): string {
  * happen before it happens, and printing the key there puts it in their
  * scrollback, their terminal history and any screen share that is running. The
  * key is still written to the file; this only keeps it off the screen.
+ *
+ * Both forms the key travels in are covered. The JSON form is what a merged
+ * config looks like; the `NAME=value` form is what a delegated CLI is handed on
+ * its command line, and that one also reaches the screen through a failure
+ * message, which no flag opts into.
  */
-function redactKey(line: string): string {
-  return line.replace(/("NOETIVE_KEY_SECRET"\s*:\s*")(?!\$\{)[^"]+(")/g, "$1<your key>$2");
+export function redactKey(line: string): string {
+  return line
+    .replace(/("NOETIVE_KEY_SECRET"\s*:\s*")(?!\$\{)[^"]+(")/g, "$1<your key>$2")
+    .replace(/(NOETIVE_KEY_SECRET=)(?!\$\{)(\S+)/g, "$1<your key>");
 }

@@ -73,17 +73,17 @@ export class MergeAdapter implements ClientAdapter {
     const installed = isInstalled(request.spec, request.workspace, existsSync);
 
     if (!existsSync(target)) {
-      return { target, installed, configured: false };
+      return { target, installed, configured: "no" };
     }
 
     try {
       const entry = this.entryAt(target, request.spec.topLevelKey);
-      if (!entry) return { target, installed, configured: false };
+      if (!entry) return { target, installed, configured: "no" };
 
       const detail = typeof entry.command === "string" ? `${entry.command} ${(entry.args as string[] | undefined)?.join(" ") ?? ""}`.trim() : undefined;
-      return detail ? { target, installed, configured: true, detail } : { target, installed, configured: true };
+      return detail ? { target, installed, configured: "yes", detail } : { target, installed, configured: "yes" };
     } catch (err) {
-      return { target, installed, configured: false, detail: (err as Error).message };
+      return { target, installed, configured: "no", detail: (err as Error).message };
     }
   }
 

@@ -97,13 +97,14 @@ test("a project-scoped install is found, not only the default scope", async () =
     dryRun: false,
   });
 
-  const found = await configuredScopes("cursor", project);
+  const { found, undetermined } = await configuredScopes("cursor", project);
 
   assert.deepEqual(
     found.map((f) => f.scope),
     ["project"],
     "expected the project scope to be reported as configured",
   );
+  assert.deepEqual(undetermined, [], "a file this installer can read is never an unanswerable scope");
 });
 
 // The manifest spells paths with forward slashes because vendor documentation

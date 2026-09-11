@@ -27,8 +27,8 @@
       "additionalProperties": false,
       "allOf": [
         {
-          "description": "The file merger writes JSON. An editor whose config is TOML has to be configured through its own CLI, or the merge would replace a working config with a JSON document the editor cannot read.",
-          "if": { "properties": { "configFormat": { "const": "toml" } }, "required": ["configFormat"] },
+          "description": "The file merger writes JSON. An editor that keeps its servers in anything else has to be configured through its own CLI, or the merge would replace a working config with a JSON document the editor cannot read. The read-back check would not catch it: the JSON written is exactly the JSON it looks for. Stated as everything-but rather than a list of the formats seen so far, so a format added later is covered before anyone remembers this rule exists.",
+          "if": { "properties": { "configFormat": { "not": { "enum": ["json", "jsonc"] } } }, "required": ["configFormat"] },
           "then": {
             "properties": { "install": { "const": "cli-delegate" }, "cli": { "properties": { "fallback": { "const": "none" } }, "required": ["fallback"] } },
             "required": ["cli"]
@@ -38,8 +38,8 @@
       "properties": {
         "displayName": { "type": "string" },
         "configFormat": {
-          "enum": ["json", "jsonc", "toml"],
-          "description": "jsonc files are edited with a comment-preserving parser so a user's notes survive the write. toml is documentation only: no file of that format is ever written here."
+          "enum": ["json", "jsonc", "toml", "yaml"],
+          "description": "jsonc files are edited with a comment-preserving parser so a user's notes survive the write. toml and yaml are documentation only: no file of either format is ever written here, so both are recorded so the schema can refuse a merge against one."
         },
         "topLevelKey": {
           "type": "string",
@@ -81,7 +81,16 @@
             },
             "envArg": {
               "type": "string",
-              "description": "The flag this CLI takes one NAME=value pair after. Without it, ${env} expands to nothing and the server is configured with no environment."
+              "description": "The flag this CLI takes NAME=value pairs after. Without it, ${env} expands to nothing and the server is configured with no environment."
+            },
+            "envStyle": {
+              "enum": ["repeated", "grouped"],
+              "default": "repeated",
+              "description": "Whether envArg is given once per pair or once followed by all of them. grouped is required by a CLI whose flag replaces its previous value instead of appending, where the repeated form keeps only the last pair and so drops the API key."
+            },
+            "interactive": {
+              "type": "boolean",
+              "description": "Whether this CLI asks the user questions. One that does is given the terminal and refused where there is none: prompted down a pipe it reads EOF, takes the cancelling answer, and can exit zero having written nothing."
             },
             "fallback": {
               "enum": ["file-merge", "none"],

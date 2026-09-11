@@ -15,6 +15,7 @@ npx @noetive/mcp-server init --client codex
 npx @noetive/mcp-server init --client copilot
 npx @noetive/mcp-server init --client antigravity
 npx @noetive/mcp-server init --client kiro
+npx @noetive/mcp-server init --client hermes
 ```
 
 Run it with no `--client` and it configures the editor it finds. Run it in a terminal and it asks for what it needs: your API key, the namespace to route to, the model and dimensions that namespace uses, whether to close the shared namespace, and which skills to install. Every answer has a flag, and anything you pass is not asked about again. `--yes` accepts the defaults and asks nothing.
@@ -22,11 +23,14 @@ Run it with no `--client` and it configures the editor it finds. Run it in a ter
 Or click:
 [Add to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=noetive&config=eyJhcmdzIjpbIi15IiwiQG5vZXRpdmUvbWNwLXNlcnZlciJdLCJjb21tYW5kIjoibnB4IiwiZW52Ijp7Ik5PRVRJVkVfS0VZX1NFQ1JFVCI6IiR7Tk9FVElWRV9LRVlfU0VDUkVUfSJ9fQ==) ·
 [Add to VS Code](https://vscode.dev/redirect/mcp/install?name=noetive&config=%7B%22args%22%3A%5B%22-y%22%2C%22%40noetive%2Fmcp-server%22%5D%2C%22command%22%3A%22npx%22%2C%22env%22%3A%7B%22NOETIVE_KEY_SECRET%22%3A%22%24%7BNOETIVE_KEY_SECRET%7D%22%7D%2C%22type%22%3A%22stdio%22%7D) ·
-[Add to Kiro](https://kiro.dev/launch/mcp/add?name=noetive&config=%7B%22args%22%3A%5B%22-y%22%2C%22%40noetive%2Fmcp-server%22%5D%2C%22command%22%3A%22npx%22%2C%22env%22%3A%7B%22NOETIVE_KEY_SECRET%22%3A%22%24%7BNOETIVE_KEY_SECRET%7D%22%7D%7D)
+[Add to Kiro](https://kiro.dev/launch/mcp/add?name=noetive&config=%7B%22args%22%3A%5B%22-y%22%2C%22%40noetive%2Fmcp-server%22%5D%2C%22command%22%3A%22npx%22%2C%22env%22%3A%7B%22NOETIVE_KEY_SECRET%22%3A%22%24%7BNOETIVE_KEY_SECRET%7D%22%7D%7D) ·
+[Add to Hermes](hermes://mcp/install?name=noetive&config=eyJhcmdzIjpbIi15IiwiQG5vZXRpdmUvbWNwLXNlcnZlciJdLCJjb21tYW5kIjoibnB4IiwiZW52Ijp7Ik5PRVRJVkVfS0VZX1NFQ1JFVCI6IiR7Tk9FVElWRV9LRVlfU0VDUkVUfSJ9fQ==)
+
+The Hermes button needs the Hermes desktop app. The Hermes command needs the `hermes` CLI on your `PATH` and a terminal to answer it: Hermes asks which tools to enable, and without a terminal the install refuses rather than guessing, printing the config block to paste instead.
 
 The command writes a `noetive` entry into your editor's MCP config. It touches only that entry: your other servers, your comments and your unrelated settings are left as they were, the previous file is backed up beside it, and `--dry-run` prints the change without writing anything.
 
-Registry-aware clients can install by name instead: `io.noetive/mcp-server`. Your editor is not listed? The three shapes in circulation are `mcpServers` with a `command`, VS Code's `servers` with an explicit `type`, and Codex's TOML `[mcp_servers.noetive]`. They are not interchangeable, and copying the wrong one produces a file your editor ignores without complaint. [docs/clients.md](docs/clients.md) has each one.
+Registry-aware clients can install by name instead: `io.noetive/mcp-server`. Your editor is not listed? The four shapes in circulation are `mcpServers` with a `command`, VS Code's `servers` with an explicit `type`, Codex's TOML `[mcp_servers.noetive]`, and Hermes' YAML `mcp_servers:` mapping. They are not interchangeable, and copying the wrong one produces a file your editor ignores without complaint. [docs/clients.md](docs/clients.md) has each one.
 
 ## Configuration
 
@@ -62,13 +66,14 @@ npx @noetive/mcp-server doctor
 
 `doctor` reports four independent things: the binary, the key, each editor's config, and which scope each was found in. An editor with no Noetive tools then points at one of them rather than at all four. To check Semantik itself, ask your agent to call `noetive_health`.
 
-In the editor: Claude Code and Codex answer `/mcp`, Copilot lists its tools in Agent mode, Cursor shows the server under Settings → MCP.
+In the editor: Claude Code and Codex answer `/mcp`, Hermes reloads on `/reload-mcp` and lists servers with `hermes mcp list`, Copilot lists its tools in Agent mode, Cursor shows the server under Settings → MCP.
 
 ## When it doesn't work
 
 - **No Noetive tools in the editor.** Start with `doctor`. If it passes, the editor has not reloaded. `init` printed the hint for yours.
 - **Tools appear but every call is refused.** The key did not reach the server. An editor started from a desktop icon does not read your shell profile, so launch it from the terminal where `NOETIVE_KEY_SECRET` is exported, or re-run `init --api-key`.
 - **`init --client codex` refuses.** Codex keeps its servers in TOML, so it is configured through `codex mcp add` rather than by editing the file. Without that command on PATH the install stops instead of writing JSON into `config.toml`.
+- **`init --client hermes` refuses or says it cannot confirm.** Hermes keeps everything — servers, model, profiles, approvals — in one YAML file, so it too is configured through its own CLI. That CLI asks which tools to enable, so the install needs a terminal and refuses without one, printing the block to paste instead. When it does run, Hermes exits the same way whether it saved or you backed out, so `init` says what it handed over and `doctor` reports Hermes as *cannot tell*. Check with `hermes mcp list`.
 - **A call fails naming a namespace.** There is no default, deliberately, for the reason given below. Pass one on the call, or set it once when you run `init`.
 
 ## Containers and remote machines
@@ -150,7 +155,7 @@ Plain `http` is accepted only for a loopback address; anywhere else needs `https
 | `semantik` | What Semantik is, and whether a given problem wants search or subscribe |
 | `doctor` | How to diagnose an installation and report what is wrong |
 
-Claude Code reads skills from a directory, so `init --client claude-code` writes them there and `remove` takes them away again. The other editors read a different instruction format, and rather than translate into four dialects and keep them in step, `init` says so and installs the server alone. The tools carry their own descriptions either way.
+Claude Code and Hermes read skills from a directory, so `init --client claude-code` and `init --client hermes` write them there and `remove` takes them away again. The other editors read a different instruction format, and rather than translate into four dialects and keep them in step, `init` says so and installs the server alone. The tools carry their own descriptions either way.
 
 `--skills none` skips them, `--skills semql,semantik` picks some, and `--skills all` takes everything.
 

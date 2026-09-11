@@ -76,14 +76,16 @@ test("every advertised client is in the manifest with a usable default scope", (
   // Pinned rather than derived: the set is what noetive.io/mcp publishes a
   // command for, so gaining or losing one is a change to a public promise and
   // should not pass quietly.
-  assert.deepEqual(clientIds().sort(), ["antigravity", "claude-code", "codex", "copilot", "cursor", "kiro"]);
+  assert.deepEqual(clientIds().sort(), ["antigravity", "claude-code", "codex", "copilot", "cursor", "hermes", "kiro"]);
 });
 
-// The file merger writes JSON. Pointing it at an editor whose config is TOML
-// would replace a working config.toml with a JSON document that editor cannot
-// read — and the merger's own read-back check would pass, because the JSON it
-// wrote is exactly the JSON it looks for. The schema states this; nothing runs
-// the schema, so it is asserted here.
+// The file merger writes JSON. Pointing it at an editor whose config is TOML or
+// YAML would replace a working config.toml or config.yaml with a JSON document
+// that editor cannot read — and the merger's own read-back check would pass,
+// because the JSON it wrote is exactly the JSON it looks for. Hermes makes the
+// stake plainer than Codex did: its file holds the model, the profiles and the
+// approval settings for the whole agent, not only its MCP servers. The schema
+// states this; nothing runs the schema, so it is asserted here.
 test("an editor whose config is not JSON is never handed to the file merger", () => {
   for (const id of clientIds()) {
     const spec = clientSpec(id);

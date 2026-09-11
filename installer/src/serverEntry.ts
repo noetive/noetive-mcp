@@ -1,4 +1,4 @@
-import { ClientSpec, PACKAGE_NAME } from "./clients";
+import { ClientSpec, PACKAGE_NAME, SERVER_NAME } from "./clients";
 
 /** API_KEY_ENV is the one variable the server needs to authenticate. */
 export const API_KEY_ENV = "NOETIVE_KEY_SECRET";
@@ -107,6 +107,35 @@ export function buildEntry(spec: ClientSpec, options: EntryOptions = {}): Server
   if (Object.keys(env).length > 0) entry.env = env;
 
   return entry as unknown as ServerEntry;
+}
+
+/**
+ * renderYamlEntry writes the entry as the block a user pastes in by hand.
+ *
+ * Rendering YAML is not the same undertaking as merging it. This produces a
+ * fixed six-line shape for the user to read and copy; it never opens, parses or
+ * replaces a file, which is what makes it safe for a config this installer
+ * refuses to write. It exists so a refusal can end in the thing to do next
+ * rather than in an apology.
+ *
+ * Every value is quoted. The key placeholder starts with `${`, which bare YAML
+ * reads as the start of a flow mapping and rejects.
+ */
+export function renderYamlEntry(spec: ClientSpec, options: EntryOptions = {}): string {
+  const entry = buildEntry(spec, options);
+  const lines = [
+    `${spec.topLevelKey}:`,
+    `  ${SERVER_NAME}:`,
+    `    command: "${entry.command}"`,
+    `    args: [${entry.args.map((arg) => `"${arg}"`).join(", ")}]`,
+  ];
+
+  if (entry.env && Object.keys(entry.env).length > 0) {
+    lines.push(`    env:`);
+    for (const [name, value] of Object.entries(entry.env)) lines.push(`      ${name}: "${value}"`);
+  }
+
+  return lines.join("\n");
 }
 
 /**

@@ -19,12 +19,34 @@ export interface InstallOutcome {
   readonly diff?: string;
   /** The backup taken before writing, if any. */
   readonly backup?: string;
+  /**
+   * Why this outcome could not be confirmed, where it could not be.
+   *
+   * Set for a CLI that ran to completion without telling us what it did. It is
+   * deliberately not derived from what the CLI printed: reading its output
+   * would tie this installer to the wording and layout of somebody else's
+   * terminal interface, and a cosmetic change there would silently turn a
+   * working install into a reported failure. Better to say we do not know.
+   */
+  readonly unverified?: string;
 }
+
+/**
+ * Configured is whether an editor has the noetive entry.
+ *
+ * Three states rather than two, because "we cannot tell" is a real answer and
+ * reporting it as "no" is worse than saying nothing: an editor whose config is
+ * a format this installer does not read, behind a CLI with no command that
+ * reports one, is indistinguishable from an unconfigured one. Called "no", it
+ * makes `doctor` fail on a working install and prescribe the command the user
+ * has already run.
+ */
+export type Configured = "yes" | "no" | "unknown";
 
 export interface StatusReport {
   readonly target: string;
   readonly installed: boolean;
-  readonly configured: boolean;
+  readonly configured: Configured;
   readonly detail?: string;
 }
 

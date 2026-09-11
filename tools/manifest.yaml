@@ -101,6 +101,13 @@ deeplinks:
   - client: kiro
     label: Add to Kiro
     url: https://kiro.dev/launch/mcp/add?name=${serverKey}&config=${config}
+  # Handled by the Hermes desktop app only. A CLI-only user who clicks this gets
+  # nothing, which is why the page that carries the button also carries the
+  # command. Hermes rejects a config declaring both url and command; this entry
+  # is stdio, so it carries command alone.
+  - client: hermes
+    label: Add to Hermes
+    url: hermes://mcp/install?name=${serverKey}&config=${configBase64}
 
 # Skills the plugin formats install and the npm wrapper writes into editors that
 # read skills from a directory.

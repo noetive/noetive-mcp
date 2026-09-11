@@ -13,11 +13,12 @@ npx @noetive/mcp-server init --client codex
 npx @noetive/mcp-server init --client copilot
 npx @noetive/mcp-server init --client antigravity
 npx @noetive/mcp-server init --client kiro
+npx @noetive/mcp-server init --client hermes
 ```
 
 Run it with no `--client` and it configures the editor it finds. Run it in a terminal and it asks for what it needs: your API key, the namespace to route to, its model and dimensions, whether to close the shared namespace, and which skills to install. Every answer has a flag, and anything you pass is not asked about again. `--yes` accepts the defaults and asks nothing, which is what CI and a non-interactive shell get automatically.
 
-One-click buttons for Cursor, VS Code and Kiro are on [noetive.io/mcp](https://noetive.io/mcp).
+One-click buttons for Cursor, VS Code, Kiro and Hermes are on [noetive.io/mcp](https://noetive.io/mcp). The Hermes button needs the Hermes desktop app; the Hermes command needs the `hermes` CLI and a terminal to answer, since Hermes asks which tools to enable.
 
 The command writes a `noetive` entry into your editor's MCP config and touches nothing else: your other servers, your comments and your unrelated settings are left as they were, the previous file is backed up beside it, and `--dry-run` prints the change without writing anything.
 
@@ -76,7 +77,7 @@ npx @noetive/mcp-server init --client cursor \
 
 ## Skills
 
-`init` installs skills that teach your agent how to write a SemQL query, when to search rather than subscribe, and how to diagnose the install. Claude Code reads skills from a directory, so they are written there and `remove` takes them away again; the other editors read a different instruction format and are told so rather than given files they would ignore.
+`init` installs skills that teach your agent how to write a SemQL query, when to search rather than subscribe, and how to diagnose the install. Claude Code and Hermes read skills from a directory, so they are written there and `remove` takes them away again; the other editors read a different instruction format and are told so rather than given files they would ignore.
 
 `--skills none` skips them, `--skills all` takes everything, and a comma-separated list picks some.
 
