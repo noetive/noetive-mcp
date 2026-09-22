@@ -4,7 +4,7 @@
 // Mutation testing for both languages in this repository.
 //
 // Coverage says a line ran. It does not say anything about whether a test would
-// notice if that line were wrong — a suite can execute every branch and assert
+// notice if that line were wrong: a suite can execute every branch and assert
 // nothing that matters. Mutation testing asks the only question that counts:
 // break the implementation on purpose, and does the suite go red?
 //
@@ -32,7 +32,7 @@ const SALVAGE = join(ROOT, ".mutation-salvage.json");
  * restoreInterrupted puts back a file left mutated by a run that was killed.
  *
  * A finally block does not survive SIGKILL, so without this a stopped run
- * leaves a deliberate bug in the working tree with nothing to announce it — and
+ * leaves a deliberate bug in the working tree with nothing to announce it, and
  * the next person to run the tests sees a failure, or a hang, that has no
  * apparent cause.
  */
@@ -93,8 +93,8 @@ const OPERATORS = [
 ];
 
 /**
- * sourceFiles lists files git knows about — tracked or newly added but not
- * ignored — that still exist on disk.
+ * sourceFiles lists files git knows about, tracked or newly added but not
+ * ignored, that still exist on disk.
  *
  * Both halves matter: listing only tracked files misses a package that has not
  * been committed yet, and not checking existence tries to mutate files that
@@ -189,7 +189,7 @@ function mutantsIn(lang, file, commentPattern) {
   const lines = readFileSync(join(ROOT, file), "utf8").split("\n");
   const mutants = [];
 
-  // A backtick string — a JS template literal or a Go raw string — runs across
+  // A backtick string, a JS template literal or a Go raw string, runs across
   // lines, so its interior looks like ordinary code to a line-at-a-time scan.
   // Usage text and embedded schemas live in exactly those, and mutating prose
   // produces survivors that are real only in the report.
@@ -238,7 +238,7 @@ function mutantsIn(lang, file, commentPattern) {
  * alone.
  *
  * Without this, a message containing `<editor>` gets mutated to `<=editor>` and
- * survives every test — correctly, because changing prose changes no behaviour.
+ * survives every test, correctly, because changing prose changes no behaviour.
  * Those false survivors are worse than no report: they bury the real holes in
  * noise, and a report nobody trusts is a report nobody reads.
  */
@@ -320,7 +320,7 @@ function report(mutants, killed, survivors) {
     return;
   }
 
-  console.log("Survivors — each is a change no test noticed:\n");
+  console.log("Survivors, each is a change no test noticed:\n");
   for (const s of survivors) {
     console.log(`  ${relative(".", s.file)}:${s.line}  [${s.id}]`);
     console.log(`    ${s.before.trim()}`);

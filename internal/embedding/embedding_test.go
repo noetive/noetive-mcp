@@ -122,7 +122,7 @@ func searchError(t *testing.T, b *stubBroker, e embedding.Embedder, query string
 }
 
 // A publish carries both. The vector is what the message is indexed by, and the
-// text is what a search gives back — drop either and half the point goes with
+// text is what a search gives back; drop either and half the point goes with
 // it: no vector means the broker embeds after all, and no text means every hit
 // comes back contentless.
 func TestPublishSendsTheVectorAndKeepsTheText(t *testing.T) {

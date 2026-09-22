@@ -56,7 +56,7 @@ export interface StatusReport {
  * Most editors keep MCP servers in a JSON object keyed by server name, and are
  * served by the manifest-driven implementation with no code of their own. An
  * adapter is written only when an editor's configuration is not fully described
- * by that file — Claude Code, whose CLI owns a layout the file does not
+ * by that file: Claude Code, whose CLI owns a layout the file does not
  * express, is the case this exists for.
  */
 export interface ClientAdapter {

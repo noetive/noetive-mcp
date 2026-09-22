@@ -17,7 +17,7 @@ import (
 )
 
 // Bounds on the collect window. An MCP tool call blocks the agent's turn, so
-// the tool waits for a while and then reports what it saw — it never holds the
+// the tool waits for a while and then reports what it saw: it never holds the
 // turn open indefinitely the way a long-lived stream would.
 const (
 	defaultWait  = 15 * time.Second
@@ -25,7 +25,7 @@ const (
 	defaultMax   = 10
 	maxMatchCap  = 100
 	setupBudget  = 20 * time.Second
-	streamNotice = "The stream was interrupted; the matches collected before that point are included. Matches that arrived after the interruption are lost — a new subscription gets a fresh id and the server makes no replay promise."
+	streamNotice = "The stream was interrupted; the matches collected before that point are included. Matches that arrived after the interruption are lost: a new subscription gets a fresh id and the server makes no replay promise."
 )
 
 // Subscriber installs a standing SemQL subscription and returns its live match
@@ -46,7 +46,7 @@ type Stream interface {
 // The conversion exists because Go has no covariant return types: a method
 // returning *semantik.Subscription does not satisfy an interface method
 // returning Stream, even though the concrete type implements Stream. This is a
-// language limitation, not an abstraction mismatch — the two contracts are the
+// language limitation, not an abstraction mismatch: the two contracts are the
 // same contract. Doing the conversion once here keeps it out of every wiring
 // site and out of the handler.
 //
@@ -74,7 +74,7 @@ func (o *subscriptionOpener) Subscribe(ctx context.Context, req semantik.Subscri
 // InterruptReason and RequestID are populated only alongside Interrupted, and
 // exist because a bare bool told an operator a stream broke without saying why
 // or giving them anything to quote. The SDK carries a structured *semantik.Error
-// on a mid-stream failure — code, message, request id — and all of it used to be
+// on a mid-stream failure (code, message, request id) and all of it used to be
 // discarded here, while the same detail was surfaced faithfully for a setup
 // failure a few lines away.
 //
@@ -118,7 +118,7 @@ func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.T
 	options := []mcp.ToolOption{
 		mcp.WithDescription(
 			"Watch a Noetive Semantik namespace for live messages matching a SemQL query, for up to a minute, then report what arrived. " +
-				"Matches come back as message ids and scores only — the server does not send message content on a live match, so use noetive_search to read what a message says. " +
+				"Matches come back as message ids and scores only: the server does not send message content on a live match, so use noetive_search to read what a message says. " +
 				"The subscription is closed when the call returns; it does not keep running.",
 		),
 		mcp.WithString("query",
@@ -160,7 +160,7 @@ func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.T
 		wait := time.Duration(bound(request.GetInt("wait_seconds", int(defaultWait.Seconds())), 1, int(maxWait.Seconds()))) * time.Second
 
 		// The stream's lifetime is the context passed to Subscribe, and nothing
-		// else can end a blocked read — Subscription.Next takes a context it
+		// else can end a blocked read: Subscription.Next takes a context it
 		// documents as sampled once and then ignored, because bufio.Scanner.Scan
 		// blocks underneath it. So the window has to be closed from out here.
 		//
@@ -180,7 +180,14 @@ func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.T
 		if err != nil {
 			var setup *semantik.SubscribeSetupError
 			if errors.As(err, &setup) {
-				return failure("noetive_subscribe could not start the subscription", setupBudget+wait, err), nil
+				// Parenthesised rather than written as a sentence, because failure
+				// appends " failed" to whatever it is given. A phrase here read as
+				// "noetive_subscribe could not start the subscription failed: ...".
+				//
+				// The tool name stays the first whole token, as it is in every
+				// other message this package renders, so what an agent reads to
+				// decide what to retry is in the same place either way.
+				return failure("noetive_subscribe (setup)", setupBudget+wait, err), nil
 			}
 			return failure("noetive_subscribe", setupBudget+wait, err), nil
 		}
@@ -190,7 +197,7 @@ func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.T
 
 		// The window starts now, and closing it is what makes the read return.
 		// collect is told when it ends so it can tell that cancellation apart from
-		// a stream that genuinely broke — the SDK wraps both identically.
+		// a stream that genuinely broke: the SDK wraps both identically.
 		closesAt := time.Now().Add(wait)
 		windowOver := time.AfterFunc(wait, cancel)
 		defer windowOver.Stop()
@@ -209,7 +216,7 @@ func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.T
 //
 // closesAt is when the caller will cancel the stream context. It is needed
 // because the SDK reports the resulting cancellation as a *SubscribeStreamError
-// — the same type a genuinely dropped connection produces — so the type alone
+// (the same type a genuinely dropped connection produces), so the type alone
 // cannot distinguish "we stopped listening" from "the connection failed".
 // Classifying on it is what stops an ordinary quiet window being reported as an
 // interruption, which is what every idle call used to say.
@@ -234,7 +241,7 @@ func collect(ctx context.Context, sub Stream, limit int, window time.Duration, c
 		event, err := sub.Next(ctx)
 		if err != nil {
 			// A cancellation at or after the window's end is the window closing,
-			// not a failure — including the wrapped form the SDK produces for it.
+			// not a failure, including the wrapped form the SDK produces for it.
 			if isWindowClose(err, closesAt) {
 				return result
 			}
@@ -272,7 +279,7 @@ const windowCloseSlack = 250 * time.Millisecond
 // can end a read with.
 //
 // Only a *SubscribeStreamError is structured. io.EOF is what Subscription.Next
-// returns for a clean server-side close — a broker draining during a deploy —
+// returns for a clean server-side close (a broker draining during a deploy)
 // and it arrives raw, so a type switch alone treated it as an ordinary quiet
 // window and reported a watch that had already ended as still running. Anything
 // else falls back to the error's own words rather than to silence.
@@ -292,8 +299,8 @@ func describeInterruption(err error) (reason, requestID string) {
 // describeStreamError extracts what an operator needs from a mid-stream failure:
 // why it broke, and the request id to quote when asking.
 //
-// Err is best-effort on the SDK's side — it is nil when no structured shape
-// could be synthesised — so the raw cause is the fallback rather than an empty
+// Err is best-effort on the SDK's side (it is nil when no structured shape
+// could be synthesised), so the raw cause is the fallback rather than an empty
 // string. Reporting "the stream was interrupted" with nothing after it is what
 // made this undiagnosable from the client.
 func describeStreamError(stream *semantik.SubscribeStreamError) (reason, requestID string) {

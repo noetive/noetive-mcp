@@ -23,7 +23,7 @@ import (
 //
 // It is a local bound, deliberately not published as a promise anywhere. The
 // far side enforces its own and is free to move it, so this can only ever be
-// conservative — if it drifts low, the cost is a query refused here that would
+// conservative: if it drifts low, the cost is a query refused here that would
 // have been accepted, which is visible and reported rather than silent.
 const maxQueryVectors = 8192
 
@@ -41,7 +41,7 @@ var (
 //
 // The syntax is chosen by the first significant byte: SemQL text never begins
 // with '{', so the discriminator is exact rather than a guess. A query with no
-// text anchors is returned byte-for-byte and costs no embed call — one nobody
+// text anchors is returned byte-for-byte and costs no embed call: one nobody
 // changed should reach the broker exactly as the agent wrote it, so that an
 // error from the far side quotes something they recognise.
 func rewrite(ctx context.Context, e Embedder, model string, dimensions uint16, query string) (string, error) {
@@ -55,7 +55,7 @@ func rewrite(ctx context.Context, e Embedder, model string, dimensions uint16, q
 // the one call that is about checking a query rather than running it.
 //
 // It is deliberately more forgiving than rewrite. A half-written query is the
-// normal case for lint — that is what completions are for — so an unterminated
+// normal case for lint, that is what completions are for, so an unterminated
 // quote or an unclosed bracket is worked with rather than refused.
 func blank(query string) (string, error) {
 	if jsonQuery(query) {
@@ -159,8 +159,8 @@ type span struct {
 // parens. So a quoted string at bracket depth of one or more is an anchor.
 //
 // A quoted string at depth zero is a namespace ref, but only where a namespace
-// ref can appear. Anywhere else it is a phrase in a query that does not parse —
-// a forgotten bracket puts an anchor there — and it is refused rather than
+// ref can appear. Anywhere else it is a phrase in a query that does not parse,
+// a forgotten bracket puts an anchor there, and it is refused rather than
 // forwarded. Treating every depth-zero string as a name would send exactly the
 // words this package exists to keep, on a query the broker was going to reject
 // anyway.
@@ -168,7 +168,7 @@ type span struct {
 // Where a namespace ref can appear is narrower than "after NAMESPACE". The
 // selector is `[NOT] name { "," [NOT] name }`, so it runs until the first word
 // that is not part of it, and any word ends it. Ending it only at WINDOW and
-// LIMIT — the clauses the grammar puts next — left the selector open across
+// LIMIT, the clauses the grammar puts next, left the selector open across
 // everything a malformed query can put after a namespace, and a phrase landing
 // there was forwarded with its text intact.
 //
@@ -336,8 +336,8 @@ func rewriteText(ctx context.Context, e Embedder, model string, dimensions uint1
 
 // spliceText copies query, replacing each anchor literal with its vector.
 //
-// Every byte outside the spans survives unchanged — brackets, keywords,
-// thresholds, the NAMESPACE clause and the agent's own spacing — so a rejection
+// Every byte outside the spans survives unchanged (brackets, keywords,
+// thresholds, the NAMESPACE clause and the agent's own spacing), so a rejection
 // from the broker still quotes a query they recognise.
 func spliceText(query string, spans []span, vectors [][]float32) string {
 	// A float32 written with the shortest round-tripping decimal runs to about
@@ -572,8 +572,8 @@ func singleAnchor(clause map[string]any, key string, sites *[]jsonSite) error {
 //
 // A bare phrase is replaced by a list holding one vector rather than by a bare
 // vector. The wire format accepts a bare phrase in these positions but not a
-// bare array of numbers — that reads as a list whose first element is a number
-// rather than an anchor — so the nesting is what keeps the query parseable.
+// bare array of numbers, that reads as a list whose first element is a number
+// rather than an anchor, so the nesting is what keeps the query parseable.
 func anchorList(clause map[string]any, key string, sites *[]jsonSite) error {
 	value, ok := clause[key]
 	if !ok {

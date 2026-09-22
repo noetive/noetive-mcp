@@ -31,9 +31,9 @@ test("no API key is written unless one is passed explicitly", () => {
 });
 
 test("an explicitly passed API key is written literally", () => {
-  const entry = buildEntry(clientSpec("cursor"), { apiKey: "keyu_example" });
+  const entry = buildEntry(clientSpec("cursor"), { apiKey: "keya_example" });
 
-  assert.equal(entry.env?.[API_KEY_ENV], "keyu_example");
+  assert.equal(entry.env?.[API_KEY_ENV], "keya_example");
 });
 
 // Kiro does not expand ${VAR} in env. Writing the placeholder anyway would put
@@ -48,7 +48,7 @@ test("no placeholder is written for an editor that cannot expand it", () => {
 // Writing a key into a dotfile is a decision with consequences the user should
 // hear about once, at the moment they make it.
 test("embedding a key warns about version control", () => {
-  assert.match(describeKeyHandling(clientSpec("cursor"), "cursor", { apiKey: "keyu_x" }), /version control/);
+  assert.match(describeKeyHandling(clientSpec("cursor"), "cursor", { apiKey: "keya_x" }), /version control/);
 });
 
 // Routing defaults are the operator naming a namespace, which is different from
@@ -81,7 +81,7 @@ test("every advertised client is in the manifest with a usable default scope", (
 
 // The file merger writes JSON. Pointing it at an editor whose config is TOML or
 // YAML would replace a working config.toml or config.yaml with a JSON document
-// that editor cannot read — and the merger's own read-back check would pass,
+// that editor cannot read, and the merger's own read-back check would pass,
 // because the JSON it wrote is exactly the JSON it looks for. Hermes makes the
 // stake plainer than Codex did: its file holds the model, the profiles and the
 // approval settings for the whole agent, not only its MCP servers. The schema

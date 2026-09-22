@@ -23,7 +23,7 @@ distance         = "DISTANCE" "(" anchor ")" [ "WITHIN" number | "TOP" integer ]
 direction        = "DIRECTION" "(" anchor_list ")" [ "CONE" number ] ;
 contrast         = "CONTRAST" "(" "ATTRACT" anchor_list [ "," "REPEL" anchor_list ] ")" [ "WITHIN" number ] ;
 
-(* Plural forms parse but the broker rejects them — see Namespace selector. *)
+(* Plural forms parse but the broker rejects them; see Namespace selector. *)
 namespace_selector = namespace_ref { "," namespace_ref } | "ALL" | "GLOBAL" ;
 namespace_ref      = [ "NOT" ] string_literal ;
 
@@ -162,12 +162,12 @@ NAMESPACE GLOBAL
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| `include` | string[] | `[]` | One name, matched literally — no globs |
+| `include` | string[] | `[]` | One name, matched literally: no globs |
 | `global` | boolean | `false` | The shared namespace, on its own |
 
 Namespace names are case-insensitive. `acme-corp`, `Acme-Corp` and `ACME-CORP` are one namespace, not three, and the same is true of `global`.
 
-The clause asserts scope rather than choosing it, and the broker checks it: a clause naming a namespace other than the request's is `400 invalid_request`. Only a single namespace is honoured. The grammar above still admits several names, an `exclude` list and `ALL` — the parser accepts them, and the broker then rejects them with `400 invalid_request` rather than ignoring them. Selecting several namespaces from a query is not supported yet.
+The clause asserts scope rather than choosing it, and the broker checks it: a clause naming a namespace other than the request's is `400 invalid_request`. Only a single namespace is honoured. The grammar above still admits several names, an `exclude` list and `ALL`: the parser accepts them, and the broker then rejects them with `400 invalid_request` rather than ignoring them. Selecting several namespaces from a query is not supported yet.
 
 Read the note on scope in the skill body before reaching for this: through the Noetive MCP tools, the `namespace` argument on the tool call is what decides where a query runs.
 

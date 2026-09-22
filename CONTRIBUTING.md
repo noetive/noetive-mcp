@@ -8,9 +8,9 @@ make build test lint
 cd installer && npm ci --ignore-scripts && npm test
 ```
 
-`make hooks` points `core.hooksPath` at `.githooks`; `make build` and `make test` do it too, so a fresh clone gets the hooks from the first thing it runs. The pre-commit hook is the fast half — formatting, credentials, and the generated-file check — and pre-push runs `go test -race` and the linter. Both name anything they had to skip because a tool was missing.
+`make hooks` points `core.hooksPath` at `.githooks`; `make build` and `make test` do it too, so a fresh clone gets the hooks from the first thing it runs. The pre-commit hook is the fast half (formatting, credentials, and the generated-file check), and pre-push runs `go test -race` and the linter. Both name anything they had to skip because a tool was missing.
 
-Node 22 or newer for the installer: `npm test` runs `node --test "dist/test/*.test.js"`, and node only expands that glob itself from 21 onwards. The published wrapper's own floor is lower — `engines` says `>=20` — because that governs users, not contributors.
+Node 22 or newer for the installer: `npm test` runs `node --test "dist/test/*.test.js"`, and node only expands that glob itself from 21 onwards. The published wrapper's own floor is lower, `engines` says `>=20`, because that governs users, not contributors.
 
 ## Things that are load-bearing
 
@@ -18,13 +18,13 @@ Node 22 or newer for the installer: `npm test` runs `node --test "dist/test/*.te
 
 **The package name is `@noetive/mcp-server`.** It appears in the commands on noetive.io/mcp, in dev-docs, and inside the Kiro deeplink. Changing it breaks published instructions.
 
-**Namespace, model and dimensions are never defaulted.** An omitted field is refused before the request is sent. This is a data-isolation boundary, not an ergonomics choice — see [docs/security.md](docs/security.md). Do not add a flag to relax it.
+**Namespace, model and dimensions are never defaulted.** An omitted field is refused before the request is sent. This is a data-isolation boundary, not an ergonomics choice: see [docs/security.md](docs/security.md). Do not add a flag to relax it.
 
 **Editor configs belong to the user.** A write may touch only the `noetive` key, must be idempotent, must back up first, and must leave comments intact. Every one of those has a test; keep it that way.
 
 ## Adding a tool
 
-Add a file to `internal/broker` holding the whole path for that call: the `mcp.NewTool` descriptor, the argument decoding, the SDK call, and the result shaping. Register it in `internal/mcpserver` and add it to `ToolNames`, then add it to `tools/manifest.yaml` and run `make emit` — the emitter fails when the two disagree.
+Add a file to `internal/broker` holding the whole path for that call: the `mcp.NewTool` descriptor, the argument decoding, the SDK call, and the result shaping. Register it in `internal/mcpserver` and add it to `ToolNames`, then add it to `tools/manifest.yaml` and run `make emit`: the emitter fails when the two disagree.
 
 Tests go beside it: one per behaviour, named for the behaviour, against a fake implementing the narrow interface the tool declares. Add fuzz seeds for any new argument, because tool arguments are model-chosen and untrusted.
 
@@ -46,7 +46,7 @@ git status --porcelain -- packaging/ .claude-plugin/ .mcp.json skills/   # emit 
 
 `git status`, not `git diff`: adding a tool emits a *new* skill file, and a diff does not see one at all. CI asserts the same thing without the pathspec, because its checkout has nothing else in it.
 
-Integration tests hit production and need a key: `NOETIVE_KEY_SECRET=keyu_... integration/run.sh`. They skip without one.
+Integration tests hit production and need a key: `NOETIVE_KEY_SECRET=keya_... integration/run.sh`. They skip without one.
 
 ## Cutting a release
 
@@ -63,8 +63,8 @@ git tag v1.4.0 && git push origin v1.4.0
 does not stage what git has never seen.
 
 The committed tree is what ships, and the tag only has to agree with it. Nine
-files carry the version — `tools/manifest.yaml`, both installer manifests,
-`server.json` and the three generated plugin manifests among them — so the bump
+files carry the version (`tools/manifest.yaml`, both installer manifests,
+`server.json` and the three generated plugin manifests among them), so the bump
 is one command rather than a checklist. Two guards keep them together: the
 emitter's tests refuse a tree whose version files disagree with each other, and
 the release workflow refuses a tag that disagrees with `tools/manifest.yaml`.
@@ -119,7 +119,7 @@ Anything else is a hole worth closing.
 
 The run edits source files in place and restores them in a `finally`. A killed
 process cannot run that, so the pre-mutation contents are parked in
-`.mutation-salvage.json` first and any later run puts them back — if a test
+`.mutation-salvage.json` first and any later run puts them back. If a test
 suite starts failing or hanging for no apparent reason, run the tool once and it
 will report what it restored.
 

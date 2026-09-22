@@ -2,7 +2,7 @@
 
 Email **security@noetive.eu**. Please do not open a public issue, and do not include a working API key in the report.
 
-Useful to include: what an attacker gains, the smallest reproduction you have, and the version — `npx @noetive/mcp-server --version`.
+Useful to include: what an attacker gains, the smallest reproduction you have, and the version: `npx @noetive/mcp-server --version`.
 
 We aim to acknowledge within two working days and to ship a fix or a mitigation within thirty days for anything that lets an attacker read or write a namespace they do not own, recover an API key, or execute code through a tool call. We will credit you in the release notes unless you prefer otherwise.
 

@@ -60,8 +60,8 @@ func TestInterruptedStreamKeepsWhatArrivedAndSaysSo(t *testing.T) {
 	}
 }
 
-// A clean server-side close is what Subscription.Next returns io.EOF for — a
-// broker draining during a deploy — and it arrives raw rather than wrapped in a
+// A clean server-side close is what Subscription.Next returns io.EOF for, a
+// broker draining during a deploy, and it arrives raw rather than wrapped in a
 // *SubscribeStreamError. Classifying on that type alone let it fall through to
 // the healthy path, so a watch that had already ended was reported as still
 // running over a quiet namespace. The two are the opposite advice: one says
@@ -102,8 +102,8 @@ func TestTheReportedDurationIsTheOneActuallyWatched(t *testing.T) {
 	}
 }
 
-// A setup failure and an in-flight failure need different remediation — retry
-// versus reconnect-and-dedupe — so they must not read the same to the agent.
+// A setup failure and an in-flight failure need different remediation, retry
+// versus reconnect-and-dedupe, so they must not read the same to the agent.
 func TestSetupFailureIsDistinguishedFromAStreamFailure(t *testing.T) {
 	stub := &stubBroker{subErr: &semantik.SubscribeSetupError{
 		Err: &semantik.Error{Code: semantik.CodeUnavailable, Message: "setup budget exceeded", HTTPStatus: 503},
@@ -112,7 +112,11 @@ func TestSetupFailureIsDistinguishedFromAStreamFailure(t *testing.T) {
 
 	message := requireError(t, call(t, handler, map[string]any{"query": "MATCH"}))
 
-	if !strings.Contains(message, "could not start") {
+	// Asserted as a prefix rather than a substring, because the marker is the
+	// operation name and failure appends " failed" to it. A sentence here instead
+	// of a name read as "noetive_subscribe could not start the subscription
+	// failed [unavailable]: ...", which marks the failure and mangles it.
+	if !strings.HasPrefix(message, "noetive_subscribe (setup) failed") {
 		t.Errorf("expected the message to mark this as a setup failure, got: %s", message)
 	}
 }
@@ -200,7 +204,7 @@ func (f *fakeStream) Next(ctx context.Context) (semantik.MatchEvent, error) {
 		// Close stays callable.
 		//
 		// The cancellation comes back wrapped, because that is what the real
-		// *semantik.Subscription does — wrapSubscribeStreamError wraps any
+		// *semantik.Subscription does: wrapSubscribeStreamError wraps any
 		// mid-stream error, cancellation included, so the type cannot tell an
 		// ended window from a dropped connection. A double that returned the bare
 		// context error would let collect distinguish them for free and hide the

@@ -14,7 +14,7 @@ import (
 // written by a language model, in two syntaxes, and this package hand-rolls a
 // scanner over both. The scanner's answer is what the package relies on to
 // claim a query carries no text, so a case it walks past is not a parse error
-// somebody notices — it is a phrase on the wire.
+// somebody notices: it is a phrase on the wire.
 //
 // The broker package's targets cannot reach any of this. They drive the tools
 // against a stub, so the rewrite never runs; only a server with an embeddings
@@ -32,7 +32,7 @@ import (
 // its 1 KiB buffer when the overflow lands mid-sequence in invalid UTF-8, and
 // decodeQuery calls it unguarded. Feeding it bytes the transport cannot deliver
 // would gate every commit on a crash nothing can reach. Feeding it what the
-// transport does deliver is the check worth having — and if that ever stops
+// transport does deliver is the check worth having, and if that ever stops
 // being true, the guard is the one the SDK already wrote: semantik.safeUnmarshal
 // wraps the same library in a recover for the same reason.
 func asTransportDelivers(query string) string {
@@ -62,7 +62,7 @@ var clauseTemplates = []string{
 
 // The one property worth stating as a promise: a query that reaches Noetive
 // carries no phrase the agent wrote in a clause. Refusing is always an
-// acceptable answer — nothing is sent — so the target only ever asserts about
+// acceptable answer, nothing is sent, so the target only ever asserts about
 // the calls that succeeded.
 func FuzzClauseAnchorsNeverTravel(f *testing.F) {
 	f.Add("payroll incident", 0)

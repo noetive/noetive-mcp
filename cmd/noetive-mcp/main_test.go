@@ -19,7 +19,7 @@ import (
 // degrades a working setup, every tool silently stops reaching the broker while
 // the editor still reports a healthy server.
 func TestConnectReturnsALiveClientWhenTheKeyIsUsable(t *testing.T) {
-	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
+	t.Setenv(mcpserver.APIKeyEnv, "keya_3xAmPl3Base58Value")
 
 	broker := connect(nil)
 
@@ -30,7 +30,7 @@ func TestConnectReturnsALiveClientWhenTheKeyIsUsable(t *testing.T) {
 
 // The placeholder trap: an editor that does not substitute its config variable
 // passes the literal text through. It is non-empty, so nothing downstream
-// rejects it, and the call reaches the server and returns "unauthorized" —
+// rejects it, and the call reaches the server and returns "unauthorized",
 // sending the user to check their account when the fault is an environment
 // their editor never read.
 func TestConnectRefusesAnUnexpandedPlaceholderBeforeBuildingAClient(t *testing.T) {
@@ -208,7 +208,7 @@ func TestUnparseableEnvironmentDimensionsStopStartup(t *testing.T) {
 // editor config written by `init` spawns it the same way, so a regression here
 // breaks install paths that are already advertised in public.
 func TestBareAndExplicitInvocationsBothServe(t *testing.T) {
-	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
+	t.Setenv(mcpserver.APIKeyEnv, "keya_3xAmPl3Base58Value")
 
 	scenarios := []struct {
 		name string
@@ -269,10 +269,10 @@ func TestOnlyALeadingServeVerbIsStripped(t *testing.T) {
 }
 
 // --version must be opt-in. Defaulted the other way, every editor launch prints
-// a version string to stdout and exits — which for a stdio protocol means the
+// a version string to stdout and exits, which for a stdio protocol means the
 // editor sees a corrupt frame and a server that immediately died.
 func TestVersionIsOnlyPrintedWhenAsked(t *testing.T) {
-	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
+	t.Setenv(mcpserver.APIKeyEnv, "keya_3xAmPl3Base58Value")
 
 	var asked strings.Builder
 	served := false
@@ -327,7 +327,7 @@ func TestAConfigurationErrorPreventsServing(t *testing.T) {
 // A failure from the transport has to reach the caller, or the process exits
 // zero on a server that never ran and the editor reports nothing at all.
 func TestAServeFailureIsReturned(t *testing.T) {
-	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
+	t.Setenv(mcpserver.APIKeyEnv, "keya_3xAmPl3Base58Value")
 
 	sentinel := errors.New("stdio closed")
 	err := run(nil, io.Discard, func(*mcpgo.MCPServer) error { return sentinel })

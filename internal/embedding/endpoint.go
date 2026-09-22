@@ -23,7 +23,7 @@ import (
 // Environment variables read by the command when it builds an Endpoint.
 //
 // There is deliberately no variable for the model or the dimensionality.
-// Both already have exactly one name — NOETIVE_MODEL and NOETIVE_DIMENSIONS —
+// Both already have exactly one name, NOETIVE_MODEL and NOETIVE_DIMENSIONS,
 // and that name is sent to Noetive as the routing triple and to this endpoint
 // as the request's model and dimensions. A second variable would be a second
 // thing to get wrong, and getting it wrong is undetectable: an endpoint serving
@@ -63,7 +63,7 @@ type Endpoint struct {
 	// two can be the same string because At refuses a URL carrying userinfo
 	// outright rather than stripping it, so there is no credential here to echo
 	// back through a tool result into the model's context. The key lives in
-	// authHeader, which is never rendered — see String.
+	// authHeader, which is never rendered, see String.
 	url        string
 	authHeader string
 }
@@ -207,13 +207,13 @@ type embedRequest struct {
 	Model string `json:"model"`
 	// EncodingFormat is sent explicitly even though the API defaults to float.
 	// Gateways exist that default to base64, and a base64 string decoded into
-	// []float32 yields an empty vector rather than an error — a silently wrong
+	// []float32 yields an empty vector rather than an error: a silently wrong
 	// embedding is worse than a loud rejection.
 	EncodingFormat string   `json:"encoding_format"`
 	Input          []string `json:"input"`
 	// Dimensions is what makes a Matryoshka model usable: qwen3-embedding:4b
 	// is natively 2560, and a namespace provisioned at 1024 needs the endpoint
-	// to truncate. It is best-effort — the guarantee is the length check on
+	// to truncate. It is best-effort: the guarantee is the length check on
 	// the way back, not this field.
 	Dimensions uint16 `json:"dimensions"`
 }
@@ -277,8 +277,9 @@ func (e *Endpoint) Embed(ctx context.Context, model string, dimensions uint16, t
 		}
 		// Everything else, including a deadline, is wrapped. *Error has no
 		// Unwrap on purpose: letting a DeadlineExceeded through would make
-		// broker.failure print "no response within 30s" and send the operator
-		// to check Noetive when it was the model on this machine that stalled.
+		// broker.failure report the call's own budget expiring and send the
+		// operator to check Noetive when it was the model on this machine that
+		// stalled.
 		return nil, &Error{Endpoint: e.url, Model: model, Message: err.Error()}
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -338,7 +339,7 @@ func (e *Endpoint) refuseBadInput(model string, dimensions uint16, texts []strin
 // index is treated as authoritative rather than advisory, and there is no
 // positional fallback. A server that omits the field decodes every element as
 // zero, and without the duplicate check that would silently give every input
-// the first vector — publishing one message under another's meaning,
+// the first vector: publishing one message under another's meaning,
 // permanently, with nothing anywhere to notice it.
 func (e *Endpoint) scatter(model string, dimensions uint16, texts []string, data []embedDatum) ([][]float32, error) {
 	if len(data) != len(texts) {
@@ -369,7 +370,7 @@ func (e *Endpoint) scatter(model string, dimensions uint16, texts []string, data
 			}
 		}
 		for i, v := range d.Embedding {
-			// A non-finite element cannot be published — the SDK rejects it —
+			// A non-finite element cannot be published, the SDK rejects it,
 			// and written into a query it would serialise as a bare NaN, which
 			// is not valid JSON and not a valid SemQL number.
 			if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {

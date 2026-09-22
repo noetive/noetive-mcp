@@ -47,7 +47,7 @@ export function platformPackage(key: string = hostKey()): string {
 /**
  * defaultFallbackDir is where postinstall places a downloaded binary.
  *
- * It must be the package's own bin directory — the same one postinstall writes
+ * It must be the package's own bin directory, the same one postinstall writes
  * to. Pointing anywhere else makes the fallback silently unreachable, and the
  * user sees "could not find the binary" on a machine where it was downloaded
  * successfully.
@@ -71,7 +71,7 @@ export interface ResolveOptions {
  *
  * The optional dependency is tried first: npm, pnpm and yarn all install only
  * the package matching the host's os and cpu fields, and that path works even
- * when install scripts are disabled — which pnpm v10 does by default. The
+ * when install scripts are disabled, which pnpm v10 does by default. The
  * download performed by postinstall is the fallback for the cases where the
  * optional dependency did not land.
  *

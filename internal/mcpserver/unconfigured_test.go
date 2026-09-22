@@ -15,7 +15,7 @@ import (
 )
 
 // A server with no credential must still register its tools. If it exited
-// instead, the editor would report only that the server failed to launch — with
+// instead, the editor would report only that the server failed to launch: with
 // no tools to call and nothing to ask, including the health tool whose job is to
 // say what is wrong.
 func TestUnconfiguredServerStillOffersItsTools(t *testing.T) {
@@ -109,7 +109,7 @@ func TestEveryOperationIsRefusedWhenUnconfigured(t *testing.T) {
 	}
 }
 
-// The refusal is shaped as a pre-flight error — HTTPStatus zero — so it travels
+// The refusal is shaped as a pre-flight error, HTTPStatus zero, so it travels
 // the same path as any other rejection that never reached the wire, and the
 // agent is told the request was not sent rather than that the service failed.
 func TestRefusalIsReportedAsPreflightNotAsAServerFailure(t *testing.T) {

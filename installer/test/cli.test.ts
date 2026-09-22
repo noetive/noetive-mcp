@@ -27,7 +27,7 @@ async function capture(argv: string[]): Promise<{ code: number; out: string; err
  * Both variables, because os.homedir() reads a different one per platform:
  * USERPROFILE on Windows and HOME everywhere else. Setting only HOME leaves
  * Windows detecting against the real user profile, where the answer depends on
- * what the runner happens to have — which passed on two of the three platforms
+ * what the runner happens to have, which passed on two of the three platforms
  * in the matrix and failed on the third.
  */
 async function withHome<T>(markers: string[], body: () => Promise<T>): Promise<T> {
@@ -53,7 +53,7 @@ async function withHome<T>(markers: string[], body: () => Promise<T>): Promise<T
   }
 }
 
-// Both spellings are in circulation — the published commands use one, and
+// Both spellings are in circulation: the published commands use one, and
 // people type the other. Silently dropping either would look like the flag was
 // accepted while the value never arrived.
 test("flag values are accepted separated or joined by =", () => {
@@ -171,7 +171,7 @@ test("list reports every supported editor", async () => {
 // An editor nothing can answer for must not be reported as unconfigured.
 // Hermes has no command that says whether one server is present, so calling it
 // "not configured" would fail `doctor` on a working install and prescribe the
-// command the user has already run — every run, forever.
+// command the user has already run, every run, forever.
 test("an editor whose state cannot be determined says so rather than guessing", async () => {
   const { out } = await withHome([".hermes"], () => capture(["list"]));
 
@@ -230,7 +230,7 @@ test("a dry run reports the change and writes nothing", async () => {
   }
 });
 
-// Removing something that was never configured is not an error — it is the
+// Removing something that was never configured is not an error: it is the
 // answer to "is it gone", and reporting it as a failure would make an
 // idempotent cleanup script fail.
 test("removing an unconfigured editor succeeds and says nothing changed", async () => {
@@ -420,10 +420,10 @@ test("an editor with no skills directory says so", async () => {
 test("a dry run does not print the API key it would write", async () => {
   await inWorkspace(async () => {
     const { out } = await capture([
-      "init", "--client", "cursor", "--scope", "project", "--api-key", "keyu_notInTheOutput", "--dry-run",
+      "init", "--client", "cursor", "--scope", "project", "--api-key", "keya_notInTheOutput", "--dry-run",
     ]);
 
-    assert.equal(out.includes("keyu_notInTheOutput"), false, "the key reached the terminal");
+    assert.equal(out.includes("keya_notInTheOutput"), false, "the key reached the terminal");
     assert.match(out, /<your key>/);
   });
 });

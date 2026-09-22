@@ -33,7 +33,7 @@ export interface CliSpec {
    *
    * A prompting CLI is handed the terminal rather than a pipe, and is refused
    * outright when there is no terminal to hand it. Piped, its prompt reads EOF
-   * and it takes the cancelling answer — which for Hermes means exiting zero
+   * and it takes the cancelling answer, which for Hermes means exiting zero
    * having written nothing, so the install would report success it never had.
    */
   readonly interactive?: boolean;
@@ -134,7 +134,7 @@ export function configPath(spec: ClientSpec, scope: string, workspace: string): 
  *
  * The manifest spells paths with forward slashes because that is what every
  * vendor's documentation uses. Substituting into that leaves a Windows path
- * with mixed separators — `C:\Users\me\project/.vscode/mcp.json` — which opens
+ * with mixed separators (`C:\Users\me\project/.vscode/mcp.json`), which opens
  * files perfectly well and then fails every comparison against a path built
  * with `join`, so `list` and `doctor` report an editor as unconfigured while
  * looking straight at its config. Normalising once, here, is what stops that
@@ -180,7 +180,7 @@ export function isProjectScoped(spec: ClientSpec, scope: string): boolean {
  * directory.
  *
  * Copilot's only scope is the workspace, and the published instructions are
- * "run this in your terminal" — which for most people means their home
+ * "run this in your terminal", which for most people means their home
  * directory. That writes ~/.vscode/mcp.json, a path VS Code never reads as a
  * workspace config, and reports success. The user then has a config file, an
  * editor with no Noetive tools, and nothing connecting the two.
@@ -205,7 +205,7 @@ export function assertUsableWorkspace(spec: ClientSpec, scope: string, workspace
 
 /**
  * isInstalled reports whether the editor appears to be present, so `list` can
- * distinguish "not configured" from "not installed" — a user with no Kiro does
+ * distinguish "not configured" from "not installed": a user with no Kiro does
  * not need to be told their Kiro config is missing.
  *
  * Absence of a detect path is treated as unknown, not as absent: a false

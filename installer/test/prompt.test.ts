@@ -77,11 +77,11 @@ test("a secret answer is never echoed", async () => {
   const t = terminal();
   const prompter = terminalPrompter(t.input, t.output);
 
-  t.type("keyu_notOnScreen\r");
+  t.type("keya_notOnScreen\r");
   const answer = await prompter.text("API key", { secret: true });
 
-  assert.equal(answer, "keyu_notOnScreen");
-  assert.equal(t.written().includes("keyu_notOnScreen"), false, "the key was echoed");
+  assert.equal(answer, "keya_notOnScreen");
+  assert.equal(t.written().includes("keya_notOnScreen"), false, "the key was echoed");
 });
 
 test("a yes or no question takes its default when nothing is typed", async () => {

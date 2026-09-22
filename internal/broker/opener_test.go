@@ -30,7 +30,7 @@ func TestSubscriberFromPassesTheRequestThrough(t *testing.T) {
 }
 
 // A failed open must surface as an error, not as a non-nil Stream wrapping a
-// nil subscription — that would defer the failure to the first read, where it
+// nil subscription: that would defer the failure to the first read, where it
 // arrives with no context at all.
 func TestSubscriberFromReturnsNoStreamOnFailure(t *testing.T) {
 	sentinel := errors.New("handshake refused")

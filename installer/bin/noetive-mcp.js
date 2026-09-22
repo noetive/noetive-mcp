@@ -3,7 +3,7 @@
 
 // Argv router for @noetive/mcp-server.
 //
-// With no subcommand — or with `serve` — this execs the Go binary, which speaks
+// With no subcommand, or with `serve`, this execs the Go binary, which speaks
 // MCP over stdio. That default is load-bearing: the "Add to Kiro" deeplink on
 // noetive.io launches `npx @noetive/mcp-server` with no arguments at all, and
 // every editor config written by `init` spawns it the same way. Anything else

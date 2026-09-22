@@ -12,8 +12,8 @@ import (
 )
 
 // Every anchor position the grammar admits must be rewritten. One missed
-// position is one phrase that still travels, and the query would still work —
-// so nothing would ever point at the gap.
+// position is one phrase that still travels, and the query would still work.
+// So nothing would ever point at the gap.
 func TestEveryClauseKindHasItsAnchorsReplaced(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -61,7 +61,7 @@ func TestEveryClauseKindHasItsAnchorsReplaced(t *testing.T) {
 }
 
 // The splice must leave everything that is not an anchor exactly as the agent
-// wrote it — brackets, keywords, thresholds, spacing — so that a rejection from
+// wrote it (brackets, keywords, thresholds, spacing), so that a rejection from
 // the broker quotes a query they recognise.
 func TestOnlyTheAnchorsChange(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
@@ -77,7 +77,7 @@ func TestOnlyTheAnchorsChange(t *testing.T) {
 // The literal has to carry the vector the endpoint produced, to the precision
 // it produced it at. Rendering 0.125 as 1 would move every anchor to a
 // different point while leaving a query that still parses and still returns
-// results — plausible ones, for a question nobody asked.
+// results, plausible ones, for a question nobody asked.
 func TestTheVectorLiteralKeepsEveryDigit(t *testing.T) {
 	b := &stubBroker{}
 	e := &stubEmbedder{vector: []float32{0.125, -0.5, 0.0009765625}}
@@ -125,7 +125,7 @@ func TestTheLargestAllowedDimensionalityIsNotRefused(t *testing.T) {
 }
 
 // A namespace name is not an anchor. Rewriting one would turn a valid selector
-// into a vector where a name belongs, and the query would stop parsing — while
+// into a vector where a name belongs, and the query would stop parsing, while
 // an anchor that merely reads like a namespace must still be rewritten.
 func TestNamespaceNamesAreLeftAloneAndAnchorsAreNot(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
@@ -182,7 +182,7 @@ func TestTheNamespaceKeywordIsRecognisedExactly(t *testing.T) {
 
 // The namespace selector must not leave a hole behind it. It used to stay open
 // from NAMESPACE until WINDOW or LIMIT, so a phrase that landed anywhere in
-// between — which is what a forgotten bracket after a namespace produces — was
+// between, which is what a forgotten bracket after a namespace produces, was
 // read as a second namespace name and forwarded with its text intact. The
 // broker rejects the query either way; the phrase had already travelled, which
 // is the one outcome this package exists to prevent.
@@ -465,7 +465,7 @@ func TestAnUnknownClauseOrFieldIsRefused(t *testing.T) {
 
 // Blanking has to understand an escaped quote for the same reason the rewrite
 // does. Reading \" as the end of the literal would put the rest of the phrase
-// outside the quotes, where nothing blanks it — and the words would go anyway.
+// outside the quotes, where nothing blanks it, and the words would go anyway.
 func TestBlankingUnderstandsAnEscapedQuote(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 

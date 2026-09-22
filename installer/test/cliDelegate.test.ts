@@ -187,12 +187,12 @@ test("an explicit API key is written into the entry as an argument", async () =>
   const { run, calls } = recorder();
   const workspace = mkdtempSync(join(tmpdir(), "noetive-claude-"));
 
-  await new CliDelegateAdapter(run).install({ ...request(workspace), entryOptions: { apiKey: "keyu_example" } });
+  await new CliDelegateAdapter(run).install({ ...request(workspace), entryOptions: { apiKey: "keya_example" } });
 
   const add = addCall(calls);
   assert.ok(add, "the CLI was not invoked");
   assert.ok(
-    adjacent(add, "--env", `${API_KEY_ENV}=keyu_example`),
+    adjacent(add, "--env", `${API_KEY_ENV}=keya_example`),
     `the key never reached the entry: ${JSON.stringify(add)}`,
   );
 });
@@ -223,15 +223,15 @@ test("env flags are placed before the launch command", async () => {
   const { run, calls } = recorder();
   const workspace = mkdtempSync(join(tmpdir(), "noetive-claude-"));
 
-  await new CliDelegateAdapter(run).install({ ...request(workspace), entryOptions: { apiKey: "keyu_example" } });
+  await new CliDelegateAdapter(run).install({ ...request(workspace), entryOptions: { apiKey: "keya_example" } });
 
   const add = addCall(calls)!;
   assert.ok(add.indexOf("--env") < add.indexOf("--"), `--env came after the separator: ${JSON.stringify(add)}`);
 });
 
 // Nothing to pass must produce no flag at all. A bare `--env` with no pair
-// would be rejected by the CLI, turning a perfectly ordinary install — an
-// editor that cannot expand variables, run without --api-key — into a failure.
+// would be rejected by the CLI, turning a perfectly ordinary install (an
+// editor that cannot expand variables, run without --api-key) into a failure.
 test("no environment to set produces no env flag", async () => {
   const { run, calls } = recorder();
   const workspace = mkdtempSync(join(tmpdir(), "noetive-codex-"));
@@ -338,7 +338,7 @@ async function withScratchHome<T>(body: (home: string) => Promise<T>): Promise<T
 // Hermes parses `--args` as argparse's REMAINDER, so it takes everything after
 // it and has to come last, with each argument its own word. Joining them into
 // one string is accepted silently and writes args: ["-y @noetive/mcp-server"],
-// which npx resolves as a package by that literal name and never finds — an
+// which npx resolves as a package by that literal name and never finds: an
 // install that reports success and produces a server that cannot start.
 test("the shipped Hermes entry produces the invocation its CLI parses", async () => {
   const calls = await withScratchHome(async (home) => {
@@ -357,14 +357,14 @@ test("the shipped Hermes entry produces the invocation its CLI parses", async ()
 // Hermes' --env is argparse nargs="*", which stores rather than appends: a
 // second --env replaces the pairs the first one carried. Repeating the flag
 // therefore keeps only the last pair, and the API key is written first, so it
-// is the one that disappears — into a server that connects and then refuses
+// is the one that disappears, into a server that connects and then refuses
 // every call, since Hermes passes a stdio server nothing but its declared env.
 test("Hermes takes every environment pair after one flag, not one flag each", async () => {
   const calls = await withScratchHome(async (home) => {
     const { run, calls } = recorder();
     await withTerminal(() =>
       new CliDelegateAdapter(run).install(
-        hermesRequest(home, { apiKey: "keyu_example", targeting: { namespace: "team" }, disableGlobalNamespace: true }),
+        hermesRequest(home, { apiKey: "keya_example", targeting: { namespace: "team" }, disableGlobalNamespace: true }),
       ),
     );
     return calls;
@@ -375,7 +375,7 @@ test("Hermes takes every environment pair after one flag, not one flag each", as
 
   const pairs = add.slice(add.indexOf("--env") + 1, add.indexOf("--command"));
   assert.deepEqual(pairs, [
-    `${API_KEY_ENV}=keyu_example`,
+    `${API_KEY_ENV}=keya_example`,
     "NOETIVE_NAMESPACE=team",
     "NOETIVE_DISABLE_GLOBAL_NS=1",
   ]);
@@ -400,8 +400,8 @@ test("Hermes refuses rather than writing JSON over the agent's own configuration
     );
 
     // The scope is ~/.hermes/config.yaml, so the home directory is where a
-    // regression would land. Asserting on the workspace — as the Codex case
-    // legitimately does — would pass no matter what the merger did.
+    // regression would land. Asserting on the workspace, as the Codex case
+    // legitimately does, would pass no matter what the merger did.
     assert.equal(existsSync(join(home, ".hermes")), false, "a refused install still wrote to the config directory");
   });
 });
@@ -441,7 +441,7 @@ test("an interactive install reports what it handed over, not a success it canno
 });
 
 // Without a terminal the prompt reads EOF, Hermes takes the cancelling answer
-// and exits zero having written nothing — so a piped run would report a
+// and exits zero having written nothing, so a piped run would report a
 // configured editor that was never configured. The refusal has to name what to
 // do instead, or it is just a different way of leaving the user stuck.
 test("no terminal refuses the interactive install and hands back the entry", async () => {
@@ -472,16 +472,16 @@ test("an embedded key is kept off the screen on both the preview and the failure
 
   const preview = await new CliDelegateAdapter(recorder().run).install({
     ...request(workspace, true),
-    entryOptions: { apiKey: "keyu_supersecret" },
+    entryOptions: { apiKey: "keya_supersecret" },
   });
-  assert.ok(!preview.diff!.includes("keyu_supersecret"), `the preview printed the key: ${preview.diff}`);
+  assert.ok(!preview.diff!.includes("keya_supersecret"), `the preview printed the key: ${preview.diff}`);
   assert.match(preview.diff!, /<your key>/);
 
   const { run } = recorder({ add: { status: 1, stdout: "", stderr: "nope" } });
   await assert.rejects(
-    () => new CliDelegateAdapter(run).install({ ...request(workspace), entryOptions: { apiKey: "keyu_supersecret" } }),
+    () => new CliDelegateAdapter(run).install({ ...request(workspace), entryOptions: { apiKey: "keya_supersecret" } }),
     (err: Error) => {
-      assert.ok(!err.message.includes("keyu_supersecret"), `the failure printed the key: ${err.message}`);
+      assert.ok(!err.message.includes("keya_supersecret"), `the failure printed the key: ${err.message}`);
       return true;
     },
   );

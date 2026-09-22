@@ -5,7 +5,7 @@ on:
     tags: ["v*"]
 
 # Read by default; the one job that needs to write says so itself. Inverted
-# deliberately — with the grants at the top, the next job added inherits write
+# deliberately: with the grants at the top, the next job added inherits write
 # on repository contents without anyone deciding it should.
 permissions:
   contents: read
@@ -50,7 +50,7 @@ jobs:
 
       # The tag is the only version input: ldflags, both npm manifests and
       # server.json are all stamped from it. A malformed tag, or one that
-      # disagrees with the packaging manifest, has to stop here — a GitHub
+      # disagrees with the packaging manifest, has to stop here: a GitHub
       # Release cannot be unpublished cleanly and an npm version cannot be
       # reused at all.
       #
@@ -134,14 +134,14 @@ jobs:
 
       # Trusted publishing needs npm 11.5.1 or later and Node 22.14 or later.
       # Node 22 satisfies the runtime but still bundles npm 10, which does not
-      # know how to exchange an OIDC token at all — it would fall silently
+      # know how to exchange an OIDC token at all: it would fall silently
       # through to token auth and the publish would look like it simply needed a
       # secret. Pinned rather than @latest so a bad npm release cannot break a
       # release of this.
       - run: npm install -g npm@11.6.2
 
       # Before anything is built. Without it the job installs, builds, stamps
-      # and packs five 8 MB binaries before npm reports ENEEDAUTH — by which
+      # and packs five 8 MB binaries before npm reports ENEEDAUTH, by which
       # point the GitHub Release already exists, so a missing repository secret
       # reads as a release that half-worked.
       #
@@ -153,7 +153,7 @@ jobs:
       # after the GitHub Release already exists.
       #
       # It cannot confirm that a trusted publisher is actually configured for
-      # each package — npm exposes no way to ask — so OIDC being available is as
+      # each package, npm exposes no way to ask, so OIDC being available is as
       # far as this goes.
       - name: Check the publish credential
         env:
@@ -177,9 +177,9 @@ jobs:
           name: binaries
           path: dist/
 
-      # Both before the stamp. The stamp is a no-op on a correctly prepared tag
-      # — scripts/stamp-version.js writes package.json and the lockfile together
-      # and the release commit already carries both — but ordering it after the
+      # Both before the stamp. The stamp is a no-op on a correctly prepared tag,
+      # scripts/stamp-version.js writes package.json and the lockfile together
+      # and the release commit already carries both, but ordering it after the
       # install keeps that true rather than depending on it.
       - run: npm ci --ignore-scripts
         working-directory: installer
@@ -203,7 +203,7 @@ jobs:
       # Platform packages first: the wrapper declares them as optionalDependencies,
       # and npm skips an optional dependency it cannot resolve without erroring.
       # A wrapper published ahead of them therefore installs cleanly and finds no
-      # binary — and npm will not let that version be replaced.
+      # binary, and npm will not let that version be replaced.
       #
       # Already-published versions are skipped rather than retried: npm versions
       # are immutable, so a re-run after a partial publish has no other way
@@ -271,7 +271,7 @@ jobs:
 
   # The second distribution channel: a hosted agent runtime runs the server in a
   # container beside the agent rather than beside a person's editor. Built from
-  # source rather than from the release archives — the Dockerfile cross-compiles,
+  # source rather than from the release archives: the Dockerfile cross-compiles,
   # so one buildx invocation produces both architectures at full speed, and the
   # image stays buildable on its own.
   oci:
@@ -321,7 +321,7 @@ jobs:
       #
       # provenance is off because buildx would otherwise add unknown/unknown
       # attestation entries to that same index, giving the registry's manifest
-      # walk one more shape to get wrong. The provenance itself is not lost — the
+      # walk one more shape to get wrong. The provenance itself is not lost: the
       # step below records it in GitHub's attestation store instead of the index.
       - id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -374,7 +374,7 @@ jobs:
       # freshness window, answers from that copy without revalidating. A lookup
       # made seconds after publish can therefore cache a document that does not
       # list the new version yet, and every later attempt re-reads that same
-      # stale document from disk — the registry is fine and the host never asks
+      # stale document from disk: the registry is fine and the host never asks
       # it again. 0.1.1 published at 22:15:12; smoke first asked at 22:15:20 and
       # all ten attempts over the next 2.4 minutes reported ETARGET for a
       # version the registry already had.
@@ -439,7 +439,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # server.json is read out of this checkout, and the registry records
-      # whatever it is handed — permanently, since an entry cannot be
+      # whatever it is handed, permanently, since an entry cannot be
       # unpublished. On a correctly prepared tag this restamp changes nothing,
       # because the release job already refused a tag disagreeing with
       # tools/manifest.yaml and packaging/emit's tests refuse a tree whose
@@ -483,7 +483,7 @@ jobs:
 
       # DNS auth, not github-oidc. The registry ties the auth method to the
       # namespace: GitHub auth only grants io.github.<user-or-org>/*, and this
-      # server is io.noetive/mcp-server — the reverse-DNS form of a domain we
+      # server is io.noetive/mcp-server, the reverse-DNS form of a domain we
       # own. Proving that means signing a challenge with the ed25519 key whose
       # public half is published in noetive.io's apex TXT record, managed in
       # noetive-platform-infra as route53-apex-txt-io.tf.

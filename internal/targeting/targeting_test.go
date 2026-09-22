@@ -87,7 +87,7 @@ func TestRefusedResolutionYieldsNoTarget(t *testing.T) {
 }
 
 // Layer is what startup uses, and startup must tolerate an incomplete result.
-// Validating there would refuse to start a server with nothing configured —
+// Validating there would refuse to start a server with nothing configured,
 // which is exactly how the Add to Kiro deeplink launches it, leaving the editor
 // with no tools and no explanation.
 func TestLayerAcceptsAnIncompleteResult(t *testing.T) {

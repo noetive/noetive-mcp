@@ -24,7 +24,7 @@
 //
 // The decision is the operator's and only the operator's. There is no tool
 // argument that turns it off, because the caller is a language model and a
-// switch it can reach is not a guarantee — one sentence of prompt injection
+// switch it can reach is not a guarantee: one sentence of prompt injection
 // would be enough to route around it. There is likewise no fallback to
 // server-side embedding when the endpoint is unreachable: falling back would
 // silently hand the work to a different model, which is the one thing nothing
@@ -87,7 +87,7 @@ func Precomputed(b Broker, e Embedder) Broker {
 
 // precomputed delegates method by method rather than embedding Broker. If
 // Broker ever grows a sixth operation that carries text, this type stops
-// satisfying it and the build says so — where an embedded interface would
+// satisfying it and the build says so, where an embedded interface would
 // quietly forward the new call with the text still in it.
 //
 // Field ordering: interfaces (16 B each).
@@ -98,9 +98,9 @@ type precomputed struct {
 
 // Publish attaches the vector to each item and sends the text with it.
 //
-// Both, not one. The vector is what the message is indexed by — PublishItem
+// Both, not one. The vector is what the message is indexed by, PublishItem
 // documents that a supplied vector takes precedence and the server does not
-// embed the text — and the text is what noetive_search gives back when someone
+// embed the text, and the text is what noetive_search gives back when someone
 // finds it later. Sending the vector alone would keep the message text off the
 // network, but it would also leave every hit contentless, which is most of what
 // makes search worth calling.
@@ -108,7 +108,7 @@ type precomputed struct {
 // So this is not a confidentiality measure for message bodies: the text still
 // reaches Noetive and is still stored. What it buys is the choice of which
 // model does the embedding, a publish that does not wait on the broker's
-// embedder, and anchor phrases that stay here — see the package doc.
+// embedder, and anchor phrases that stay here, see the package doc.
 func (p *precomputed) Publish(ctx context.Context, req semantik.PublishRequest) (semantik.PublishResponse, error) {
 	// The SDK does not copy Vector, and the caller still holds this slice.
 	// Writing into their backing array would be a side effect nothing in the
@@ -170,7 +170,7 @@ func (p *precomputed) Subscribe(ctx context.Context, req semantik.SubscribeReque
 // Lint sends the query with its anchor text replaced by a placeholder.
 //
 // Lint carries no routing triple, so there is no model and no dimensionality to
-// embed with — and a query being linted is often one that does not parse yet,
+// embed with. And a query being linted is often one that does not parse yet,
 // which is precisely when there is nothing to embed. Blanking checks the shape,
 // which is what lint is for, while the phrases stay here.
 func (p *precomputed) Lint(ctx context.Context, req semantik.LintRequest) (semantik.LintResponse, error) {
@@ -209,7 +209,7 @@ func (p *precomputed) Lint(ctx context.Context, req semantik.LintRequest) (seman
 //
 // It deliberately does not probe the embeddings endpoint. Health carries no
 // model and no dimensionality, so the only thing it could send is a bare
-// reachability ping — which would report healthy for a service that cannot
+// reachability ping, which would report healthy for a service that cannot
 // serve the namespace's model, the one failure worth catching.
 func (p *precomputed) Health(ctx context.Context) error {
 	return p.broker.Health(ctx)

@@ -31,13 +31,13 @@ The server needs an API key from the [Noetive dashboard](https://noetive.io/dash
 By default `init` writes a reference to that variable rather than the key itself, so the secret stays out of a config file that gets synced or committed:
 
 ```bash
-export NOETIVE_KEY_SECRET=keyu_...
+export NOETIVE_KEY_SECRET=keya_...
 ```
 
 Kiro and Codex do not expand variables in their configs, so pass the key directly there:
 
 ```bash
-npx @noetive/mcp-server init --client kiro --api-key keyu_...
+npx @noetive/mcp-server init --client kiro --api-key keya_...
 ```
 
 ## Check it worked

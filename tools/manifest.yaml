@@ -30,7 +30,7 @@ license: ISC
 # How registry-aware clients ask for this server by name, in the reverse-DNS
 # form of a domain we control.
 #
-# Repeated in eight other places that all have to agree — server.json, the npm
+# Repeated in eight other places that all have to agree: server.json, the npm
 # wrapper's mcpName, the mcp-name marker in both READMEs, the OCI label in the
 # Dockerfile, and the image annotation in both workflows. The MCP registry
 # validates the lot and refuses the publish when any of them disagrees, which is
@@ -81,8 +81,8 @@ tools:
 # Every one of these carries the same server entry, and every one encodes it
 # differently: the name is a URL parameter here where it is the object key in a
 # config file, and Cursor wants base64 where the others want percent-encoding.
-# Hand-written they go stale silently — a deeplink that decodes to a stale entry
-# still opens the editor and still reports success — so they are generated from
+# Hand-written they go stale silently: a deeplink that decodes to a stale entry
+# still opens the editor and still reports success, so they are generated from
 # the same `server:` block above and emitted into packaging/install.json for the
 # README and noetive.io/mcp to read.
 #
@@ -148,6 +148,21 @@ skills:
       find it by meaning. Covers namespaces, messages, subscriptions and how a call
       is routed.
     source: semantik.md
+
+  - name: semantik-text
+    description: >-
+      Choose the words Semantik embeds: the text a publisher sends and the anchor
+      phrases inside DISTANCE, DIRECTION and CONTRAST. Use when deciding what goes
+      in text versus metadata, how agents should phrase messages so subscribers
+      match them, how to word anchors for a topic, a category partition or an
+      intent such as ask, report or verdict, or why a subscription matches
+      everything, nothing or the wrong polarity. The semql skill owns the grammar
+      and the JSON format; this one owns the wording and how to measure it.
+    source: semantik-text.md
+    references:
+      - semantik-text/embedding-behaviour.md
+      - semantik-text/anchor-catalog.md
+      - semantik-text/validation.md
 
 steering:
   - name: using-noetive

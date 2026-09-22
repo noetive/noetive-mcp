@@ -73,7 +73,7 @@ In the editor: Claude Code and Codex answer `/mcp`, Hermes reloads on `/reload-m
 - **No Noetive tools in the editor.** Start with `doctor`. If it passes, the editor has not reloaded. `init` printed the hint for yours.
 - **Tools appear but every call is refused.** The key did not reach the server. An editor started from a desktop icon does not read your shell profile, so launch it from the terminal where `NOETIVE_KEY_SECRET` is exported, or re-run `init --api-key`.
 - **`init --client codex` refuses.** Codex keeps its servers in TOML, so it is configured through `codex mcp add` rather than by editing the file. Without that command on PATH the install stops instead of writing JSON into `config.toml`.
-- **`init --client hermes` refuses or says it cannot confirm.** Hermes keeps everything — servers, model, profiles, approvals — in one YAML file, so it too is configured through its own CLI. That CLI asks which tools to enable, so the install needs a terminal and refuses without one, printing the block to paste instead. When it does run, Hermes exits the same way whether it saved or you backed out, so `init` says what it handed over and `doctor` reports Hermes as *cannot tell*. Check with `hermes mcp list`.
+- **`init --client hermes` refuses or says it cannot confirm.** Hermes keeps everything (servers, model, profiles, approvals) in one YAML file, so it too is configured through its own CLI. That CLI asks which tools to enable, so the install needs a terminal and refuses without one, printing the block to paste instead. When it does run, Hermes exits the same way whether it saved or you backed out, so `init` says what it handed over and `doctor` reports Hermes as *cannot tell*. Check with `hermes mcp list`.
 - **A call fails naming a namespace.** There is no default, deliberately, for the reason given below. Pass one on the call, or set it once when you run `init`.
 
 ## Containers and remote machines
@@ -124,13 +124,13 @@ This closes one namespace. It is not what stops a call being routed somewhere yo
 
 By default Noetive turns your text into a vector. Point `NOETIVE_EMBEDDINGS_URL` at an OpenAI-compatible `/v1/embeddings` endpoint you run and the server does it here instead: a published message carries a vector you computed, and a query's anchor phrases are replaced by vectors before it goes.
 
-Three things you get: embeddings from a model you chose rather than the broker's, a publish that does not wait on the broker's embedder, and searches that do not tell Noetive what you were looking for. What you do not get is confidential publishing — a publish still sends the message text, because that is what a search returns to whoever finds it later. Anchor phrases stay here; message bodies do not.
+Three things you get: embeddings from a model you chose rather than the broker's, a publish that does not wait on the broker's embedder, and searches that do not tell Noetive what you were looking for. What you do not get is confidential publishing: a publish still sends the message text, because that is what a search returns to whoever finds it later. Anchor phrases stay here; message bodies do not.
 
 ```bash
 NOETIVE_EMBEDDINGS_URL=http://localhost:11434/v1/embeddings
 ```
 
-**One name, one model.** The endpoint must answer to the name in `NOETIVE_MODEL` and return `NOETIVE_DIMENSIONS` values, because that is the space the namespace is indexed in. There is deliberately no second variable naming the model a second time: two names are two things to get wrong, and getting it wrong is invisible — a different model returns vectors of the right length in the wrong space, so every publish lands where nothing will find it and every search comes back confidently empty. Alias your model to the name the namespace uses:
+**One name, one model.** The endpoint must answer to the name in `NOETIVE_MODEL` and return `NOETIVE_DIMENSIONS` values, because that is the space the namespace is indexed in. There is deliberately no second variable naming the model a second time: two names are two things to get wrong, and getting it wrong is invisible: a different model returns vectors of the right length in the wrong space, so every publish lands where nothing will find it and every search comes back confidently empty. Alias your model to the name the namespace uses:
 
 ```bash
 ollama cp qwen3-embedding:4b Qwen3-Embedding-4B
@@ -140,10 +140,10 @@ A name the endpoint does not know is an immediate 404 quoting the name that was 
 
 Two things follow from this and are worth knowing before you turn it on:
 
-- **A query carries fewer anchors.** Each anchor travels as a vector rather than a few words, so a query that was well within the broker's limits as text may not be as vectors — and the higher the dimensionality, the fewer fit. Past the limit the call is refused before anything is sent, and the message names the ceiling for your dimensionality.
+- **A query carries fewer anchors.** Each anchor travels as a vector rather than a few words, so a query that was well within the broker's limits as text may not be as vectors, and the higher the dimensionality, the fewer fit. Past the limit the call is refused before anything is sent, and the message names the ceiling for your dimensionality.
 - **There is no fallback.** If the endpoint is unreachable or answers with something unusable, the call fails and nothing is sent. Falling back would quietly hand the work to a different model, which is the one failure nothing downstream can detect.
 
-Plain `http` is accepted only for a loopback address; anywhere else needs `https`, so a mistyped hostname cannot put your text on the network in the clear. A URL that cannot be used stops the server rather than starting one that quietly embeds through Noetive instead. Inside a container `127.0.0.1` is the container, not your machine — use `host.docker.internal`.
+Plain `http` is accepted only for a loopback address; anywhere else needs `https`, so a mistyped hostname cannot put your text on the network in the clear. A URL that cannot be used stops the server rather than starting one that quietly embeds through Noetive instead. Inside a container `127.0.0.1` is the container, not your machine: use `host.docker.internal`.
 
 ## Skills
 
@@ -152,6 +152,7 @@ Plain `http` is accepted only for a loopback address; anywhere else needs `https
 | Skill | What it teaches |
 |---|---|
 | `semql` | How to write a query that means what you intended, with the full grammar and a catalogue of the mistakes that still parse |
+| `semantik-text` | What to put in a message and in an anchor, so a subscription matches what you meant |
 | `semantik` | What Semantik is, and whether a given problem wants search or subscribe |
 | `doctor` | How to diagnose an installation and report what is wrong |
 
@@ -182,10 +183,13 @@ make build      # binary into installer/bin, where the npm wrapper looks for it
 make test       # go test -race
 make fuzz       # replay the fuzz seeds and corpus; deterministic
 make fuzz-live  # search for new inputs, FUZZTIME=30s by default
+make mutate     # break the implementation on purpose and check a test notices
 make lint
 make emit       # regenerate every generated manifest from tools/manifest.yaml
 make installer  # build and test the npm wrapper
 ```
+
+`make mutate` is the one worth explaining. Coverage says a line ran; it says nothing about whether a test would notice the line being wrong, and a suite can execute every branch while asserting nothing that matters. A surviving mutant is a hole: either the behaviour is untested, or the test covering it is too weak to see the difference.
 
 Never hand-edit `packaging/claude-plugin`, `packaging/kiro-power`, `packaging/install.json`, `.claude-plugin/`, `skills/` or `.mcp.json`. They are generated by `make emit` from `tools/manifest.yaml`, and CI fails when they differ. `packaging/install.json` is the published install surface: every editor, its command and its one-click link, joined from `tools/manifest.yaml` and `installer/src/manifest/clients.json`. The README links above and noetive.io/mcp both come from it.
 
@@ -223,7 +227,7 @@ Each of these shipped once. What follows each is the thing that now catches it.
 
 **A gate that searches is not a gate.** `make fuzz` ran a 30-second random search per target, so the same commit could pass and then fail without anything changing. It now replays the seeds and each package's `testdata/fuzz` deterministically, in about a second. `make fuzz-live` is the search, and when it finds something, Go writes the input to that directory. Commit it and the replay covers it forever.
 
-**A list of packages goes stale the same way a list of targets does.** Both fuzz commands named `./internal/broker`, so the query parser behind the local-embedding promise — the one component that hand-rolls a scanner over model-written text in two syntaxes — had no target at all. Both now enumerate packages as well as targets, and the first thing that found was a phrase being forwarded to the broker instead of replaced by a vector.
+**A list of packages goes stale the same way a list of targets does.** Both fuzz commands named `./internal/broker`, so the query parser behind the local-embedding promise, the one component that hand-rolls a scanner over model-written text in two syntaxes, had no target at all. Both now enumerate packages as well as targets, and the first thing that found was a phrase being forwarded to the broker instead of replaced by a vector.
 
 **A CLI-configured editor receives nothing you do not pass as an argument.** `claude mcp add` does not copy ambient environment into a server entry, so setting the API key in the spawned process configured nothing while reporting that it had. The manifest's `cli.args` carry an `${env}` placeholder that splices in one `--env` pair per variable. Position is load-bearing at both ends: after the `--` that introduces the launch command the flag reaches `npx` instead of the editor, and before the server name it swallows the name itself, because `claude mcp add` declares `--env <env...>` and keeps consuming arguments until the next flag.
 

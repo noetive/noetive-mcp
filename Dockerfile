@@ -25,7 +25,7 @@ FROM gcr.io/distroless/static-debian12:nonroot
 
 # The MCP registry's proof that this image belongs to the server it is listed
 # under: it pulls the manifest and refuses to publish unless this label matches
-# `name` in server.json. Also set as an index annotation at push time — the
+# `name` in server.json. Also set as an index annotation at push time: the
 # registry resolves the multi-arch index, which does not inherit a child's
 # labels.
 LABEL io.modelcontextprotocol.server.name="io.noetive/mcp-server"

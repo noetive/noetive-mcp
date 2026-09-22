@@ -39,8 +39,8 @@ func main() {
 	}
 }
 
-// run is the whole program, with the two things a test cannot supply — where
-// output goes and what actually serves — passed in.
+// run is the whole program, with the two things a test cannot supply, where
+// output goes and what actually serves, passed in.
 //
 // main keeps only process concerns. Everything a mistake could break lives here
 // instead, because the argument handling in particular is load-bearing: the
@@ -138,7 +138,7 @@ func withoutServeVerb(argv []string) []string {
 // not, and wraps it to embed on this machine when an endpoint was configured.
 //
 // Exiting on a missing credential would leave the editor reporting a server
-// that failed to launch, with no tools registered and nothing to ask — not even
+// that failed to launch, with no tools registered and nothing to ask: not even
 // noetive_health, whose whole job is to say what is wrong. Starting degraded
 // keeps the tools visible and turns an opaque launch failure into a message the
 // agent can read out.

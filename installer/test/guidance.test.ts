@@ -12,8 +12,8 @@ import { API_KEY_ENV, DASHBOARD_URL, describeKeyHandling } from "../src/serverEn
 
 // The published instruction is "run this in your terminal", which for most
 // people means their home directory. Copilot's only scope writes into the
-// current directory, so that produced ~/.vscode/mcp.json — a file VS Code never
-// reads as a workspace config — and reported success. The user was left with a
+// current directory, so that produced ~/.vscode/mcp.json, a file VS Code never
+// reads as a workspace config, and reported success. The user was left with a
 // config file, an editor with no tools, and nothing connecting the two.
 test("a project-scoped install from the home directory is refused", () => {
   const copilot = clientSpec("copilot");
@@ -72,8 +72,8 @@ test("guidance for an editor that cannot expand variables gives the working comm
 });
 
 // That guidance ends in a command the user is meant to run. Naming a fixed
-// editor in it sends a Codex user to configure Kiro — an editor they may not
-// have — while their own install stays keyless and every tool call fails.
+// editor in it sends a Codex user to configure Kiro, an editor they may not
+// have, while their own install stays keyless and every tool call fails.
 test("guidance names the editor being configured, not a fixed one", () => {
   for (const id of clientIds().filter((c) => !clientSpec(c).expandsVariables)) {
     assert.match(describeKeyHandling(clientSpec(id), id), new RegExp(`--client ${id}\\b`));
@@ -108,8 +108,8 @@ test("a project-scoped install is found, not only the default scope", async () =
 });
 
 // The manifest spells paths with forward slashes because vendor documentation
-// does. Substituting a Windows workspace into that leaves mixed separators —
-// `C:\Users\me\project/.vscode/mcp.json` — which opens files perfectly well and
+// does. Substituting a Windows workspace into that leaves mixed separators
+// (`C:\Users\me\project/.vscode/mcp.json`), which opens files perfectly well and
 // then fails every comparison against a path built with join, so `list` and
 // `doctor` report an editor as unconfigured while looking straight at its
 // config.

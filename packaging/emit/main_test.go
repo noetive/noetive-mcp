@@ -46,6 +46,10 @@ func authoringSource(t *testing.T, manifest string) string {
 func completeManifest(t *testing.T) string {
 	t.Helper()
 
+	// Built from the server rather than listed, so a helper cannot be the reason a
+	// drift check passes: the point of these tests is that the manifest and the
+	// server agree, and a hand-written list here would be a third thing to keep in
+	// step with both.
 	var tools strings.Builder
 	for _, name := range mcpserver.ToolNames() {
 		tools.WriteString("  - name: " + name + "\n    summary: does a thing\n")
@@ -116,7 +120,8 @@ func TestDriftBetweenManifestAndServerIsRefused(t *testing.T) {
 // The mirror case: a tool registered but left undocumented would ship a plugin
 // whose documentation is silently incomplete.
 func TestAnUndocumentedRegisteredToolIsRefused(t *testing.T) {
-	manifest := strings.Replace(completeManifest(t), "  - name: "+mcpserver.ToolNames()[0]+"\n    summary: does a thing\n", "", 1)
+	manifest := strings.Replace(completeManifest(t),
+		"  - name: "+mcpserver.ToolNames()[0]+"\n    summary: does a thing\n", "", 1)
 
 	model, err := load(authoringSource(t, manifest))
 	if err != nil {
@@ -165,7 +170,7 @@ func TestAManifestMissingRequiredFieldsIsRefused(t *testing.T) {
 	}
 }
 
-// The two formats disagree on the MCP filename — .mcp.json with a leading dot
+// The two formats disagree on the MCP filename: .mcp.json with a leading dot
 // for Claude, mcp.json without for Agent Plugins. Emitting the wrong one
 // produces a plugin the host silently ignores.
 func TestEachFormatGetsItsOwnMCPFilename(t *testing.T) {
@@ -871,7 +876,7 @@ func TestTheServerEntryIsKeyedOnTheServerKeyNotThePluginName(t *testing.T) {
 // The version is stamped from the git tag into installer/package.json and
 // server.json at release, but tools/manifest.yaml is committed and emitted into
 // the plugin manifests. Nothing at release reconciles the two, so the only
-// moment the disagreement is cheap to find is here — a tag that disagrees
+// moment the disagreement is cheap to find is here: a tag that disagrees
 // publishes an npm package and a registry entry describing different builds.
 func TestEveryPublishedManifestDeclaresTheSameVersion(t *testing.T) {
 	root, err := repoRoot()
@@ -932,8 +937,8 @@ func TestEveryPublishedManifestDeclaresTheSameVersion(t *testing.T) {
 	}
 
 	// The platform pins belong to the published artifact, not to the committed
-	// tree. A pin can only name a version that does not exist yet — the platform
-	// packages ship with this wrapper — so npm records the placeholder
+	// tree. A pin can only name a version that does not exist yet, the platform
+	// packages ship with this wrapper, so npm records the placeholder
 	// `{"optional": true}` in the lockfile, and `npm ci` rejects that lockfile
 	// from the moment that version is published. Committed pins therefore turn
 	// every push between one release and the next red.
@@ -962,7 +967,7 @@ func readInto(t *testing.T, path string, decode func([]byte, any) error, target 
 // The MCP registry rejects an OCI package that carries a registryBaseUrl and
 // wants the image tag inside the identifier instead. That puts the version in
 // two places in one entry, so a release can advertise itself while pointing at
-// the previous release's image — and a registry entry cannot be unpublished.
+// the previous release's image, and a registry entry cannot be unpublished.
 func TestTheOCIPackageIsShapedTheWayTheRegistryAccepts(t *testing.T) {
 	root, err := repoRoot()
 	if err != nil {
@@ -1060,8 +1065,8 @@ func installTargets(t *testing.T, root string) map[string]map[string]any {
 	return byID
 }
 
-// The install commands are published in three places — this repository's
-// README, noetive.io/mcp and the plugin listings — and have already drifted
+// The install commands are published in three places (this repository's
+// README, noetive.io/mcp and the plugin listings) and have already drifted
 // apart once. Emitting them from the client manifest means an editor cannot be
 // supported without being advertised, or advertised without being supported.
 func TestEveryClientGetsAPublishedInstallCommand(t *testing.T) {
@@ -1287,7 +1292,7 @@ func registryTree(t *testing.T, name string) string {
 
 // The registry name is authored once and repeated in seven other places. The
 // MCP registry validates all of them and refuses the publish on any
-// disagreement — at the last step of a release, after the GitHub Release, npm
+// disagreement: at the last step of a release, after the GitHub Release, npm
 // and the image have already gone out and cannot be taken back.
 func TestEveryCopyOfTheRegistryNameIsChecked(t *testing.T) {
 	const name = "io.noetive/mcp-server"
@@ -1384,7 +1389,7 @@ func TestARenameThatMissesOneOccurrenceIsCaught(t *testing.T) {
 	root := registryTree(t, name)
 	workflow := filepath.Join(root, ".github", "workflows", "ci.yml")
 
-	// Two annotations, the first correct and the second stale — a check that
+	// Two annotations, the first correct and the second stale: a check that
 	// reads only the first sees nothing wrong.
 	body := "jobs:\n  oci:\n    annotations: |\n" +
 		"      index:io.modelcontextprotocol.server.name=" + name + "\n" +

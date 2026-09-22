@@ -14,7 +14,7 @@ const FALLBACK_DIR = join("/", "fallback");
 
 // postinstall downloads into the package's own bin directory. If resolution
 // looks anywhere else, a machine where the download succeeded still reports
-// "could not find the binary" — which is exactly what happened before this was
+// "could not find the binary", which is exactly what happened before this was
 // pinned down.
 test("the fallback directory is the same bin directory postinstall writes to", () => {
   assert.equal(defaultFallbackDir(), join(packageRoot(), "bin"));

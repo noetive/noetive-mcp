@@ -71,7 +71,7 @@ test("removal reports a change only when there was something to remove", async (
 });
 
 // A config file that does not exist yet is the ordinary first-run state, and it
-// must not read as configured — that is the branch `doctor` uses to decide
+// must not read as configured: that is the branch `doctor` uses to decide
 // whether anything is set up at all.
 test("a missing config is reported as unconfigured", async () => {
   const report = await new MergeAdapter().status(request(cursor, scratch()));

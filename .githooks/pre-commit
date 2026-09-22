@@ -9,7 +9,7 @@
 #
 # Checks read the working tree, not the index. Closing that gap means
 # `git stash --keep-index`, which costs a second and can eat work when the hook
-# is interrupted — a worse trade than the hole it fills.
+# is interrupted, a worse trade than the hole it fills.
 #
 # Optional tools announce themselves when absent and never silently skip: a
 # check that quietly stopped running is indistinguishable from one that passes.
@@ -19,7 +19,7 @@ skipped=''
 
 note_skip() {
 	skipped="$skipped $1"
-	printf 'pre-commit: SKIPPED %s — %s is not installed (%s). CI runs it regardless.\n' \
+	printf 'pre-commit: SKIPPED %s: %s is not installed (%s). CI runs it regardless.\n' \
 		"$1" "$2" "$3" >&2
 }
 
@@ -51,12 +51,19 @@ STAGED
 # --- credentials, by content -----------------------------------------------
 # Five repo-specific patterns, not a scanner. A broad entropy check produces
 # false positives, and a hook that cries wolf is what trains the --no-verify
-# reflex. The base58 charset and the 24-character floor are what keep the
-# keyu_/keyt_ fixtures in the tests and the README from tripping it — every one
-# of them is shorter than that and contains a character base58 excludes.
+# reflex. The base58 charset and the 24-character floor are what keep the key
+# fixtures in the tests and the README from tripping it: every one of them is
+# shorter than that and contains a character base58 excludes.
+#
+# The key family is matched as key<letter>_ rather than as a list of the families
+# that exist today. A list is a thing that goes stale silently, and it already did
+# once: the families were renamed, this pattern was not, and it went on passing
+# every commit, a guard reporting success for the one input it exists to catch.
+# Nothing else in this repository knows a family name, deliberately; the server is
+# the only authority on whether a key is real. This is detection, not validation.
 leaked=$(git diff --cached -U0 --diff-filter=ACMR |
 	grep '^+' |
-	grep -Ea 'key[ut]_[1-9A-HJ-NP-Za-km-z]{24,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|npm_[A-Za-z0-9]{36}')
+	grep -Ea 'key[a-z]_[1-9A-HJ-NP-Za-km-z]{24,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|npm_[A-Za-z0-9]{36}')
 if [ -n "$leaked" ]; then
 	printf 'pre-commit: staged content matches a live credential:\n%s\n' "$leaked" >&2
 	fail=1
@@ -103,7 +110,7 @@ if [ -n "$go_staged" ]; then
 			fail=1
 		fi
 	elif command -v gofmt >/dev/null 2>&1; then
-		printf 'pre-commit: DEGRADED formatting — golangci-lint is absent, so import grouping goes unchecked this commit (go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0).\n' >&2
+		printf 'pre-commit: DEGRADED formatting: golangci-lint is absent, so import grouping goes unchecked this commit (go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0).\n' >&2
 		while IFS= read -r path; do
 			[ -f "$path" ] || continue
 			if [ -n "$(gofmt -l "$path")" ]; then
@@ -122,7 +129,7 @@ fi
 
 # --- generated packaging ---------------------------------------------------
 # The most common way a pull request breaks, and the only check here costing a
-# second — so it runs only when something feeding the emitter is staged.
+# second, so it runs only when something feeding the emitter is staged.
 #
 # Anchored, one path at a time: an unanchored `*tools/*` against the whole list
 # also matches installer/src/mytools/index.ts and notes/no-skills/README.md, and
@@ -143,13 +150,13 @@ if [ -n "$needs_emit" ]; then
 	if command -v go >/dev/null 2>&1; then
 		# Refuse before regenerating rather than after. The emitter overwrites
 		# whatever is in the tree, so running it over an unstaged edit to a
-		# generated file reverts that edit and then reports success — the hook
+		# generated file reverts that edit and then reports success; the hook
 		# would destroy work and say nothing.
 		if ! git diff --quiet -- $generated; then
-			printf 'pre-commit: %s have unstaged changes. Stage or discard them first — regenerating over them would silently revert your edits.\n' "$generated" >&2
+			printf 'pre-commit: %s have unstaged changes. Stage or discard them first: regenerating over them would silently revert your edits.\n' "$generated" >&2
 			fail=1
 		elif ! go run ./packaging/emit >/dev/null; then
-			printf 'pre-commit: packaging/emit failed — the manifest and the registered tool list disagree.\n' >&2
+			printf 'pre-commit: packaging/emit failed: the manifest and the registered tool list disagree.\n' >&2
 			fail=1
 		elif ! git diff --quiet -- $generated ||
 			[ -n "$(git ls-files --others --exclude-standard -- $generated)" ]; then

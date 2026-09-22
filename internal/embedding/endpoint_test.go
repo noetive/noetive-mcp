@@ -130,7 +130,7 @@ func TestTheBearerIsSentWhenAKeyIsConfigured(t *testing.T) {
 
 // The highest-consequence check in the package. The API does not promise order,
 // and a reply read positionally would publish one message under another's
-// meaning — permanently, and with every result still looking plausible.
+// meaning, permanently, and with every result still looking plausible.
 func TestAReplyOutOfOrderIsPutBackInOrderByItsIndex(t *testing.T) {
 	e, _ := serving(t, func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
@@ -238,7 +238,7 @@ func TestAVectorOfTheWrongLengthIsRefusedNamingBothNumbers(t *testing.T) {
 }
 
 // A non-finite element cannot be published, and written into a query it would
-// serialise as a bare NaN or +Inf — which is neither valid JSON nor a valid
+// serialise as a bare NaN or +Inf, which is neither valid JSON nor a valid
 // SemQL number, so the query would fail to parse with no clue as to why.
 // Both signs, because a check that only looks for one leaves the other to be
 // written into a query as a bare -Inf.
@@ -378,8 +378,8 @@ func TestAnUnstructuredErrorBodyIsStillReportedWithItsStatus(t *testing.T) {
 	}
 }
 
-// Following a redirect would forward the input text — the very thing this
-// feature keeps off the network — to whatever the Location header names.
+// Following a redirect would forward the input text, the very thing this
+// feature keeps off the network, to whatever the Location header names.
 func TestARedirectIsNotFollowed(t *testing.T) {
 	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("the request was forwarded to the redirect target")
@@ -421,7 +421,7 @@ func TestAnEndpointThatIsNotThereDoesNotLookLikeADeadline(t *testing.T) {
 }
 
 // The caller withdrawing is not a failure of anything, and the tool layer says
-// so — but only if the cancellation survives to be recognised.
+// so, but only if the cancellation survives to be recognised.
 func TestACancelledCallIsReportedAsACancellation(t *testing.T) {
 	e, _ := serving(t, func(_ http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()

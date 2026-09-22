@@ -2,11 +2,11 @@
 # Runs the integration suite against the live Noetive Semantik API.
 #
 # The endpoint is not configurable here on purpose. These tests exist to catch
-# wire drift — the API changing shape underneath a client that still compiles —
+# wire drift, the API changing shape underneath a client that still compiles,
 # and pointing them at a stub would defeat that. Only the API key comes from the
 # environment.
 #
-#     NOETIVE_KEY_SECRET=keyu_... integration/run.sh
+#     NOETIVE_KEY_SECRET=keya_... integration/run.sh
 #
 # With no key the suite skips rather than fails, so it is safe to wire into a
 # pipeline that does not always have credentials.
@@ -20,7 +20,7 @@
 #     integration/run.sh
 #
 # The endpoint has to answer to the name in NOETIVE_MODEL, which for a local
-# runner usually means aliasing it — `ollama cp qwen3-embedding:4b
+# runner usually means aliasing it: `ollama cp qwen3-embedding:4b
 # Qwen3-Embedding-4B`. A name it does not know comes back as a 404 quoting it.
 set -eu
 
@@ -34,4 +34,9 @@ cd "$(dirname "$0")/.."
 # Cache cleared so a pass never comes from a run against a previous API shape,
 # which is the exact failure this suite is meant to notice.
 go clean -testcache
+
+# -v is load-bearing, not decoration. go test prints the reason a test skipped
+# only in verbose mode, and the scheduled workflow reads those reasons to warn
+# that a run which skipped everything proved nothing. Quieting this line would
+# leave that warning silently never firing.
 exec go test -tags integration -count=1 -timeout 10m -v ./integration/...

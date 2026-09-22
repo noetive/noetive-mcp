@@ -4,7 +4,7 @@
 // Semantik API.
 //
 // It hits production on purpose. The failure these tests exist to catch is wire
-// drift — the API changing shape underneath a client that still compiles — and
+// drift, the API changing shape underneath a client that still compiles, and
 // a mock cannot drift. They are skipped when NOETIVE_KEY_SECRET is unset so the
 // ordinary test run stays green offline.
 package integration
@@ -22,6 +22,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
+	"github.com/noetive/noetive-mcp/internal/broker"
 	"github.com/noetive/noetive-mcp/internal/mcpserver"
 	"github.com/noetive/noetive-mcp/internal/targeting"
 )
@@ -106,13 +107,19 @@ func (s *session) text(result mcp.CallToolResult) string {
 }
 
 // The cheapest end-to-end check: DNS, TLS, the key and the broker in one call.
-// If this fails, nothing below is meaningful.
+// If this reports drift, nothing below is meaningful.
+//
+// Guarded like every other call despite being the canary. A host that is not
+// there is the one condition this test cannot distinguish from a broken client,
+// and reporting it as one sends whoever reads the run to audit a client that
+// never got to say anything.
 func TestHealthAgainstProduction(t *testing.T) {
 	s := newSession(t)
 
 	result := s.call("noetive_health", map[string]any{})
 
 	if result.IsError {
+		skipInconclusive(t, s.text(result))
 		t.Fatalf("health failed: %s", s.text(result))
 	}
 }
@@ -127,6 +134,7 @@ func TestLintAgainstProduction(t *testing.T) {
 	})
 
 	if result.IsError {
+		skipInconclusive(t, s.text(result))
 		t.Fatalf("lint failed: %s", s.text(result))
 	}
 	if !strings.Contains(s.text(result), "valid") {
@@ -134,26 +142,76 @@ func TestLintAgainstProduction(t *testing.T) {
 	}
 }
 
-// stalled reports whether a tool result describes the broker failing to do the
-// work, rather than the client asking for the wrong thing.
+// inconclusive reports whether a tool result describes the broker failing to do
+// the work, rather than the client asking for the wrong thing.
 //
-// Only two shapes qualify, and neither can hide the drift this suite exists to
-// catch. "no response within" is the tool's own budget expiring, which means
-// nothing came back at all — a changed wire shape always produces a response.
-// "[unavailable]" is the server reporting a retryable condition in its own
-// words; a shape change surfaces as a different code or a decode error, never as
-// that one.
+// Five shapes qualify, and none can hide the drift this suite exists to catch.
+// The three the tool names itself are taken from the broker package rather than
+// copied, so rewording one cannot silently stop this from matching it.
+// NoResponseWithin is the tool's own budget expiring, which means nothing came
+// back at all. A changed wire shape always produces a response. Unreachable is
+// a connection that never opened and Unanswered one that broke; in neither case
+// was there a response for a shape to have drifted in.
+//
+// The remaining two are the server's own words and stay literals here, because
+// they belong to whoever sends them. "[unavailable]" is a retryable condition
+// the server names; a shape change surfaces as a different code or a decode
+// error, never as that one. "(retry after " is the server saying when to come
+// back, which it sends under several codes, backpressure and a namespace not
+// yet ready among them, and which no rejection of a malformed request carries.
+// Matching the hint rather than enumerating the codes is what keeps this from
+// having to track the server's vocabulary.
 //
 // Deliberately not a general "any error is fine" escape. A suite that skips
 // whatever it cannot explain proves nothing and would report a genuinely broken
-// client as a good day.
-func stalled(message string) bool {
-	return strings.Contains(message, "no response within") || strings.Contains(message, "[unavailable]")
+// client as a good day. Two exclusions are load-bearing rather than incidental:
+//
+// A local embedder that cannot be reached is rendered as an *embedding.Error
+// naming the endpoint, matches none of these, and fails the embedding tests as
+// it should: that endpoint is the operator's own infrastructure, not the
+// broker's.
+//
+// "[malformed_response]" is excluded even though a broker dropping a connection
+// mid-body can produce it, because that is also exactly what wire drift looks
+// like: a response this client could not decode. Excusing it would blind the
+// suite to the one failure it exists to find.
+func inconclusive(message string) bool {
+	return strings.Contains(message, broker.NoResponseWithin) ||
+		strings.Contains(message, broker.Unreachable) ||
+		strings.Contains(message, broker.Unanswered) ||
+		strings.Contains(message, "[unavailable]") ||
+		strings.Contains(message, "(retry after ")
+}
+
+// skipInconclusive ends the test as inconclusive when the message is the broker
+// failing to serve the call: too slow, refusing retryably, or not there at all.
+// None of those say anything about whether the client is correct, which is the
+// only thing this suite measures.
+//
+// One owner for the decision, because the alternative has already failed four
+// times: each call site guarding itself is a call site that can be added without
+// the guard, and the suite goes red for a production condition every other test
+// records as a skip.
+//
+// The wording is load-bearing, so it comes from a constant the workflow's own
+// test checks rather than being written here. The phrase deliberately stops
+// short of saying why: it covers a broker that answered too late and one that
+// never answered at all.
+//
+// The message quotes the failure in full. On the skip path that is only ever
+// the server's own code, its retry hint, or one of this client's three
+// transport phrases, and without it a run that skipped everything records that
+// it happened but not what happened.
+func skipInconclusive(t *testing.T, message string) {
+	t.Helper()
+	if inconclusive(message) {
+		t.Skipf("%s; nothing to conclude about the client: %s", brokerDidNotAnswer, message)
+	}
 }
 
 // Publish then search, with a marker unique to this run. Indexing is not
 // immediate and the server makes no read-your-writes promise, so a miss is
-// reported as a skip rather than a failure — asserting on it would produce a
+// reported as a skip rather than a failure: asserting on it would produce a
 // test that fails for reasons unrelated to the code.
 func TestPublishThenSearchAgainstProduction(t *testing.T) {
 	s := newSession(t)
@@ -177,11 +235,9 @@ func TestPublishThenSearchAgainstProduction(t *testing.T) {
 		// Skipped for the same reason the search below is: this suite exists to
 		// catch the API changing shape underneath a client that still compiles,
 		// and a suite that also goes red when production is briefly slow stops
-		// being read as evidence about the client at all. Drift still fails —
+		// being read as evidence about the client at all. Drift still fails:
 		// only a stall is tolerated, and it says so in the log.
-		if stalled(s.text(published)) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", s.text(published))
-		}
+		skipInconclusive(t, s.text(published))
 		t.Fatalf("publish failed: %s", s.text(published))
 	}
 	if published.StructuredContent == nil {
@@ -195,9 +251,7 @@ func TestPublishThenSearchAgainstProduction(t *testing.T) {
 		// Search embeds the query, so it blocks on the same component publish
 		// just did. Tolerating a stall on one side and not the other would leave
 		// the test red for the same production condition either way.
-		if stalled(s.text(found)) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", s.text(found))
-		}
+		skipInconclusive(t, s.text(found))
 		t.Fatalf("search failed: %s", s.text(found))
 	}
 	if strings.Contains(s.text(found), "No matches") {
@@ -217,20 +271,16 @@ func TestIdempotentPublishAgainstProduction(t *testing.T) {
 	if first.IsError {
 		// The probe text is constant so a warm production cache should spare it
 		// the embedder, but that is an assumption about a system this repository
-		// does not control — and a broker-wide stall would block this call
+		// does not control, and a broker-wide stall would block this call
 		// regardless of whether the text was cached. Tolerated the same way the
 		// publish above is: a stall says nothing about whether idempotency held.
-		if stalled(s.text(first)) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", s.text(first))
-		}
+		skipInconclusive(t, s.text(first))
 		t.Fatalf("first publish failed: %s", s.text(first))
 	}
 
 	second := s.call("noetive_publish", args)
 	if second.IsError {
-		if stalled(s.text(second)) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", s.text(second))
-		}
+		skipInconclusive(t, s.text(second))
 		t.Fatalf("second publish failed: %s", s.text(second))
 	}
 
@@ -243,6 +293,11 @@ func TestIdempotentPublishAgainstProduction(t *testing.T) {
 // come back as a retryable `unavailable`, and the client has to surface that as
 // retryable rather than as a client defect. Zero matches in a quiet namespace is
 // a success; a failed setup is not.
+//
+// Setup embeds the query, so it waits on the same component publish and search
+// do, and on the tightest budget of the three, since the collect window is
+// carved out of it. A stall lands here first and says no more about the client
+// than it does there.
 func TestSubscribeSetupAgainstProduction(t *testing.T) {
 	s := newSession(t)
 
@@ -253,6 +308,7 @@ func TestSubscribeSetupAgainstProduction(t *testing.T) {
 	})
 
 	if result.IsError {
+		skipInconclusive(t, s.text(result))
 		t.Fatalf("subscribe failed: %s", s.text(result))
 	}
 	if !strings.Contains(s.text(result), "subscription") {
@@ -271,6 +327,12 @@ func TestServerRejectionCarriesItsRequestID(t *testing.T) {
 	if !result.IsError {
 		t.Skip("the server accepted a query expected to be invalid; the grammar may have changed")
 	}
+	// An error arrived, but not necessarily the rejection this test is about: a
+	// broker that is unreachable or refusing retryably also lands here, and
+	// neither carries a request id because neither reached the parser. Asserting
+	// on one would report a missing correlation id the server was never asked
+	// for.
+	skipInconclusive(t, s.text(result))
 	if !strings.Contains(s.text(result), "request_id") {
 		t.Errorf("expected a request_id to correlate with server logs, got: %s", s.text(result))
 	}

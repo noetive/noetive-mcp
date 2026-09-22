@@ -10,7 +10,7 @@ import (
 )
 
 // The text fallback is the whole result for a client that cannot read
-// structured content, so the count has to be right at each boundary — an agent
+// structured content, so the count has to be right at each boundary: an agent
 // told "1 match" when twelve arrived will stop looking.
 func TestSearchSummaryCountsMatchesAtEachBoundary(t *testing.T) {
 	scenarios := []struct {

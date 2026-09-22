@@ -29,12 +29,17 @@ func TestUnexpandedPlaceholdersAreRecognised(t *testing.T) {
 	}
 }
 
-// A real key must never be mistaken for a placeholder — refusing a working
+// A real key must never be mistaken for a placeholder: refusing a working
 // credential would be a far worse failure than the one this guards against.
 func TestRealKeysAreNotMistakenForPlaceholders(t *testing.T) {
 	keys := []string{
-		"keyu_3xAmPl3Base58Value",
-		"keyt_3xAmPl3Base58Value",
+		"keya_3xAmPl3Base58Value",
+		// A family this repo has never heard of. Nothing here parses a key,
+		// the server is the only authority on validity, so an unfamiliar
+		// prefix has to pass exactly like a familiar one. Listing the families
+		// that exist today would make this a check that goes stale the next
+		// time one is added.
+		"keyz_3xAmPl3Base58Value",
 		"",
 		"   ",
 		"not a key but not a placeholder",
@@ -50,15 +55,15 @@ func TestRealKeysAreNotMistakenForPlaceholders(t *testing.T) {
 }
 
 // The check has to require both halves of the placeholder shape. A value that
-// merely ends in a brace — which a base58 key never does, but a passphrase-style
-// credential might — must not be mistaken for an unexpanded variable and
+// merely ends in a brace (which a base58 key never does, but a passphrase-style
+// credential might) must not be mistaken for an unexpanded variable and
 // refused, because refusing a working credential is worse than the failure this
 // guards against.
 func TestBothHalvesOfThePlaceholderShapeAreRequired(t *testing.T) {
 	notPlaceholders := []string{
-		"keyu_ends_with_a_brace}",
+		"keya_ends_with_a_brace}",
 		"}",
-		"keyu_has_a_${inside}_but_starts_normally",
+		"keya_has_a_${inside}_but_starts_normally",
 	}
 
 	for _, value := range notPlaceholders {

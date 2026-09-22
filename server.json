@@ -47,7 +47,7 @@
         },
         {
           "name": "NOETIVE_EMBEDDINGS_URL",
-          "description": "An OpenAI-compatible /v1/embeddings endpoint you run. Set it and embeddings are computed on this machine rather than by Noetive: a publish carries the vector alongside its text, and a query's anchor phrases are replaced by vectors so they are never sent. This is not confidential publishing — message text still travels, because that is what a search returns. The endpoint must answer to the same model name as NOETIVE_MODEL and return NOETIVE_DIMENSIONS values. Plain http is accepted only for a loopback address. Inside a container 127.0.0.1 is the container itself; use host.docker.internal.",
+          "description": "An OpenAI-compatible /v1/embeddings endpoint you run. Set it and embeddings are computed on this machine rather than by Noetive: a publish carries the vector alongside its text, and a query's anchor phrases are replaced by vectors so they are never sent. This is not confidential publishing: message text still travels, because that is what a search returns. The endpoint must answer to the same model name as NOETIVE_MODEL and return NOETIVE_DIMENSIONS values. Plain http is accepted only for a loopback address. Inside a container 127.0.0.1 is the container itself; use host.docker.internal.",
           "isRequired": false
         },
         {
@@ -155,7 +155,7 @@
         },
         {
           "name": "NOETIVE_EMBEDDINGS_URL",
-          "description": "An OpenAI-compatible /v1/embeddings endpoint you run. Set it and embeddings are computed on this machine rather than by Noetive: a publish carries the vector alongside its text, and a query's anchor phrases are replaced by vectors so they are never sent. This is not confidential publishing — message text still travels, because that is what a search returns. The endpoint must answer to the same model name as NOETIVE_MODEL and return NOETIVE_DIMENSIONS values. Plain http is accepted only for a loopback address. Inside a container 127.0.0.1 is the container itself; use host.docker.internal.",
+          "description": "An OpenAI-compatible /v1/embeddings endpoint you run. Set it and embeddings are computed on this machine rather than by Noetive: a publish carries the vector alongside its text, and a query's anchor phrases are replaced by vectors so they are never sent. This is not confidential publishing: message text still travels, because that is what a search returns. The endpoint must answer to the same model name as NOETIVE_MODEL and return NOETIVE_DIMENSIONS values. Plain http is accepted only for a loopback address. Inside a container 127.0.0.1 is the container itself; use host.docker.internal.",
           "isRequired": false
         },
         {

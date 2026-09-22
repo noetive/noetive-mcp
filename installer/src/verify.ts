@@ -36,7 +36,7 @@ export function parseChecksums(text: string): Map<string, string> {
  *
  * An unlisted asset is a failure, not a pass. Treating "no checksum published"
  * as acceptable would make the whole check bypassable by anyone who can also
- * serve the download — which is exactly the attacker this defends against.
+ * serve the download, which is exactly the attacker this defends against.
  */
 export function verifyDownload(path: string, assetName: string, checksumsText: string): void {
   const published = parseChecksums(checksumsText).get(assetName);

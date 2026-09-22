@@ -20,8 +20,8 @@ const APIKeyEnv = "NOETIVE_KEY_SECRET"
 //
 // Editors are configured with "${NOETIVE_KEY_SECRET}" so the secret stays out
 // of the config file, and the editor substitutes the real value at launch. When
-// that substitution does not happen — the variable is unset, or the editor was
-// started from a desktop launcher that never read the user's shell profile —
+// that substitution does not happen (the variable is unset, or the editor was
+// started from a desktop launcher that never read the user's shell profile),
 // the literal placeholder arrives here instead.
 //
 // It has to be caught by shape, because it is a perfectly well-formed string:
@@ -51,7 +51,7 @@ func PlaceholderKey(value string) bool {
 //
 // It exists so a server with no usable credential still starts. Exiting instead
 // would leave the editor reporting only that the server failed to launch, with
-// no tools registered and nothing to ask — including noetive_health, which is
+// no tools registered and nothing to ask: including noetive_health, which is
 // the tool whose entire job is to say what is wrong. Starting degraded turns an
 // opaque launch failure into a sentence the agent can read out and the user can
 // act on.

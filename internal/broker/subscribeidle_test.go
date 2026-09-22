@@ -25,7 +25,7 @@ import (
 // bufio.Scanner.Scan blocks and only the context passed to Client.Subscribe can
 // unblock it. In production the per-read deadline therefore fires against
 // nobody, the read stays blocked until the shared stream context expires, and
-// the SDK wraps that DeadlineExceeded in a *SubscribeStreamError — which the
+// the SDK wraps that DeadlineExceeded in a *SubscribeStreamError, which the
 // tool classifies as an interruption.
 //
 // idleStream below is written to the contract the SDK actually has. Correcting
@@ -35,7 +35,7 @@ import (
 // idleStream models a subscription over a namespace where nothing is published.
 // It ignores the per-read context exactly as Subscription.Next does, blocking
 // until the stream context is cancelled and then reporting that cancellation the
-// way the SDK does — wrapped, so it is indistinguishable by type from a genuine
+// way the SDK does: wrapped, so it is indistinguishable by type from a genuine
 // mid-stream failure.
 type idleStream struct {
 	streamCtx context.Context
@@ -70,7 +70,7 @@ func (idleBroker) Subscribe(ctx context.Context, _ semantik.SubscribeRequest) (b
 // TestSubscribeIdleWindowIsNotAnInterruption is the core D3 reproduction.
 //
 // Watching a quiet namespace for the full window and seeing nothing is the
-// ordinary outcome — subscribe is live-only and makes no replay promise, so a
+// ordinary outcome: subscribe is live-only and makes no replay promise, so a
 // standalone watch usually ends exactly this way. Reporting it as an
 // interruption tells an agent the transport failed when it did not, and the
 // advice that follows it ("matches after the interruption are lost") describes
@@ -94,7 +94,7 @@ func TestSubscribeIdleWindowIsNotAnInterruption(t *testing.T) {
 // defect.
 //
 // The per-read deadline is inert against the real stream, so what actually ends
-// the window is the stream context — which the handler sizes at
+// the window is the stream context, which the handler sizes at
 // setupBudget + wait. A one-second watch therefore blocks the agent's turn for
 // twenty-one seconds, whether or not setup took any time at all. The budget is
 // meant to cover setup, not to be added to every window.
@@ -114,7 +114,7 @@ func TestSubscribeHonoursTheRequestedWindow(t *testing.T) {
 
 // TestSubscribeGenuineStreamFailureIsStillInterrupted bounds the fix, so it
 // cannot be satisfied by never reporting an interruption at all. A stream that
-// really breaks mid-read still has to be surfaced — otherwise a false alarm has
+// really breaks mid-read still has to be surfaced; otherwise a false alarm has
 // merely been traded for a silent one.
 func TestSubscribeGenuineStreamFailureIsStillInterrupted(t *testing.T) {
 	stream := &fakeStream{

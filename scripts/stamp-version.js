@@ -11,7 +11,7 @@
 //
 // The committed tree is what ships. Claude Code and Kiro serve their manifests
 // out of the repository, the wrapper pins its platform dependencies to exactly
-// its own version, and server.json is handed to the MCP registry verbatim — so
+// its own version, and server.json is handed to the MCP registry verbatim, so
 // a file left stale here is a published artifact describing a different build.
 // The release workflow refuses a tag that disagrees with tools/manifest.yaml,
 // and packaging/emit's tests refuse a tree whose version files disagree with
@@ -21,7 +21,7 @@
 // generated, so stamping them directly would be undone by the next `make emit`.
 // tools/manifest.yaml is their source and is stamped instead.
 //
-// Idempotent, and a pure function of its argument — the release workflow runs it
+// Idempotent, and a pure function of its argument: the release workflow runs it
 // again on a tree that should already be stamped, so a correct release makes it
 // a verified no-op rather than a step anyone has to trust.
 
@@ -47,7 +47,7 @@ function main() {
       // An OCI package carries the version twice: once in `version`, and again
       // as the tag inside `identifier`. The MCP registry rejects an OCI entry
       // with a registryBaseUrl and wants that canonical reference instead, so
-      // the tag is not optional — and stamping only `version` would leave the
+      // the tag is not optional, and stamping only `version` would leave the
       // registry advertising this release while pointing at the previous
       // release's image.
       if (pkg.registryType === "oci") {
@@ -55,7 +55,7 @@ function main() {
       }
     }
   });
-  console.log(`stamped ${version} — run \`make emit\` to regenerate the plugin manifests`);
+  console.log(`stamped ${version}: run \`make emit\` to regenerate the plugin manifests`);
 }
 
 // A line edit rather than a YAML round-trip: tools/manifest.yaml is the
@@ -78,7 +78,7 @@ function stampManifest(version) {
 // not exist yet, which npm records in the lockfile as the placeholder
 // `{"optional": true}`. That placeholder is accepted right up until the version
 // it stands for is published, at which point `npm ci` refuses the lockfile as
-// out of sync — turning every push between one release and the next red, which
+// out of sync, turning every push between one release and the next red, which
 // is what happened after 0.1.0 shipped.
 //
 // scripts/build-platform-packages.js writes the pins instead, immediately after

@@ -18,7 +18,7 @@ import (
 //
 // Search dominates. It is the tool an agent reaches for most, and it is the only
 // one whose result size scales with what the server returns rather than with
-// what the caller sent — a 50-hit response is 50 structs to shape.
+// what the caller sent, a 50-hit response is 50 structs to shape.
 
 func benchRequest(args map[string]any) mcp.CallToolRequest {
 	return mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: args}}

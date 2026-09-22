@@ -219,7 +219,7 @@ test("status reports a corrupt config as unconfigured with the reason", async ()
   assert.match(report.detail ?? "", /not valid JSON/);
 });
 
-// Removing from a file that was never created is a no-op, not a failure — an
+// Removing from a file that was never created is a no-op, not a failure: an
 // idempotent cleanup script must not fail on the second run.
 test("removing from a missing file reports no change", async () => {
   const workspace = mkdtempSync(join(tmpdir(), "noetive-installer-"));

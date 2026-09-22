@@ -67,7 +67,7 @@ func FuzzLintArguments(f *testing.F) {
 	})
 }
 
-// Arguments may also arrive with the wrong JSON type entirely — a model can
+// Arguments may also arrive with the wrong JSON type entirely: a model can
 // send a string where a number belongs, or an array where an object belongs.
 func FuzzArgumentTypeConfusion(f *testing.F) {
 	f.Add("text", "1024")
@@ -86,7 +86,7 @@ func FuzzArgumentTypeConfusion(f *testing.F) {
 }
 
 // mustNotPanic asserts a handler survives arbitrary arguments and always yields
-// a result. Either outcome is acceptable — a refusal is as valid as a success —
+// a result. Either outcome is acceptable, a refusal is as valid as a success,
 // but neither a panic nor a nil result is.
 func mustNotPanic(t *testing.T, handler mcpserver.ToolHandlerFunc, args map[string]any) {
 	t.Helper()

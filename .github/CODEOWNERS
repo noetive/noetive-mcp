@@ -9,7 +9,7 @@
 /server.json            @gurre
 /scripts/               @gurre
 
-# Namespace, model and dimensions are never defaulted — that is a data-isolation
+# Namespace, model and dimensions are never defaulted; that is a data-isolation
 # boundary, not an ergonomics choice. See docs/security.md.
 /docs/security.md       @gurre
 /internal/targeting/    @gurre

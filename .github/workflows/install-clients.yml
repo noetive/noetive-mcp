@@ -1,7 +1,7 @@
 name: install-clients
 
 # The unit tests drive a fake CLI, so they prove the installer builds the argv
-# the manifest describes — not that any real editor accepts it. Every install
+# the manifest describes, not that any real editor accepts it. Every install
 # bug that reached users so far was in that gap: a flag spelled the way the
 # vendor's docs spell it and not the way their parser reads it, an entry written
 # under a key the editor ignores, a CLI that exits zero having done nothing.
@@ -10,8 +10,8 @@ name: install-clients
 # Deliberately not on every pull request. It downloads third-party CLIs whose
 # availability this repository does not control, and a red build caused by
 # somebody else's npm outage on a change that touched the README teaches people
-# to ignore the colour. It runs where it can actually be about this code —
-# changes to the installer or the manifest — plus weekly and on demand.
+# to ignore the colour. It runs where it can actually be about this code,
+# changes to the installer or the manifest, plus weekly and on demand.
 on:
   push:
     branches: [main]
@@ -95,7 +95,7 @@ jobs:
       # Asserted before the install rather than assumed by it. Without the CLI
       # on PATH a cli-delegate client falls back or refuses, and both of those
       # are behaviours this job would then report as the thing it set out to
-      # test — a green run that never exercised the CLI path at all.
+      # test: a green run that never exercised the CLI path at all.
       - name: The CLI is on PATH
         if: matrix.probe != ''
         run: ${{ matrix.probe }}
@@ -109,14 +109,14 @@ jobs:
           echo "SCRATCH_HOME=$HOME" >> "$GITHUB_ENV"
           HOME="$HOME" node installer/bin/noetive-mcp.js init \
             --client ${{ matrix.client }} --yes --skills none \
-            --api-key keyu_ci_placeholder --namespace ci-probe
+            --api-key keya_ci_placeholder --namespace ci-probe
 
       # Read back from the file the editor reads, not from what the installer
       # said it did. The installer reporting success is the claim under test.
       #
       # Searched at any depth rather than at a known path. Claude Code keys
-      # local-scope entries per project inside ~/.claude.json — a private layout
-      # that has already moved once between releases — so pinning the path here
+      # local-scope entries per project inside ~/.claude.json, a private layout
+      # that has already moved once between releases, so pinning the path here
       # would make this job fail the next time they rearrange it, on an install
       # that still works perfectly. What is asserted is that the editor's config
       # now contains the entry, which is the part that has to be true.

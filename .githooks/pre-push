@@ -1,6 +1,6 @@
 #!/bin/sh
 # The slow half: about five seconds here. Affordable at push frequency, not at
-# commit frequency — which is the whole reason pre-commit does not run these.
+# commit frequency, which is the whole reason pre-commit does not run these.
 #
 # git feeds one `<local ref> <local oid> <remote ref> <remote oid>` line per ref
 # on stdin. An all-zero local oid is a branch deletion, which has nothing to
@@ -8,8 +8,8 @@
 # comparison point is the merge base with the remote's default branch rather
 # than the whole of history.
 #
-# When the range cannot be worked out — no merge base, or a remote oid this
-# clone does not have after a fetch prune or a history rewrite — everything
+# When the range cannot be worked out (no merge base, or a remote oid this
+# clone does not have after a fetch prune or a history rewrite), everything
 # runs. The safe direction for an unknown is more checking, not less.
 
 remote=${1:-origin}
@@ -53,13 +53,13 @@ fail=0
 if command -v go >/dev/null 2>&1; then
 	go test -race ./... || fail=1
 else
-	printf 'pre-push: SKIPPED tests — go is not installed (https://go.dev/dl). CI runs them regardless.\n' >&2
+	printf 'pre-push: SKIPPED tests: go is not installed (https://go.dev/dl). CI runs them regardless.\n' >&2
 fi
 
 if command -v golangci-lint >/dev/null 2>&1; then
 	golangci-lint run --config ./.golangci.yml ./... || fail=1
 else
-	printf 'pre-push: SKIPPED lint — golangci-lint is not installed (go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0). CI runs it regardless.\n' >&2
+	printf 'pre-push: SKIPPED lint: golangci-lint is not installed (go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0). CI runs it regardless.\n' >&2
 fi
 
 exit $fail

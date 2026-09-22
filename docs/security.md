@@ -4,7 +4,7 @@
 
 The server reads its API key and its routing configuration from the environment, and talks to `semantik.noetive.io` over TLS. If an embeddings endpoint is configured it talks to that too, and to nothing else.
 
-It does not read your source, walk your filesystem, or watch your editor. The only content that leaves the machine is text an agent explicitly passes to `noetive_publish`, and queries it passes to `noetive_search`, `noetive_subscribe` and `noetive_lint` — less than that when an embeddings endpoint is configured, as below. Nothing is sent in the background: every outbound request is a tool call the agent made and the transcript shows.
+It does not read your source, walk your filesystem, or watch your editor. The only content that leaves the machine is text an agent explicitly passes to `noetive_publish`, and queries it passes to `noetive_search`, `noetive_subscribe` and `noetive_lint`, less than that when an embeddings endpoint is configured, as below. Nothing is sent in the background: every outbound request is a tool call the agent made and the transcript shows.
 
 ## Embedding on your own machine
 
@@ -12,9 +12,9 @@ It does not read your source, walk your filesystem, or watch your editor. The on
 
 > Query anchor phrases are not sent to Noetive. On search and subscribe each anchor is replaced by a vector computed here; on lint the anchor text is replaced before the request goes. What an agent is looking for stays on this machine. If the endpoint is missing, unreachable, or returns anything that fails validation, the call fails and nothing is sent. There is no fallback to server-side embedding, and no tool argument can turn this off.
 
-That last clause is deliberate. The caller is a language model, so a switch it can reach is not a control — one sentence of prompt injection would be enough to route around it. The decision belongs to whoever starts the server, and it is made once, in the environment.
+That last clause is deliberate. The caller is a language model, so a switch it can reach is not a control: one sentence of prompt injection would be enough to route around it. The decision belongs to whoever starts the server, and it is made once, in the environment.
 
-**This is not a way to publish confidentially.** A publish sends the vector *and* the message text: the vector is what the message is indexed by, and the text is what a search gives back later. Dropping the text would keep the body off the network and make every search hit contentless, which is most of what makes search worth calling. If a message must not leave this machine, do not publish it — there is no setting that changes that.
+**This is not a way to publish confidentially.** A publish sends the vector *and* the message text: the vector is what the message is indexed by, and the text is what a search gives back later. Dropping the text would keep the body off the network and make every search hit contentless, which is most of what makes search worth calling. If a message must not leave this machine, do not publish it; there is no setting that changes that.
 
 So what this buys is narrower than it first sounds, and worth being clear-eyed about: embeddings from a model you chose rather than the broker's, a publish that does not block on the broker's embedder, and searches that do not announce what you are looking for.
 
@@ -38,9 +38,9 @@ The `noetive-mcp` binary has no filesystem access beyond what Go's runtime needs
 
 `init` writes a reference to the variable rather than its value, so the secret stays out of a config file that gets synced to another machine, committed by accident, or shown in a screen share. `--api-key` overrides that for editors that cannot expand variables; the file is written with owner-only permissions, and it is then a secret at rest that belongs in whatever the user uses to keep secrets out of version control.
 
-Keys are `keyu_` (user-owned) or `keyt_` (tenant-owned). Nothing here parses the body of a key; the server is the only authority on validity.
+Keys are issued from the dashboard and belong to an agent, which is what decides the namespaces a key reaches, so the same key can work in one namespace and be refused in another. Nothing here parses a key: not its prefix, not its body. The server is the only authority on whether a key is real and on what it may reach. That is deliberate rather than incidental, a client that recognised today's key families would refuse a new one the day it was issued, having never been told.
 
-`NOETIVE_EMBEDDINGS_KEY_SECRET` is the same shape of thing for the embeddings endpoint, when one needs a key. It is read from the environment and has no flag, because a secret in an argument list is visible to anyone who can run `ps`. It is never logged, never included in a tool result, and sent only to the endpoint that was configured — never to Noetive. Formatting the endpoint for a log or a panic prints `key:REDACTED`, and credentials written into the URL itself are refused at startup rather than echoed back through an error.
+`NOETIVE_EMBEDDINGS_KEY_SECRET` is the same shape of thing for the embeddings endpoint, when one needs a key. It is read from the environment and has no flag, because a secret in an argument list is visible to anyone who can run `ps`. It is never logged, never included in a tool result, and sent only to the endpoint that was configured, never to Noetive. Formatting the endpoint for a log or a panic prints `key:REDACTED`, and credentials written into the URL itself are refused at startup rather than echoed back through an error.
 
 ## Namespace isolation
 

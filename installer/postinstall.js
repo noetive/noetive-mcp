@@ -5,7 +5,7 @@
 //
 // The primary delivery path is optionalDependencies: npm, pnpm and yarn each
 // install only the platform package matching the host, and that path works even
-// when install scripts are blocked — which pnpm v10 does by default. This script
+// when install scripts are blocked, which pnpm v10 does by default. This script
 // exists for the cases where that did not happen, and it is deliberately
 // best-effort: a failure here must not fail the install, because the wrapper
 // prints a precise remediation the first time it cannot find the binary.

@@ -381,7 +381,7 @@ async function list(options: Options, out: Writer): Promise<number> {
  * binary, the key, the editor config, or the broker.
  *
  * Only genuine faults fail. An editor the user has installed but deliberately
- * did not configure is reported, not failed — a doctor that is permanently red
+ * did not configure is reported, not failed: a doctor that is permanently red
  * for a Cursor user who does not use Copilot teaches people to ignore it, which
  * costs more than the check is worth.
  */
@@ -402,7 +402,7 @@ async function doctor(options: Options, out: Writer): Promise<number> {
 
     // Every scope, not just the default. A user who installed with
     // --scope project is configured, and a report that only looks at the
-    // global file tells them they are not — sending them to fix something
+    // global file tells them they are not, sending them to fix something
     // that already works.
     const { found, undetermined } = await configuredScopes(id, workspace);
     if (found.length > 0) {
@@ -480,8 +480,8 @@ interface Check {
  * configuredScopes finds every scope where an editor already has a noetive
  * entry.
  *
- * An editor can legitimately be configured in more than one place — a global
- * entry and a per-project one — and which of them applies depends on where the
+ * An editor can legitimately be configured in more than one place, a global
+ * entry and a per-project one, and which of them applies depends on where the
  * editor was opened, not on which this command considers the default.
  */
 export async function configuredScopes(clientId: string, workspace: string): Promise<EditorStatus> {

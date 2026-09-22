@@ -8,7 +8,7 @@
 .githooks
 
 # Credentials. The final image is distroless and copies only the binary, so
-# nothing here reaches a published layer — but the build context and the local
+# nothing here reaches a published layer, but the build context and the local
 # layer cache are not nothing.
 #
 # `**/` on every one of these: docker matches with filepath.Match, where `*`

@@ -23,7 +23,7 @@ import (
 //
 // Unlike the rest of the suite it is not pinned to the shared namespace. A
 // local embedder has to be told the same model name the namespace is
-// provisioned under, and that pairing is the operator's own — so the triple
+// provisioned under, and that pairing is the operator's own, so the triple
 // comes from the environment, falling back to the shared namespace when it says
 // nothing.
 func localTarget(t *testing.T) targeting.Policy {
@@ -69,7 +69,7 @@ func newLocalSession(t *testing.T) *session {
 	return start(t, embedding.Precomputed(client, endpoint), policy)
 }
 
-// newRoutedSession is the ordinary server — the broker does the embedding —
+// newRoutedSession is the ordinary server, the broker does the embedding,
 // pointed at the same namespace as newLocalSession, so the two can be compared.
 func newRoutedSession(t *testing.T, policy targeting.Policy) *session {
 	t.Helper()
@@ -95,7 +95,7 @@ func start(t *testing.T, b mcpserver.Broker, policy targeting.Policy) *session {
 // The one thing no unit test can establish: that the vectors this machine
 // produces land in the same space the namespace is indexed in.
 //
-// Everything else about the feature is checkable against a stub — that the text
+// Everything else about the feature is checkable against a stub: that the text
 // is replaced, that the wire shape is right, that a failure sends nothing. Two
 // models agreeing on dimensionality while disagreeing on meaning is invisible
 // to all of it, and shows up only here, as a publish that nothing can find.
@@ -120,9 +120,7 @@ func TestLocallyEmbeddedPublishIsFoundByALocallyEmbeddedSearch(t *testing.T) {
 		if strings.Contains(message, "dimensional") {
 			t.Fatalf("the endpoint and the namespace disagree about size: %s", message)
 		}
-		if stalled(message) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", message)
-		}
+		skipInconclusive(t, message)
 		t.Fatalf("publish failed: %s", message)
 	}
 
@@ -130,9 +128,7 @@ func TestLocallyEmbeddedPublishIsFoundByALocallyEmbeddedSearch(t *testing.T) {
 		"query": fmt.Sprintf(`MATCH DISTANCE(%q) WITHIN 0.6 LIMIT 20`, marker),
 	})
 	if found.IsError {
-		if stalled(s.text(found)) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", s.text(found))
-		}
+		skipInconclusive(t, s.text(found))
 		t.Fatalf("search failed: %s", s.text(found))
 	}
 	if strings.Contains(s.text(found), "No matches") {
@@ -151,7 +147,7 @@ func TestLocallyEmbeddedPublishIsFoundByALocallyEmbeddedSearch(t *testing.T) {
 //
 // Publishing and searching through the same local embedder proves the vectors
 // round-trip, but it would pass just as well if the model here were nothing
-// like the one the namespace is provisioned with — both ends would simply be
+// like the one the namespace is provisioned with: both ends would simply be
 // wrong together. This publishes with text, so the broker embeds it, and then
 // searches with a query embedded here. A match means the two embedders put the
 // same phrase in the same place, which is the thing nothing else can check.
@@ -170,9 +166,7 @@ func TestALocallyEmbeddedQueryFindsABrokerEmbeddedMessage(t *testing.T) {
 		"idempotency_key": marker,
 	})
 	if published.IsError {
-		if stalled(remote.text(published)) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", remote.text(published))
-		}
+		skipInconclusive(t, remote.text(published))
 		t.Fatalf("publish failed: %s", remote.text(published))
 	}
 
@@ -180,16 +174,14 @@ func TestALocallyEmbeddedQueryFindsABrokerEmbeddedMessage(t *testing.T) {
 		"query": fmt.Sprintf(`MATCH DISTANCE(%q) WITHIN 0.6 LIMIT 20`, marker),
 	})
 	if found.IsError {
-		if stalled(local.text(found)) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", local.text(found))
-		}
+		skipInconclusive(t, local.text(found))
 		t.Fatalf("search failed: %s", local.text(found))
 	}
 	if strings.Contains(local.text(found), "No matches") {
 		// Indexing lag and a space mismatch look identical from here, so this
 		// cannot be a failure. It is the one result worth re-running before
 		// trusting a setup: a miss that persists is the models disagreeing.
-		t.Skipf("no match yet — either the message is not indexed, or the local model is not the one the namespace uses: %s", local.text(found))
+		t.Skipf("no match yet: either the message is not indexed, or the local model is not the one the namespace uses: %s", local.text(found))
 	}
 
 	// That something matched is not the claim. The namespace holds other
@@ -233,8 +225,8 @@ func marshal(t *testing.T, result mcp.CallToolResult) string {
 }
 
 // The rewritten query has to be one the broker's own parser accepts. It is a
-// shape nothing else in this repository produces — vector literals spliced into
-// the text the agent wrote — and only the live server can say whether it parses.
+// shape nothing else in this repository produces, vector literals spliced into
+// the text the agent wrote, and only the live server can say whether it parses.
 func TestALocallyEmbeddedQueryParsesOnTheServer(t *testing.T) {
 	s := newLocalSession(t)
 
@@ -248,9 +240,7 @@ func TestALocallyEmbeddedQueryParsesOnTheServer(t *testing.T) {
 		if !result.IsError {
 			continue
 		}
-		if stalled(s.text(result)) {
-			t.Skipf("the broker did not answer in time; nothing to conclude about the client: %s", s.text(result))
-		}
+		skipInconclusive(t, s.text(result))
 		t.Errorf("the server rejected the rewritten form of %s:\n  %s", query, s.text(result))
 	}
 }

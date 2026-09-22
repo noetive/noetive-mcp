@@ -127,7 +127,7 @@
       },
       "restartHint": "Start a new Codex session.",
       "quirks": [
-        "Config is TOML — a [mcp_servers.<name>] table — so there is no file fallback: without the codex command on PATH the install refuses rather than writing JSON into config.toml.",
+        "Config is TOML (a [mcp_servers.<name>] table), so there is no file fallback: without the codex command on PATH the install refuses rather than writing JSON into config.toml.",
         "Status is the exit code of `codex mcp get`, because there is no file this installer can parse.",
         "Does not expand ${VAR}: --env writes literal values, so the API key has to be passed with --api-key or inherited from the environment Codex was launched in."
       ]
@@ -155,7 +155,7 @@
       },
       "restartHint": "Restart Antigravity to pick up the new server.",
       "quirks": [
-        "Uses serverUrl rather than url for remote servers. Irrelevant here — this server is stdio — but it is why an Antigravity config cannot be copied from a Cursor one.",
+        "Uses serverUrl rather than url for remote servers. Irrelevant here, this server is stdio, but it is why an Antigravity config cannot be copied from a Cursor one.",
         "The IDE, the agy CLI and the SDK share one config file."
       ]
     },
@@ -178,7 +178,7 @@
           "default": true
         }
       },
-      "restartHint": "Switch Copilot Chat to Agent mode — MCP tools are only available there.",
+      "restartHint": "Switch Copilot Chat to Agent mode: MCP tools are only available there.",
       "quirks": [
         "The top-level key is servers, not mcpServers.",
         "The file is JSONC: comments are preserved on write."
@@ -227,9 +227,9 @@
       },
       "restartHint": "Run /reload-mcp in an open session, or start a new one.",
       "quirks": [
-        "Config is YAML — an mcp_servers.<name> mapping — and the same file holds the model, profiles and approval settings, so there is no file fallback: without the hermes command on PATH the install refuses rather than writing JSON over the whole configuration.",
+        "Config is YAML (an mcp_servers.<name> mapping), and the same file holds the model, profiles and approval settings, so there is no file fallback: without the hermes command on PATH the install refuses rather than writing JSON over the whole configuration.",
         "`mcp add` connects to the server, lists its tools and asks which to enable, so it is run on the user's terminal rather than down a pipe, and is refused where there is no terminal.",
-        "It exits zero whether it saved or the user cancelled, so the install reports what it did and not what Hermes did with it. There is no command that answers whether one server is configured — `mcp list` exits zero whatever it finds — so `list` and `doctor` report Hermes as unknown rather than guessing.",
+        "It exits zero whether it saved or the user cancelled, so the install reports what it did and not what Hermes did with it. There is no command that answers whether one server is configured, `mcp list` exits zero whatever it finds, so `list` and `doctor` report Hermes as unknown rather than guessing.",
         "`--args` takes the remainder of the command line, so it goes last and every argument after it is its own word. `--env` takes all its pairs after a single flag: repeating the flag replaces the previous pairs rather than adding to them, which would drop the API key.",
         "A stdio server receives only the env this entry declares plus a small baseline; it does not inherit the environment Hermes was launched in. An entry with no env block is a server that connects and then refuses every call.",
         "Expands ${VAR} and ${env:VAR} when it connects, resolved from ~/.hermes/.env first and the process environment second, so the key can live in either and the placeholder is what stays on disk.",

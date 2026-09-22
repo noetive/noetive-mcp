@@ -175,8 +175,8 @@ $RECYCLE.BIN/
 # env file
 .env
 
-# direnv local overrides. `.env` above does not match these — gitignore treats
-# it as a literal filename — and .envrc.local is where the MCP registry signing
+# direnv local overrides. `.env` above does not match these: gitignore treats
+# it as a literal filename, and .envrc.local is where the MCP registry signing
 # key lives, which grants publish rights to the io.noetive/* namespace.
 .envrc.local
 .envrc.*.local

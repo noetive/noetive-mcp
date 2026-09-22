@@ -10,7 +10,7 @@ permissions:
 
 # A pull request's only interesting run is the one for its newest commit; the
 # superseded ones spend runners answering a question nobody is asking. Pushes to
-# main are never cancelled — the per-commit record of which commit was green is
+# main are never cancelled: the per-commit record of which commit was green is
 # what makes a bisect possible.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -47,7 +47,7 @@ jobs:
       # than a wall: it fires when a path in this code reaches the vulnerable
       # symbol, not when a vulnerable version appears somewhere in the graph.
       # The advisory database is fetched at run time, so pinning the scanner
-      # costs no freshness — a red build here can arrive without a code change,
+      # costs no freshness: a red build here can arrive without a code change,
       # and that is the signal, not a defect.
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
@@ -74,11 +74,11 @@ jobs:
           cache: true
 
       # Packages and targets are both enumerated, not listed: a hand-written list
-      # silently stops covering what somebody added last week, and it did — the
+      # silently stops covering what somebody added last week, and it did: the
       # query parser behind the confidentiality promise sat outside a list that
       # named ./internal/broker. `make fuzz-live` enumerates the same way.
       #
-      # Short by design — the point here is that the corpus still replays and no
+      # Short by design: the point here is that the corpus still replays and no
       # seed panics. Campaigns run on a schedule.
       - name: Fuzz seeds
         run: |
@@ -200,7 +200,7 @@ jobs:
   # Both architectures, because the release pushes both and only one of them is
   # the runner's own. The Dockerfile cross-compiles rather than emulating, so
   # linux/arm64 is a real compile here and a broken one fails at the same place
-  # it would at tag time — after a GitHub Release exists.
+  # it would at tag time, after a GitHub Release exists.
   #
   # Not pushed: the load/push distinction is the only thing that differs from the
   # release build, and buildx cannot load a multi-arch result into the local

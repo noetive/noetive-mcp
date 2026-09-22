@@ -54,7 +54,7 @@ func main() {
 
 	// The registry name is repeated across packaging, docs, the image and both
 	// workflows. The MCP registry validates every one of them and refuses the
-	// publish on any disagreement — at the last step of a release, after the
+	// publish on any disagreement: at the last step of a release, after the
 	// GitHub Release, npm and the image have all already gone out.
 	if err := model.registryNameIsConsistent(root); err != nil {
 		log.Fatal(err)
@@ -188,23 +188,25 @@ func load(dir string) (authoring, error) {
 }
 
 // agreesWithServer checks the documented tools against the registered ones.
+//
+// Generated documentation must not claim a tool the server does not register,
+// and the server must not register one the documentation does not mention. An
+// equality rather than a subset in either direction, because both halves of a
+// disagreement produce the same symptom: an editor showing a tool list that does
+// not match the prose next to it.
 func (a authoring) agreesWithServer() error {
 	documented := make([]string, 0, len(a.Tools))
 	for _, t := range a.Tools {
 		documented = append(documented, t.Name)
 	}
-	registered := mcpserver.ToolNames()
+	registered := slices.Clone(mcpserver.ToolNames())
 
 	sort.Strings(documented)
 	sort.Strings(registered)
 
-	if len(documented) != len(registered) {
-		return fmt.Errorf("manifest documents %v but the server registers %v", documented, registered)
-	}
-	for i := range documented {
-		if documented[i] != registered[i] {
-			return fmt.Errorf("manifest documents %v but the server registers %v", documented, registered)
-		}
+	if !slices.Equal(documented, registered) {
+		return fmt.Errorf("manifest documents %v but the server registers %v",
+			documented, registered)
 	}
 	return nil
 }
@@ -303,7 +305,7 @@ func (a authoring) serverEntry() map[string]any {
 // emitClaudePlugin writes packaging/claude-plugin.
 //
 // The Claude schema allows component-path fields and expects the MCP file to be
-// .mcp.json — with the leading dot, unlike the Agent Plugins spec.
+// .mcp.json: with the leading dot, unlike the Agent Plugins spec.
 func emitClaudePlugin(a authoring, root string) error {
 	dir := filepath.Join(root, "packaging", "claude-plugin")
 	if err := reset(dir); err != nil {
@@ -459,9 +461,9 @@ type installTarget struct {
 // emitInstall writes packaging/install.json: every editor, its install command,
 // and its one-click link where one exists.
 //
-// It is the join of the two manifests that already exist — the client list in
+// It is the join of the two manifests that already exist, the client list in
 // installer/src/manifest/clients.json and the server entry in
-// tools/manifest.yaml — because the install instructions are the one artefact
+// tools/manifest.yaml, because the install instructions are the one artefact
 // that needs both, and they are published in three places that have already
 // drifted apart once.
 func emitInstall(a authoring, root string) error {
@@ -711,7 +713,7 @@ func reset(dir string) error {
 //
 // HTML escaping is off because these files are read by editors and by
 // noetive.io, never embedded in a <script> tag. Left on, the & in every install
-// deeplink becomes & — which parses back correctly but makes a generated
+// deeplink becomes &, which parses back correctly but makes a generated
 // URL unreadable in review, exactly where a wrong one has to be spotted.
 func writeJSON(path string, value any) error {
 	var buffer bytes.Buffer
@@ -746,7 +748,7 @@ func repoRoot() (string, error) {
 //
 // Separated from repoRoot so the walk itself can be tested. It decides where
 // every generated file is written, and a wrong answer scatters a plugin payload
-// somewhere in the tree — or, worse, into the wrong repository — with a
+// somewhere in the tree (or, worse, into the wrong repository) with a
 // successful exit status either way.
 func moduleRootAbove(start string) (string, error) {
 	dir := start

@@ -37,7 +37,7 @@ func TestPublishRoutesToTheNamespaceTheCallNames(t *testing.T) {
 
 // This is the data-isolation boundary. A call that names no namespace, against
 // a server configured with none, must be refused before any bytes leave the
-// process — never quietly routed to a shared space.
+// process, never quietly routed to a shared space.
 func TestPublishWithoutATargetNeverReachesTheBroker(t *testing.T) {
 	stub := &stubBroker{}
 	_, handler := broker.PublishTool(stub, targeting.Policy{})

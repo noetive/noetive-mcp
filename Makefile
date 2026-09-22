@@ -7,7 +7,7 @@ BINARY  := noetive-mcp
 # The hooks are the only part of setup that lives in .git/config instead of the
 # tree, which makes them the only part that can silently not be there. Wired
 # into build and test because those are the first things anyone runs. Writing to
-# .git/config is a real side effect, so it says so — and says nothing on the
+# .git/config is a real side effect, so it says so, and says nothing on the
 # runs where it changes nothing.
 #
 # The probe compares the repository root to the working directory, not merely
@@ -35,7 +35,7 @@ test: hooks
 # package's testdata/fuzz. Deterministic, which is what makes it a gate: the
 # same commit gives the same verdict on every machine and every run.
 #
-# It deliberately does not search. `-fuzz` does, and a search is not a check —
+# It deliberately does not search. `-fuzz` does, and a search is not a check:
 # it explores random inputs, so the same command legitimately passes now and
 # fails ten minutes later having found something new. As a gate that teaches
 # people to re-run until green; the failure that prompted this split was exactly
@@ -45,7 +45,7 @@ test: hooks
 #
 # Packages are enumerated rather than named, for the same reason the targets
 # inside them are: a hand-written list silently stops covering the package
-# somebody added a target to last week, and it did — the query parser that makes
+# somebody added a target to last week, and it did: the query parser that makes
 # this server's confidentiality promise went a release with no target at all
 # because the list said ./internal/broker.
 #
@@ -93,19 +93,21 @@ lint:
 
 # Coverage says a line ran; it says nothing about whether a test would notice if
 # that line were wrong. This breaks the implementation on purpose and reports
-# every change no test caught. Slow by nature — it runs the suite once per
-# mutant — so it belongs in a deliberate pass, not the edit loop.
+# every change no test caught. Slow by nature, it runs the suite once per
+# mutant, so it belongs in a deliberate pass, not the edit loop.
 mutate:
 	node scripts/mutation-test.js
 
 # Allocation counts for the tool handlers, measured against a stub broker so the
-# numbers are the handler's own cost. Record results in BENCH_TRACKER.md.
+# numbers are the handler's own cost. The figures are internal and this repository
+# is public, so keep them in an untracked BENCH_TRACKER.md rather than committing
+# them; .gitignore already holds that path.
 bench:
 	go test -run "^$$" -bench=. -benchmem -benchtime=20000x -memprofile=mem.out ./internal/broker/
 	go tool pprof -top -alloc_objects -nodecount=10 mem.out
 
-# Regenerates all three payloads — the Claude plugin, the Kiro Power and this
-# repository's own plugin manifest — from tools/manifest.yaml. Never hand-edit
+# Regenerates all three payloads (the Claude plugin, the Kiro Power and this
+# repository's own plugin manifest) from tools/manifest.yaml. Never hand-edit
 # packaging/, .claude-plugin/, skills/ or .mcp.json; CI fails when they differ.
 emit:
 	go run ./packaging/emit
@@ -118,7 +120,7 @@ docker:
 
 # Also removes what `make bench` and `go test -c` leave behind: both are
 # gitignored, both are large, and a stray 9 MB broker.test in the tree is one
-# `git add -f` from being permanent. Not .mutation-salvage.json — that file is
+# `git add -f` from being permanent. Not .mutation-salvage.json: that file is
 # how scripts/mutation-test.js restores source left mutated by a killed run, and
 # deleting it would strand a deliberate bug with nothing left to announce it.
 #

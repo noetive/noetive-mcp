@@ -10,7 +10,7 @@ import { ClientAdapter, InstallOutcome, InstallRequest, StatusReport } from "./a
  * keyed by server name. It is driven entirely by the client manifest, which is
  * what makes adding such an editor a data change rather than a code change.
  *
- * It touches exactly one key — the one named by SERVER_NAME — and rewrites the
+ * It touches exactly one key, the one named by SERVER_NAME, and rewrites the
  * file by range edit, so sibling servers, comments and formatting survive
  * untouched.
  */

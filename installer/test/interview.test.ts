@@ -70,7 +70,7 @@ const editor = { expandsVariables: true, offeredSkills: [{ value: "semql", label
 test("the interview collects every setting the server reads", async () => {
   const { prompter } = scripted({
     "Write your API key": true,
-    "API key from": "keyu_3xAmPl3",
+    "API key from": "keya_3xAmPl3",
     Namespace: "acme-platform",
     "Embedding model": "Qwen3-Embedding-4B",
     Dimensions: "1024",
@@ -79,7 +79,7 @@ test("the interview collects every setting the server reads", async () => {
 
   const answers = await interview(prompter, editor);
 
-  assert.equal(answers.apiKey, "keyu_3xAmPl3");
+  assert.equal(answers.apiKey, "keya_3xAmPl3");
   assert.equal(answers.namespace, "acme-platform");
   assert.equal(answers.model, "Qwen3-Embedding-4B");
   assert.equal(answers.dimensions, "1024");
@@ -94,7 +94,7 @@ test("a question whose flag was passed is not asked", async () => {
 
   const answers = await interview(prompter, {
     ...editor,
-    apiKey: "keyu_fromflag",
+    apiKey: "keya_fromflag",
     namespace: "from-flag",
     model: "model-from-flag",
     dimensions: "512",
@@ -103,7 +103,7 @@ test("a question whose flag was passed is not asked", async () => {
   });
 
   assert.deepEqual(asked, [], "nothing should have been asked");
-  assert.equal(answers.apiKey, "keyu_fromflag");
+  assert.equal(answers.apiKey, "keya_fromflag");
   assert.equal(answers.namespace, "from-flag");
   assert.equal(answers.disableGlobalNamespace, false);
   assert.deepEqual(answers.skills, ["semql"]);
@@ -179,11 +179,11 @@ test("an unusable dimensionality is refused at the prompt", async () => {
 // writing ${NOETIVE_KEY_SECRET} into a config that will never substitute it
 // produces "unauthorized" and sends the user to check an account that is fine.
 test("an editor that cannot expand variables is asked for the key directly", async () => {
-  const { prompter, asked } = scripted({ "API key from": "keyu_literal" });
+  const { prompter, asked } = scripted({ "API key from": "keya_literal" });
 
   const answers = await interview(prompter, { ...editor, expandsVariables: false });
 
-  assert.equal(answers.apiKey, "keyu_literal");
+  assert.equal(answers.apiKey, "keya_literal");
   assert.equal(
     asked.some((a) => a.question.includes("Write your API key")),
     false,
@@ -223,7 +223,7 @@ test("no skill question is asked when the editor has nowhere to put them", async
 // still have a server that authenticates, so the credential comes first and the
 // things a first install can skip come last.
 test("the interview asks for the key before anything else", async () => {
-  const { prompter, asked } = scripted({ "Write your API key": true, "API key from": "keyu_x", Namespace: "n" });
+  const { prompter, asked } = scripted({ "Write your API key": true, "API key from": "keya_x", Namespace: "n" });
 
   await interview(prompter, editor);
 

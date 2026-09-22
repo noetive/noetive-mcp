@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Adding an editor is usually a `clients.json` entry and a test fixture,
-        with no new code — see [docs/clients.md](../../blob/main/docs/clients.md).
+        with no new code: see [docs/clients.md](../../blob/main/docs/clients.md).
         These fields are that entry, so a filled-in form is most of a pull request.
 
   - type: input

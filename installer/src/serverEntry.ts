@@ -161,7 +161,7 @@ export function describeKeyHandling(spec: ClientSpec, clientId: string, options:
       getKey,
       `The config references \${${API_KEY_ENV}} rather than storing it, so export it where ${spec.displayName} can see it:`,
       ``,
-      `    export ${API_KEY_ENV}=keyu_...`,
+      `    export ${API_KEY_ENV}=keya_...`,
       ``,
       `Launching ${spec.displayName} from a desktop icon will not pick that up, because desktop launchers do not read your shell profile.`,
       `Start it from that same terminal, or re-run this command with --api-key to write the key into the config instead.`,
@@ -172,6 +172,6 @@ export function describeKeyHandling(spec: ClientSpec, clientId: string, options:
     getKey,
     `${spec.displayName} does not expand \${${API_KEY_ENV}} in its config, so no key was written. Re-run with the key to finish:`,
     ``,
-    `    npx ${PACKAGE_NAME} init --client ${clientId} --api-key keyu_...`,
+    `    npx ${PACKAGE_NAME} init --client ${clientId} --api-key keya_...`,
   ].join("\n");
 }

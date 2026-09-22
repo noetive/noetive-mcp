@@ -198,7 +198,7 @@ test("the packed skills directory carries the emitted skills", () => {
   const packed = bundledSkills();
 
   assert.ok(packed.length > 0, "expected skills packed beside the compiled module");
-  for (const name of ["doctor", "semql", "semantik"]) {
+  for (const name of ["doctor", "semql", "semantik", "semantik-text"]) {
     assert.ok(packed.some((s) => s.name === name), `expected the ${name} skill to be packed`);
   }
   const semql = packed.find((s) => s.name === "semql")!;

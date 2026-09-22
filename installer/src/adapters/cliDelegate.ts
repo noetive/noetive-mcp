@@ -12,7 +12,7 @@ import { MergeAdapter } from "./generic";
  *
  * That is preferred wherever the editor owns a config layout the file path does
  * not describe. Claude Code keys user-scope entries per project inside
- * ~/.claude.json — a layout that has already changed once between releases —
+ * ~/.claude.json, a layout that has already changed once between releases,
  * and Codex keeps its servers in TOML rather than the JSON this installer
  * merges. In both cases the CLI knows the layout authoritatively.
  *
@@ -63,7 +63,7 @@ export class CliDelegateAdapter implements ClientAdapter {
     // An interactive CLI exiting zero means it ran, not that it saved. Hermes
     // exits zero after "Cancelled" just as it does after writing, and the only
     // things that distinguish the two are its printed output and whether the
-    // config changed — one we will not read, the other we cannot parse. So the
+    // config changed: one we will not read, the other we cannot parse. So the
     // answer is reported as unknown rather than guessed in either direction.
     if (spec.interactive) {
       return {
@@ -106,7 +106,7 @@ export class CliDelegateAdapter implements ClientAdapter {
     const installed = isInstalled(request.spec, request.workspace, existsSync);
 
     // No file this installer can read, so the CLI is asked instead. Only its
-    // exit status is used — that is an existence check, not output parsing, and
+    // exit status is used: that is an existence check, not output parsing, and
     // survives any rewording of what it prints.
     //
     // Without such a command there is no answer to give. Hermes has none: its
@@ -144,8 +144,8 @@ export class CliDelegateAdapter implements ClientAdapter {
       if (pairs.length === 0) return [];
 
       // Grouped means the flag takes every pair at once. Repeating it against a
-      // CLI built that way is not additive — the second occurrence replaces the
-      // first — so all but the last pair vanish, and the API key is written
+      // CLI built that way is not additive, the second occurrence replaces the
+      // first, so all but the last pair vanish, and the API key is written
       // first, which makes it the one that goes.
       return envStyle === "grouped" ? [envArg, ...pairs] : pairs.flatMap((pair) => [envArg, pair]);
     });
@@ -155,7 +155,7 @@ export class CliDelegateAdapter implements ClientAdapter {
    * assertTerminal refuses to drive a prompting CLI down a pipe.
    *
    * A prompt reading a closed stdin takes its cancelling answer, and Hermes'
-   * `mcp add` then exits zero having saved nothing — so the install would
+   * `mcp add` then exits zero having saved nothing, so the install would
    * report success for a config it never wrote. Refusing is the only honest
    * answer, and it carries the entry so the user is not left to reconstruct it.
    */
@@ -239,7 +239,7 @@ const COMMAND_TIMEOUT_MS = 60_000;
  * Everything else gets a closed stdin and a deadline. Both guard the same
  * failure: a CLI that decides to ask a question on a run where nobody is
  * watching hangs with its output captured, so the user sees no prompt, no
- * progress and no error — just a command that never returns.
+ * progress and no error, just a command that never returns.
  */
 export const systemRunner: Runner = (command, args, env, interactive) => {
   if (interactive) {

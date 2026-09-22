@@ -40,7 +40,7 @@ func LintTool(l Linter) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		mcp.WithDescription("Check a SemQL query for errors and get completion suggestions before running it. Use this when a query is unfamiliar or a search returned an invalid_request error."),
 		mcp.WithString("query",
 			mcp.Required(),
-			mcp.Description("SemQL query to check. May be partial — completions are suggested for the position given by cursor."),
+			mcp.Description("SemQL query to check. May be partial: completions are suggested for the position given by cursor."),
 		),
 		mcp.WithNumber("cursor",
 			mcp.Description("Byte offset into the query to suggest completions for. Defaults to the end of the query."),

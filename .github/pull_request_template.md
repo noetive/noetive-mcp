@@ -9,8 +9,8 @@
 
 - [ ] `make test lint emit` and `git status --porcelain` is empty
 - [ ] `cd installer && npm test`
-- [ ] `NOETIVE_KEY_SECRET=keyu_... integration/run.sh` — touches the wire
-- [ ] `node scripts/mutation-test.js --file <changed>` — adds behaviour
+- [ ] `NOETIVE_KEY_SECRET=keya_... integration/run.sh`: touches the wire
+- [ ] `node scripts/mutation-test.js --file <changed>`: adds behaviour
 
 ## Load-bearing
 

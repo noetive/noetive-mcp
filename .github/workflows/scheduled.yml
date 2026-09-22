@@ -6,7 +6,7 @@ on:
   schedule:
     - cron: "17 6 * * *"
     # Weekly: a real fuzz campaign. Daily would re-search ground the last one
-    # already covered — a twenty-minute search converges long before morning.
+    # already covered: a twenty-minute search converges long before morning.
     - cron: "41 4 * * 1"
   workflow_dispatch:
 
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 # github.event.schedule is empty on workflow_dispatch, so a manual run executes
-# every job — which is what you want when you are here because something looks
+# every job, which is what you want when you are here because something looks
 # wrong.
 jobs:
   vulnerabilities:
@@ -75,7 +75,38 @@ jobs:
             echo "NOETIVE_KEY_SECRET is unset; the suite would skip every test and report success." >&2
             exit 1
           fi
-          integration/run.sh
+          # Status captured rather than allowed to end the step, because the
+          # annotation below is most worth having on a run where some tests
+          # failed and others skipped. Under `bash -e` a non-zero go test would
+          # abort here and the grep would never run, losing the warning in the
+          # one case that needs both halves of the picture.
+          set -o pipefail
+          status=0
+          integration/run.sh 2>&1 | tee /tmp/integration.log || status=$?
+
+          # A broker that is slow, refusing retryably, or not there at all makes
+          # the suite skip rather than fail: none of those say anything about
+          # whether this client is correct, which is the only thing it measures.
+          # Right per test and misleading in aggregate, because the run then goes
+          # green having proved nothing. This is the line that says so.
+          #
+          # Since health and lint are guarded too, a broker that is unreachable
+          # skips every test in the suite: there is no canary left to go red, and
+          # this warning is the only signal the run produced no evidence.
+          #
+          # A warning rather than a failure. The condition is the broker's, not
+          # this repository's, and the report job below opens an issue here for
+          # anything that fails. If this warning appears on run after run, the
+          # alarm belongs where the broker lives, not on this check.
+          #
+          # Matches the prefix, not the whole sentence: skipInconclusive names the
+          # broker without saying why it did not answer, and the reason that
+          # follows differs per test.
+          if grep -q 'the broker did not answer' /tmp/integration.log; then
+            echo "::warning::The broker did not answer; tests skipped rather than failed, so this run says nothing about whether the client is correct."
+          fi
+
+          exit $status
 
   fuzz:
     if: github.event.schedule != '17 6 * * *'
@@ -94,7 +125,7 @@ jobs:
       # re-covers ground the last one already covered.
       #
       # restore and save split apart, because actions/cache only saves when the
-      # job succeeds — which would throw away the corpus of the one run that
+      # job succeeds, which would throw away the corpus of the one run that
       # actually found something.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -103,7 +134,7 @@ jobs:
           restore-keys: fuzz-
 
       # Ten minutes each against the accumulated corpus. A crasher is written to
-      # that package's testdata/fuzz — commit it as a seed alongside the fix.
+      # that package's testdata/fuzz: commit it as a seed alongside the fix.
       # Packages are enumerated for the reason `make fuzz` gives.
       - name: Fuzz campaign
         run: |

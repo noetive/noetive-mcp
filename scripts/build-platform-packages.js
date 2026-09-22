@@ -6,7 +6,7 @@
 // This is the esbuild pattern, and it is the primary delivery path rather than
 // a download because it is the only one that works everywhere: npm, pnpm and
 // yarn each install exactly the package whose os/cpu fields match the host, and
-// they do it without running an install script — which pnpm v10 blocks by
+// they do it without running an install script, which pnpm v10 blocks by
 // default.
 //
 //     node scripts/stamp-version.js 1.4.0     # first: the version must match
@@ -28,7 +28,7 @@ const DIST = join(ROOT, "dist");
 // this script runs against what is actually on disk.
 //
 // A prefix rather than the directory, because GoReleaser appends a
-// microarchitecture level — amd64 as _v1, arm64 as _v8.0 — and it has changed
+// microarchitecture level (amd64 as _v1, arm64 as _v8.0) and it has changed
 // which architectures get one. Hard-coding the directory name is what broke
 // here: arm64 acquired a suffix these entries did not have.
 //
@@ -134,8 +134,8 @@ function main() {
 // The wrapper's optionalDependencies are written here, not committed, and this
 // is the only place that knows every package was actually built.
 //
-// A committed pin can only name a version that does not exist yet — these are
-// published by the same release that publishes the wrapper — so npm records the
+// A committed pin can only name a version that does not exist yet, these are
+// published by the same release that publishes the wrapper, so npm records the
 // placeholder `{"optional": true}` in the lockfile. That placeholder is accepted
 // right up until the version it stands for is published, at which point
 // `npm ci` refuses the lockfile as out of sync. Committing the pins therefore

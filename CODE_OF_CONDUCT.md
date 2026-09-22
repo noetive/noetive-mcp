@@ -2,7 +2,7 @@
 
 ## Our standard
 
-Everyone participating in this project — issues, pull requests, discussions — is expected to be respectful and constructive. Assume good faith, critique the work rather than the person, and accept that people have different levels of context.
+Everyone participating in this project (issues, pull requests, discussions) is expected to be respectful and constructive. Assume good faith, critique the work rather than the person, and accept that people have different levels of context.
 
 Unacceptable: harassment, personal attacks, discriminatory language, publishing others' private information, and sustained disruption.
 
