@@ -187,12 +187,17 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 		// documents as sampled once and then ignored, because bufio.Scanner.Scan
 		// blocks underneath it. So the window has to be closed from out here.
 		//
-		// Cancel rather than a timeout, armed after Subscribe returns: setup is
-		// then measured rather than added. The previous deadline of
-		// setupBudget+wait meant a 15s watch always held the agent's turn for 35s,
-		// whether setup took twenty seconds or none.
-		ctx, cancel := context.WithTimeout(ctx, setupBudget+wait)
+		// Two timers on one cancellable context, because setup and the window
+		// are bounded separately. Setup gets setupBudget however long the
+		// window is; the SDK retries inside Subscribe on the context it is
+		// given, so only cancelling that context stops setup and its retries.
+		// The window timer is armed once Subscribe returns, so setup is
+		// measured rather than added to the watch. The whole call is still
+		// at most setupBudget+wait, which is what SubscribeToolWithin sizes.
+		parent := ctx
+		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
+		setupOver := time.AfterFunc(setupBudget, cancel)
 
 		sub, err := s.Subscribe(ctx, semantik.SubscribeRequest{
 			Query:      query,
@@ -200,6 +205,16 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 			Model:      target.Model,
 			Dimensions: target.Dimensions,
 		})
+		// Stop reports false when the timer already fired: setup outlived its
+		// budget, and whatever Subscribe returned was cut short by us, not by
+		// the service or the caller. Said so, rather than letting the
+		// cancellation read as the caller leaving or the stream breaking.
+		if !setupOver.Stop() && parent.Err() == nil {
+			if err == nil {
+				_ = sub.Close()
+			}
+			return failure("noetive_subscribe (setup)", setupBudget, fmt.Errorf("the subscription was not ready within %s: %w", setupBudget, context.DeadlineExceeded)), nil
+		}
 		if err != nil {
 			var setup *semantik.SubscribeSetupError
 			if errors.As(err, &setup) {

@@ -60,11 +60,11 @@ func TestTheBackendIsCalledWithTheToolCallsOwnContext(t *testing.T) {
 	}
 }
 
-// MaxCall exists to keep a subscribe under a proxy's idle timeout. The window
+// SubscribeBudget exists to keep a subscribe under a proxy's idle timeout. The window
 // an agent is offered has to shrink with it, or the schema invites a request
 // the proxy will cut off.
-func TestMaxCallShrinksTheSubscribeWindowOffered(t *testing.T) {
-	srv := server(t, tools.SemantikOptions{MaxCall: 45 * time.Second})
+func TestSubscribeBudgetShrinksTheSubscribeWindowOffered(t *testing.T) {
+	srv := server(t, tools.SemantikOptions{SubscribeBudget: 45 * time.Second})
 
 	subscribe := listed(t, srv)["noetive_subscribe"]
 	wait, ok := subscribe.InputSchema.Properties["wait_seconds"].(map[string]any)
@@ -82,10 +82,10 @@ func TestMaxCallShrinksTheSubscribeWindowOffered(t *testing.T) {
 // A budget that cannot fit a subscribe is refused before anything is
 // registered, so a wiring mistake stops the server rather than shipping a tool
 // that can only fail.
-func TestAMaxCallTooShortForAnyWindowIsRefused(t *testing.T) {
+func TestASubscribeBudgetTooShortForAnyWindowIsRefused(t *testing.T) {
 	srv := mcpgo.NewMCPServer("test", "1")
-	if err := tools.RegisterSemantik(srv, &recordingBackend{}, tools.SemantikOptions{MaxCall: 5 * time.Second}); err == nil {
-		t.Fatal("expected a MaxCall shorter than the setup budget to be refused")
+	if err := tools.RegisterSemantik(srv, &recordingBackend{}, tools.SemantikOptions{SubscribeBudget: 5 * time.Second}); err == nil {
+		t.Fatal("expected a SubscribeBudget shorter than the setup budget to be refused")
 	}
 	if got := listedNames(t, srv); len(got) != 0 {
 		t.Errorf("a refused registration still added %v", got)

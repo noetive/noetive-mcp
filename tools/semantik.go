@@ -45,29 +45,33 @@ type SemantikBackend interface {
 
 // SemantikOptions tunes the Semantik tools to where they are served.
 type SemantikOptions struct {
-	// MaxCall bounds how long one subscribe call may take, setup included.
-	// Set it below the idle timeout of anything between the agent and the
-	// server: a subscribe sends nothing until it reports, so a proxy that cuts
-	// idle connections turns a long watch into a gateway error. Zero means no
-	// such limit, which is setup plus a minute's window.
-	MaxCall time.Duration
+	// SubscribeBudget bounds how long one subscribe call may take, setup
+	// included. Set it below the idle timeout of anything between the agent
+	// and the server: a subscribe sends nothing until it reports, so a proxy
+	// that cuts idle connections turns a long watch into a gateway error.
+	// Zero means no such limit, which is setup plus a minute's window.
+	//
+	// It bounds subscribe only. The other tools keep their own fixed 30 second
+	// per-call timeout, so a proxy that cuts idle connections sooner than that
+	// is not made safe by this option alone.
+	SubscribeBudget time.Duration
 }
 
 // RegisterSemantik adds the tools [SemantikToolNames] lists to srv.
 //
-// It refuses a MaxCall too short to leave a subscribe any window at all, since
-// that is a wiring mistake and would otherwise surface as a tool that can only
-// fail.
+// It refuses a SubscribeBudget too short to leave a subscribe any window at
+// all: that is a wiring mistake, and would otherwise surface as a tool that
+// can only fail.
 func RegisterSemantik(srv *mcpserver.MCPServer, b SemantikBackend, opts SemantikOptions) error {
 	if srv == nil || b == nil {
 		return fmt.Errorf("tools: RegisterSemantik needs a server and a backend")
 	}
-	budget := opts.MaxCall
+	budget := opts.SubscribeBudget
 	if budget == 0 {
 		budget = broker.DefaultCallBudget
 	}
 	if budget < broker.MinCallBudget {
-		return fmt.Errorf("tools: a MaxCall of %s leaves a subscribe no window; the least that does is %s", budget, broker.MinCallBudget)
+		return fmt.Errorf("tools: a SubscribeBudget of %s leaves a subscribe no window; the least that does is %s", budget, broker.MinCallBudget)
 	}
 	broker.Register(srv, b, targeting.Policy{}, budget)
 	return nil

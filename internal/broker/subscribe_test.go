@@ -241,3 +241,38 @@ func TestACappedBudgetClampsTheWindowAClientAsksFor(t *testing.T) {
 		t.Errorf("expected the window to be clamped to 25s, got: %s", got)
 	}
 }
+
+// stallingOpener never finishes setting up: it holds Subscribe until its
+// context is cancelled, the way a service that accepts the connection and
+// never answers does.
+type stallingOpener struct{}
+
+func (stallingOpener) Subscribe(ctx context.Context, _ semantik.SubscribeRequest) (broker.Stream, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// Setup has its own budget, and running out of it is reported as that: not as
+// the caller cancelling, and not as a broken stream that lost matches. An agent
+// reads the difference to decide whether to retry.
+func TestASetupThatNeverFinishesIsReportedAsSetupRunningOut(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits out the 20 second setup budget")
+	}
+	_, handler := broker.SubscribeToolWithin(stallingOpener{}, configured, 45*time.Second)
+
+	started := time.Now()
+	result := call(t, handler, map[string]any{"query": "MATCH", "wait_seconds": float64(25)})
+	took := time.Since(started)
+
+	msg := requireError(t, result)
+	if !strings.Contains(msg, "setup") || !strings.Contains(msg, "20s") {
+		t.Errorf("expected a setup budget refusal naming 20s, got: %s", msg)
+	}
+	if strings.Contains(msg, "cancelled") {
+		t.Errorf("our own budget was reported as the caller leaving: %s", msg)
+	}
+	if took > 25*time.Second {
+		t.Errorf("setup was allowed %s, beyond its 20s budget", took)
+	}
+}
