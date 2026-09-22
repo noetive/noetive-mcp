@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
@@ -220,4 +221,23 @@ func (f *fakeStream) Close() error {
 	defer f.mu.Unlock()
 	f.closed = true
 	return nil
+}
+
+// A capped call budget has to bind the handler, not only the schema: a client
+// that ignores the advertised maximum must still be clamped to the window that
+// fits, or the proxy the cap exists for cuts the call off.
+func TestACappedBudgetClampsTheWindowAClientAsksFor(t *testing.T) {
+	stream := &fakeStream{id: "sub_01hz", events: []semantik.MatchEvent{{MessageID: "msg_1"}}}
+	_, handler := broker.SubscribeToolWithin(&stubBroker{stream: stream}, configured, 45*time.Second)
+
+	result := call(t, handler, map[string]any{
+		"query":        "MATCH",
+		"max_matches":  float64(1),
+		"wait_seconds": float64(60),
+	})
+	requireSuccess(t, result)
+
+	if got := text(t, result); !strings.Contains(got, "25s") {
+		t.Errorf("expected the window to be clamped to 25s, got: %s", got)
+	}
 }

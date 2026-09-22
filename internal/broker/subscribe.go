@@ -115,9 +115,32 @@ type streamMatch struct {
 //	tool, handler := broker.SubscribeTool(client, configured)
 //	srv.AddTool(tool, handler)
 func SubscribeTool(s Subscriber, policy targeting.Policy) (mcp.Tool, mcpserver.ToolHandlerFunc) {
+	return SubscribeToolWithin(s, policy, setupBudget+maxWait)
+}
+
+// SubscribeToolWithin is [SubscribeTool] with the whole call held under
+// callBudget: setup plus the longest window a caller may ask for.
+//
+// It exists for a deployment behind a proxy that severs a connection idle for
+// longer than some fixed time. A subscribe sends nothing until it reports, so
+// the call's whole length is idle time to that proxy, and a window the proxy
+// cuts short arrives as a gateway error rather than as the matches that did
+// arrive. The window cap is callBudget less the setup budget, and the tool's
+// schema advertises that cap, so an agent is never offered a window it cannot
+// have.
+//
+// A budget that leaves no window at all is a wiring mistake, not a request, and
+// panics.
+func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.Duration) (mcp.Tool, mcpserver.ToolHandlerFunc) {
+	maxWait := min(callBudget-setupBudget, maxWait).Truncate(time.Second)
+	if maxWait < time.Second {
+		panic(fmt.Sprintf("broker: a %s call budget leaves no subscribe window after the %s setup budget", callBudget, setupBudget))
+	}
+	defaultWait := min(defaultWait, maxWait)
+
 	options := []mcp.ToolOption{
 		mcp.WithDescription(
-			"Watch a Noetive Semantik namespace for live messages matching a SemQL query, for up to a minute, then report what arrived. " +
+			"Watch a Noetive Semantik namespace for live messages matching a SemQL query, for up to " + spokenWindow(maxWait) + ", then report what arrived. " +
 				"Matches come back as message ids and scores only: the server does not send message content on a live match, so use noetive_search to read what a message says. " +
 				"The subscription is closed when the call returns; it does not keep running.",
 		),
@@ -376,6 +399,16 @@ func describe(namespace string, result collected) string {
 // readableSeconds renders a duration held as seconds the way Go writes
 // durations, so "1m0s" and "250ms" read as one scale rather than as 60 and
 // 0.25 of an unstated unit.
+// spokenWindow names the window cap the way the description has always said
+// it, so the stdio surface reads exactly as it did before the cap became a
+// parameter.
+func spokenWindow(d time.Duration) string {
+	if d == time.Minute {
+		return "a minute"
+	}
+	return strconv.Itoa(int(d.Seconds())) + " seconds"
+}
+
 func readableSeconds(seconds float64) string {
 	return time.Duration(seconds * float64(time.Second)).Round(time.Millisecond).String()
 }
