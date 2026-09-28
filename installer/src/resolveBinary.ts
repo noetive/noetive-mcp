@@ -38,7 +38,7 @@ export function platformPackage(key: string = hostKey()): string {
   if (!name) {
     throw new Error(
       `${key} is not a supported platform. Supported: ${Object.keys(PLATFORM_PACKAGES).join(", ")}. ` +
-        `You can still build from source: go install github.com/noetive/noetive-mcp/cmd/noetive-mcp@latest`,
+        `You can still build from source: go install go.noetive.io/noetive-mcp/cmd/noetive-mcp@latest`,
     );
   }
   return name;

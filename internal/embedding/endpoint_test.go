@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/noetive/noetive-mcp/internal/embedding"
+	"go.noetive.io/noetive-mcp/internal/embedding"
 )
 
 // captured is what the endpoint actually received, so the assertions are about

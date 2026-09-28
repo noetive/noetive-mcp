@@ -9,7 +9,7 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/broker"
 )
 
 // Step-0 reproduction for D3: a quiet window is reported as a broken stream.

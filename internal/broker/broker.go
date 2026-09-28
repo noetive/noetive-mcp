@@ -25,7 +25,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // Per-call deadlines. An MCP tool call blocks the agent's turn, so an

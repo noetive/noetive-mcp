@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/noetive/noetive-mcp/internal/mcpserver"
+	"go.noetive.io/noetive-mcp/internal/mcpserver"
 )
 
 // FuzzPlaceholderKeyNeverRefusesARealKey is the asymmetry this check has to keep.

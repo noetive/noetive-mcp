@@ -13,7 +13,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // Bounds on the collect window. An MCP tool call blocks the agent's turn, so

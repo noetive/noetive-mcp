@@ -1,4 +1,4 @@
-module github.com/noetive/noetive-mcp
+module go.noetive.io/noetive-mcp
 
 go 1.25.13
 

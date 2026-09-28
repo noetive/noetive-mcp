@@ -6,7 +6,7 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/broker"
 )
 
 // The text fallback is the whole result for a client that cannot read

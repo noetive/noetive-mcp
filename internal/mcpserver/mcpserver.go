@@ -8,8 +8,8 @@ package mcpserver
 import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // Broker is the set of Semantik operations the server exposes as tools.

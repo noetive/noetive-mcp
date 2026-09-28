@@ -3,7 +3,7 @@ package mcpserver_test
 import (
 	"testing"
 
-	"github.com/noetive/noetive-mcp/internal/mcpserver"
+	"go.noetive.io/noetive-mcp/internal/mcpserver"
 )
 
 // An editor that does not substitute its config placeholder hands the server

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // The routing triple is chosen by a model, and it is the only thing standing

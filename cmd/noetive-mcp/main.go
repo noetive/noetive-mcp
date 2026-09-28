@@ -17,9 +17,9 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/embedding"
-	"github.com/noetive/noetive-mcp/internal/mcpserver"
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/embedding"
+	"go.noetive.io/noetive-mcp/internal/mcpserver"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 var version = "dev"

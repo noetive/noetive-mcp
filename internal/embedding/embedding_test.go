@@ -8,7 +8,7 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/embedding"
+	"go.noetive.io/noetive-mcp/internal/embedding"
 )
 
 // stubEmbedder stands in for a service on this machine.

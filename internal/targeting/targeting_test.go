@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // A call that names every field must be routed exactly as asked, with no

@@ -7,7 +7,7 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/embedding"
+	"go.noetive.io/noetive-mcp/internal/embedding"
 )
 
 // A SemQL query is untrusted input in the sense that matters here: it is

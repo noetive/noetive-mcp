@@ -10,8 +10,8 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // The window has to close on the requested count, otherwise the tool holds the

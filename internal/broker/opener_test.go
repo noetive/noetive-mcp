@@ -7,7 +7,7 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/broker"
 )
 
 // SubscriberFrom exists because Go has no covariant return types: a method

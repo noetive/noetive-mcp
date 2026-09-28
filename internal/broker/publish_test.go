@@ -6,8 +6,8 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // The routing triple an agent passes must reach the wire unchanged. If the

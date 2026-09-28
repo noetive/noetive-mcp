@@ -17,7 +17,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/mcpserver"
+	"go.noetive.io/noetive-mcp/internal/mcpserver"
 )
 
 // Environment variables read by the command when it builds an Endpoint.

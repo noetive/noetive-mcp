@@ -7,8 +7,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // Tool arguments are the untrusted input of an MCP server: they are chosen by a

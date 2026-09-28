@@ -6,7 +6,7 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/broker"
 )
 
 // Lint is the one tool an agent can call before it knows where it is writing,

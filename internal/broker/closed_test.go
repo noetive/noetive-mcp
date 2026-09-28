@@ -7,8 +7,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // Every tool that routes has to honour a closed namespace. The check lives in

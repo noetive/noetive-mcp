@@ -15,9 +15,9 @@ import (
 	json "github.com/goccy/go-json"
 	"gopkg.in/yaml.v3"
 
-	"github.com/noetive/noetive-mcp/internal/embedding"
-	"github.com/noetive/noetive-mcp/internal/mcpserver"
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/embedding"
+	"go.noetive.io/noetive-mcp/internal/mcpserver"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // authoringSource writes a minimal but complete authoring tree and returns its

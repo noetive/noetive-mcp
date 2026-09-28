@@ -7,7 +7,7 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/broker"
 )
 
 // Health exists so a user can tell "cannot reach Noetive" apart from "the query

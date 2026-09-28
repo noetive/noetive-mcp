@@ -8,7 +8,7 @@ import (
 
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/embedding"
+	"go.noetive.io/noetive-mcp/internal/embedding"
 )
 
 // Every anchor position the grammar admits must be rewritten. One missed

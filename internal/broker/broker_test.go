@@ -17,9 +17,9 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/noetive/noetive-sdk-go/semantik"
 
-	"github.com/noetive/noetive-mcp/internal/broker"
-	"github.com/noetive/noetive-mcp/internal/embedding"
-	"github.com/noetive/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/embedding"
+	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
 // complete is a fully-specified fallback, standing in for an operator who
