@@ -166,12 +166,47 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # --snapshot skips publishing but not the sign pipe, which needs the
-      # release job's OIDC token; everything before it is what breaks silently.
+      # Same pin as the release job: the cosign it installs is the one whose
+      # flags .goreleaser.yaml has to match.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # The release job signs keyless with its OIDC identity, which this job does
+      # not have. A cosign earlier on PATH passes goreleaser's own sign-blob
+      # arguments through to the real one, adding a throwaway key and a signing
+      # config with no transparency log, so the configured invocation runs as a
+      # release runs it and nothing is published. Skipping signing here instead
+      # let a cosign upgrade through that failed v0.2.0 at release time.
+      - name: Sign with a throwaway key
+        run: |
+          dir="$RUNNER_TEMP/cosign"
+          mkdir -p "$dir"
+          real=$(command -v cosign)
+          COSIGN_PASSWORD= cosign generate-key-pair --output-key-prefix "$dir/cosign"
+          cosign signing-config create --out "$dir/signing-config.json"
+          cat > "$dir/bin-cosign" <<EOF
+          #!/bin/sh
+          if [ "\$1" = sign-blob ]; then
+            export COSIGN_PASSWORD=
+            exec "$real" "\$@" --key "$dir/cosign.key" --signing-config "$dir/signing-config.json"
+          fi
+          exec "$real" "\$@"
+          EOF
+          mkdir -p "$dir/bin"
+          mv "$dir/bin-cosign" "$dir/bin/cosign"
+          chmod +x "$dir/bin/cosign"
+          echo "$dir/bin" >> "$GITHUB_PATH"
+          echo "COSIGN_DIR=$dir" >> "$GITHUB_ENV"
+
+      # --snapshot skips publishing; everything before it is what breaks silently.
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.17.1
-          args: release --snapshot --clean --skip=sign
+          args: release --snapshot --clean
+
+      - name: Signature verifies
+        run: >-
+          cosign verify-blob --key "$COSIGN_DIR/cosign.pub" --insecure-ignore-tlog=true
+          --bundle dist/checksums.txt.sigstore.json dist/checksums.txt
 
       # Exits non-zero on the first binary it cannot find, so running it is the
       # assertion.
