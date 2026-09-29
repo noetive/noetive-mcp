@@ -9,9 +9,9 @@ import (
 	json "github.com/goccy/go-json"
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/noetive/noetive-sdk-go/semantik"
 	"go.noetive.io/noetive-mcp/internal/broker"
 	"go.noetive.io/noetive-mcp/internal/targeting"
+	"go.noetive.io/noetive-sdk-go/semantik"
 )
 
 // What comes back is untrusted too, and it is the half that is easy to forget.

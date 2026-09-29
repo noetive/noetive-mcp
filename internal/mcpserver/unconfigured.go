@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/noetive/noetive-sdk-go/semantik"
+	"go.noetive.io/noetive-sdk-go/semantik"
 )
 
 // APIKeyEnv is the one credential the server reads.

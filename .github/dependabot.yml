@@ -31,7 +31,7 @@ updates:
     ignore:
       # Moving this changes the wire contract the client is written against, so
       # it belongs to a deliberate read of an SDK release note, not to a bot.
-      - dependency-name: github.com/noetive/noetive-sdk-go
+      - dependency-name: go.noetive.io/noetive-sdk-go
 
   - package-ecosystem: npm
     directory: /installer

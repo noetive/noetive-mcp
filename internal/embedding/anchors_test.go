@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/noetive/noetive-sdk-go/semantik"
+	"go.noetive.io/noetive-sdk-go/semantik"
 
 	"go.noetive.io/noetive-mcp/internal/embedding"
 )

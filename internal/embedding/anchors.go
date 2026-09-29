@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/goccy/go-json"
-	"github.com/noetive/noetive-sdk-go/semantik"
+	"go.noetive.io/noetive-sdk-go/semantik"
 )
 
 // maxQueryVectors bounds the total float32 values this server will put into one

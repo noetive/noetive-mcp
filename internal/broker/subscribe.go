@@ -11,7 +11,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/noetive/noetive-sdk-go/semantik"
+	"go.noetive.io/noetive-sdk-go/semantik"
 
 	"go.noetive.io/noetive-mcp/internal/targeting"
 )

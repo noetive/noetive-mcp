@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/noetive/noetive-sdk-go/semantik"
+	"go.noetive.io/noetive-sdk-go/semantik"
 
 	"go.noetive.io/noetive-mcp/internal/targeting"
 )

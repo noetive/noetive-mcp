@@ -5,7 +5,7 @@ go 1.25.13
 require (
 	github.com/goccy/go-json v0.10.6
 	github.com/mark3labs/mcp-go v1.1.1
-	github.com/noetive/noetive-sdk-go v0.0.0-20260602220349-b7ebe198fa50
+	go.noetive.io/noetive-sdk-go v0.0.0-20260929121359-cc8afa10563f
 	gopkg.in/yaml.v3 v3.0.1
 )
 
