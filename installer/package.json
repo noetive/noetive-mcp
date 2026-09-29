@@ -1,6 +1,6 @@
 {
   "name": "@noetive/mcp-server",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Connect your AI editor to the Noetive Semantik semantic broker over MCP",
   "keywords": [
     "mcp",
