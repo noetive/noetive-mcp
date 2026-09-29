@@ -182,7 +182,7 @@ make hooks      # wire .githooks into this clone; make build and make test do it
 make build      # binary into installer/bin, where the npm wrapper looks for it
 make test       # go test -race
 make fuzz       # replay the fuzz seeds and corpus; deterministic
-make fuzz-live  # search for new inputs, FUZZTIME=30s by default
+make fuzz-live  # search for new inputs, FUZZTIME=200000x executions per target by default
 make mutate     # break the implementation on purpose and check a test notices
 make lint
 make emit       # regenerate every generated manifest from tools/manifest.yaml
@@ -200,20 +200,22 @@ The tag is the only version input. Everything a release publishes is stamped fro
 ```sh
 node scripts/stamp-version.js 0.1.3   # every file that carries a version
 make emit                             # regenerate what the manifests feed
-git commit -am "chore: release 0.1.3"
+git add -A && git commit -m "chore: release 0.1.3"
 git push origin main                  # then wait for CI
 git tag v0.1.3 && git push origin v0.1.3
 ```
 
-Four things about that order are load-bearing.
+Five things about releasing are load-bearing.
 
-**Stamp, then emit.** `scripts/stamp-version.js` writes `tools/manifest.yaml`, both npm manifests and `server.json`, including the OCI tag inside `server.json`'s `identifier`, which carries the version a second time. It deliberately leaves the generated plugin manifests alone, because `make emit` is what writes those and would undo a direct edit. Both are idempotent, so re-running them on a release that is already correct is a verified no-op rather than a step you have to trust.
+**Stamp, then emit.** `scripts/stamp-version.js` writes `tools/manifest.yaml`, both npm manifests and `server.json`. The OCI entry in `server.json` carries its version only as the image tag inside `identifier`, so that is what gets stamped there, and it never has a `version` field. It deliberately leaves the generated plugin manifests alone, because `make emit` is what writes those and would undo a direct edit. Both are idempotent, so re-running them on a release that is already correct is a verified no-op rather than a step you have to trust.
 
-**Wait for CI before tagging.** The `installer` job runs on Linux, macOS and Windows because the paths it writes differ on each. A green Linux job is not evidence about the other two.
+**Wait for CI before tagging.** Tag only a commit on which every job is green. The `installer` job runs on Linux, macOS and Windows because the paths it writes differ on each; a green Linux job is not evidence about the other two. `release-dry-run` builds every archive and signs `checksums.txt` exactly as a release does, with a throwaway key in place of the workflow's identity.
 
 **Tag the commit that says it is the release.** The workflow refuses a tag that disagrees with `tools/manifest.yaml`, so a forgotten bump stops at the first step instead of half-way through publishing.
 
 **Nothing after the tag can be taken back.** An npm version is immutable, a signed image is public, and a registry entry cannot be unpublished. The jobs are ordered so the irreversible steps come last and each one gates the next: `release` builds and signs, `npm` publishes the five platform packages and only then the wrapper, `oci` pushes the image, `smoke` installs the published wrapper on all three platforms, and `registry` runs last because it validates everything the others published.
+
+**A failed release is fixed forward.** The Go module proxy and checksum database record a tag the moment anyone fetches it, even when the release workflow publishes nothing. Moving that tag would make one version name two builds, which Go refuses as a checksum mismatch. Leave it where it is, fix the problem, and release the next patch version.
 
 ### What a release has already got wrong
 
@@ -226,6 +228,12 @@ Each of these shipped once. What follows each is the thing that now catches it.
 **One name in nine places drifts.** `io.noetive/mcp-server` appears in `server.json`, the wrapper's `mcpName`, the `mcp-name` marker in both READMEs, the Dockerfile label and both workflows' image annotations. The MCP registry validates all of them and refuses the publish on any disagreement, at the last step, after everything else is already public. `tools/manifest.yaml` now declares it once and `make emit` checks the rest, comparing every occurrence rather than searching for one, because a rename that leaves a copy behind still contains the right name somewhere.
 
 **A gate that searches is not a gate.** `make fuzz` ran a 30-second random search per target, so the same commit could pass and then fail without anything changing. It now replays the seeds and each package's `testdata/fuzz` deterministically, in about a second. `make fuzz-live` is the search, and when it finds something, Go writes the input to that directory. Commit it and the replay covers it forever.
+
+**A timed fuzz search fails runs that found nothing.** Given `-fuzztime 30s`, Go's fuzzer can report its own deadline as `context deadline exceeded`, and it did so repeatedly in CI while no input failed. Budgets are now execution counts, which stop without a deadline, and shrinking each new input is capped, since a target seeded with 64 KiB of input spent over two minutes there.
+
+**Signing broke on a tool upgrade that CI never ran.** cosign v3 stopped writing separate signature and certificate files, and `v0.2.0` failed at signing after its tag was public. The dry run had skipped signing, so it could not notice. It now signs through the release's own configuration, and `checksums.txt` ships with one Sigstore bundle, `checksums.txt.sigstore.json`.
+
+**The registry refused every publish, and nothing checked why.** An OCI entry in `server.json` must not have a `version` field, and `0.1.0`, `0.1.2` and `0.2.1` all failed the registry step on it while every other channel shipped. The stamp script now leaves that field out, and `make emit`'s tests refuse a tree that has it.
 
 **A list of packages goes stale the same way a list of targets does.** Both fuzz commands named `./internal/broker`, so the query parser behind the local-embedding promise, the one component that hand-rolls a scanner over model-written text in two syntaxes, had no target at all. Both now enumerate packages as well as targets, and the first thing that found was a phrase being forwarded to the broker instead of replaced by a vector.
 

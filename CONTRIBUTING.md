@@ -72,9 +72,15 @@ That refusal is the first step of the run, before a GitHub Release exists,
 because a release cannot be unpublished cleanly and an npm version cannot be
 reused at all.
 
-The pipeline is tag → GitHub Release → npm → a smoke install on three operating
-systems → the MCP registry. Each stage gates the next, so a broken npm publish
-never reaches the registry entry that advertises it.
+The pipeline is tag → signed GitHub Release → npm and the container image → a
+smoke install on three operating systems → the MCP registry. Each stage gates
+the next, so a broken npm publish never reaches the registry entry that
+advertises it.
+
+"Once CI is green" means every job, including `release-dry-run`, which signs
+exactly as a release does. If a release still fails after the tag, do not move
+or reuse the tag: the Go module proxy has already recorded it. Fix the cause and
+release the next patch version.
 
 A prerelease tag (`v1.4.0-rc.1`) runs every stage except the last, and publishes
 where nothing picks it up by default: npm gets the `next` dist-tag rather than

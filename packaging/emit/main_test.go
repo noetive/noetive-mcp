@@ -909,8 +909,9 @@ func TestEveryPublishedManifestDeclaresTheSameVersion(t *testing.T) {
 	var server struct {
 		Version  string `json:"version"`
 		Packages []struct {
-			Identifier string `json:"identifier"`
-			Version    string `json:"version"`
+			RegistryType string  `json:"registryType"`
+			Identifier   string  `json:"identifier"`
+			Version      *string `json:"version"`
 		} `json:"packages"`
 	}
 	readInto(t, filepath.Join(root, "server.json"), json.Unmarshal, &server)
@@ -926,8 +927,20 @@ func TestEveryPublishedManifestDeclaresTheSameVersion(t *testing.T) {
 		"server.json":                 server.Version,
 	}
 	declared["installer/package-lock.json root package"] = lock.Packages[""].Version
+	// An OCI package declares its version as the image tag and nowhere else;
+	// TestTheOCIPackageIsShapedTheWayTheRegistryAccepts says why.
 	for _, p := range server.Packages {
-		declared["server.json packages "+p.Identifier] = p.Version
+		where := "server.json packages " + p.Identifier
+		if p.RegistryType == "oci" {
+			_, tag, _ := strings.Cut(p.Identifier, ":")
+			declared[where+" image tag"] = tag
+			continue
+		}
+		if p.Version == nil {
+			t.Errorf("%s declares no version", where)
+			continue
+		}
+		declared[where] = *p.Version
 	}
 
 	for where, got := range declared {
@@ -964,10 +977,10 @@ func readInto(t *testing.T, path string, decode func([]byte, any) error, target 
 	}
 }
 
-// The MCP registry rejects an OCI package that carries a registryBaseUrl and
-// wants the image tag inside the identifier instead. That puts the version in
-// two places in one entry, so a release can advertise itself while pointing at
-// the previous release's image, and a registry entry cannot be unpublished.
+// The MCP registry rejects an OCI package that carries a registryBaseUrl or a
+// version, and wants the image tag inside the identifier instead. The tag is
+// then the entry's only version, and the whole publish fails on either field:
+// 0.1.0, 0.1.2 and 0.2.1 never reached the registry because of `version`.
 func TestTheOCIPackageIsShapedTheWayTheRegistryAccepts(t *testing.T) {
 	root, err := repoRoot()
 	if err != nil {
@@ -976,10 +989,10 @@ func TestTheOCIPackageIsShapedTheWayTheRegistryAccepts(t *testing.T) {
 
 	var server struct {
 		Packages []struct {
-			RegistryType    string `json:"registryType"`
-			RegistryBaseURL string `json:"registryBaseUrl"`
-			Identifier      string `json:"identifier"`
-			Version         string `json:"version"`
+			RegistryType    string  `json:"registryType"`
+			RegistryBaseURL string  `json:"registryBaseUrl"`
+			Identifier      string  `json:"identifier"`
+			Version         *string `json:"version"`
 		} `json:"packages"`
 	}
 	readInto(t, filepath.Join(root, "server.json"), json.Unmarshal, &server)
@@ -995,12 +1008,12 @@ func TestTheOCIPackageIsShapedTheWayTheRegistryAccepts(t *testing.T) {
 			t.Errorf("the oci package declares registryBaseUrl %q; the registry refuses to publish an entry that carries one", p.RegistryBaseURL)
 		}
 
-		tag := p.Identifier[strings.LastIndex(p.Identifier, ":")+1:]
+		if p.Version != nil {
+			t.Errorf("the oci package declares version %q; the registry refuses to publish an entry that carries one", *p.Version)
+		}
+
 		if !strings.Contains(p.Identifier, ":") {
 			t.Fatalf("the oci identifier %q carries no tag; the registry wants a canonical reference", p.Identifier)
-		}
-		if tag != p.Version {
-			t.Errorf("the oci identifier points at %s but the entry declares version %s", tag, p.Version)
 		}
 	}
 
