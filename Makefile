@@ -73,7 +73,19 @@ fuzz:
 #
 # grep's no-match exit is absorbed deliberately: most packages have no targets,
 # and treating "none here" as a failure stopped the sweep at the first one.
-FUZZTIME ?= 30s
+#
+# Budgets are execution counts, not durations. A duration puts the coordinator
+# on a deadline, and Go's fuzzer can report that deadline as a failure when it
+# fires: it checks the parent context before the child it compares against has
+# been cancelled, so a clean run ends in `context deadline exceeded`. A count
+# stops the coordinator without a deadline, so that failure cannot happen.
+#
+# Minimization is capped for the same reason and for speed: every new
+# interesting input is shrunk before it is kept, for up to a minute by default,
+# and execs are not counted meanwhile. A target seeded with a 64 KiB input spent
+# over two minutes shrinking a 200000-exec budget.
+FUZZTIME ?= 200000x
+FUZZMINIMIZETIME ?= 1000x
 
 fuzz-live:
 	@ran=0; \
@@ -83,7 +95,7 @@ fuzz-live:
 	   for target in $$targets; do \
 	     ran=1; \
 	     echo "fuzz: $$pkg $$target ($(FUZZTIME))"; \
-	     go test -run "^$$" -fuzz "^$$target$$" -fuzztime $(FUZZTIME) $$pkg || exit 1; \
+	     go test -run "^$$" -fuzz "^$$target$$" -fuzztime $(FUZZTIME) -fuzzminimizetime $(FUZZMINIMIZETIME) $$pkg || exit 1; \
 	   done; \
 	 done; \
 	 test $$ran -eq 1 || { echo "no fuzz targets found" >&2; exit 1; }

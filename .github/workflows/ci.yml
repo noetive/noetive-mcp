@@ -60,8 +60,8 @@ jobs:
           version: v2.5.0
           args: --config ./.golangci.yml ./...
 
-  # Split out because 30s per target is a third of the critical path and couples
-  # to nothing else in the go job.
+  # Split out because the search couples to nothing else in the go job. Seeds and
+  # promoted inputs already replay there, under `go test ./...`.
   fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -73,25 +73,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # Packages and targets are both enumerated, not listed: a hand-written list
-      # silently stops covering what somebody added last week, and it did: the
-      # query parser behind the confidentiality promise sat outside a list that
-      # named ./internal/broker. `make fuzz-live` enumerates the same way.
-      #
-      # Short by design: the point here is that the corpus still replays and no
-      # seed panics. Campaigns run on a schedule.
-      - name: Fuzz seeds
-        run: |
-          ran=0
-          for pkg in $(go list ./...); do
-            listing=$(go test -list '^Fuzz' "$pkg") || exit 1
-            targets=$(printf '%s\n' "$listing" | grep '^Fuzz' || true)
-            for target in $targets; do
-              ran=1
-              go test -run "^$" -fuzz "^${target}$" -fuzztime 30s "$pkg"
-            done
-          done
-          test "$ran" -eq 1
+      # A short search, bounded by execution count rather than time: see the
+      # Makefile for why a timed budget fails runs that found nothing. The target
+      # enumerates packages and targets, so a new target is covered without an
+      # edit here. Campaigns run on a schedule.
+      - name: Fuzz search
+        run: make fuzz-live
 
   installer:
     runs-on: ${{ matrix.os }}
