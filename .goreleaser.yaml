@@ -96,13 +96,16 @@ checksum:
 # Keyless signing: the identity is the GitHub Actions workflow itself, recorded
 # in the public transparency log, so a consumer can verify who built an artifact
 # without anyone holding a private key that could leak.
+#
+# One Sigstore bundle carries the signature, certificate and log entry. cosign
+# v3 writes nothing else: it ignores --output-signature and --output-certificate
+# and fails without --bundle. Verify with `cosign verify-blob --bundle`.
 signs:
   - cmd: cosign
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - --yes
     artifacts: checksum
