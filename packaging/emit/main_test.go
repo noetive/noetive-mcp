@@ -15,6 +15,7 @@ import (
 	json "github.com/goccy/go-json"
 	"gopkg.in/yaml.v3"
 
+	"go.noetive.io/noetive-mcp/internal/browser"
 	"go.noetive.io/noetive-mcp/internal/embedding"
 	"go.noetive.io/noetive-mcp/internal/mcpserver"
 	"go.noetive.io/noetive-mcp/internal/targeting"
@@ -540,7 +541,7 @@ func TestServerJSONMustDocumentEveryVariableTheServerReads(t *testing.T) {
 		return out
 	}
 
-	every := slices.Concat([]string{mcpserver.APIKeyEnv}, targeting.EnvNames(), embedding.EnvNames())
+	every := slices.Concat([]string{mcpserver.APIKeyEnv}, targeting.EnvNames(), embedding.EnvNames(), browser.EnvNames())
 
 	// The real shape: an npm package that inherits its environment and an
 	// image that has to be told to forward each one.

@@ -34,6 +34,25 @@ func Register(srv *mcpserver.MCPServer, b Broker, policy targeting.Policy, callB
 	srv.AddTool(HealthTool(b))
 }
 
+// RegisterDiagnostics adds only the health tool, for a server that cannot reach
+// Noetive.
+//
+// The tools that spend the user's quota are left out rather than registered to
+// refuse: a tool that can only fail still costs its description in every turn
+// and invites the agent to try it. Health stays because it is the one tool that
+// can say what is wrong.
+func RegisterDiagnostics(srv *mcpserver.MCPServer, h HealthChecker) {
+	srv.AddTool(HealthTool(h))
+}
+
+// UnconfiguredInstructions is what the agent reads when the server has no usable
+// credential: that the Noetive tools are absent, why, and what to do about it.
+// Without it the agent would look for tools that are not there and report the
+// server as broken.
+func UnconfiguredInstructions(reason string) string {
+	return "WARNING: the Noetive Semantik tools (publish, search, subscribe, lint) are not available in this session because no usable API key was found. " + reason + "\n\nOf the Noetive tools only noetive_health is registered. Tell the user, and do not retry; adding the key takes effect after the editor is restarted."
+}
+
 // DefaultCallBudget is the longest a subscribe call may take when nothing
 // between the agent and the server limits it: setup plus a minute's window.
 const DefaultCallBudget = setupBudget + maxWait

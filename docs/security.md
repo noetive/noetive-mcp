@@ -6,6 +6,8 @@ The server reads its API key and its routing configuration from the environment,
 
 It does not read your source, walk your filesystem, or watch your editor. The only content that leaves the machine is text an agent explicitly passes to `noetive_publish`, and queries it passes to `noetive_search`, `noetive_subscribe` and `noetive_lint`, less than that when an embeddings endpoint is configured, as below. Nothing is sent in the background: every outbound request is a tool call the agent made and the transcript shows.
 
+The browser tools, when riffle is installed, fetch pages the agent names from this machine and return their text to the agent. Nothing from that reaches Noetive unless the agent then passes it to a Noetive tool. The server does not open the browser to anything on its own. The browser process is started with this server's environment minus every `NOETIVE_` variable, so it never holds your Noetive key or your embeddings key; any site credentials it needs are the `RIFFLE_SECRET_` variables you set for it, which pass through. It is started only from an absolute path.
+
 ## Embedding on your own machine
 
 `NOETIVE_EMBEDDINGS_URL` points the server at an OpenAI-compatible `/v1/embeddings` endpoint you run. With one configured:

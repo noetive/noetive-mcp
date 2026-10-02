@@ -5,12 +5,14 @@ import (
 	"errors"
 	"io"
 	"math"
+	"os"
 	"strings"
 	"testing"
 
 	mcpgo "github.com/mark3labs/mcp-go/server"
 	"go.noetive.io/noetive-sdk-go/semantik"
 
+	"go.noetive.io/noetive-mcp/internal/browser"
 	"go.noetive.io/noetive-mcp/internal/mcpserver"
 	"go.noetive.io/noetive-mcp/internal/targeting"
 )
@@ -346,5 +348,38 @@ func TestTheLargestUsableDimensionalityIsAccepted(t *testing.T) {
 	}
 	if got.Fallback.Dimensions != math.MaxUint16 {
 		t.Errorf("expected the value to survive, got %d", got.Fallback.Dimensions)
+	}
+}
+
+// Nothing here may start a browser. A developer machine that has riffle on PATH
+// would otherwise launch a real process in every test that calls run, which is
+// slow and makes the result depend on what is installed.
+func TestMain(m *testing.M) {
+	if err := os.Setenv("PATH", ""); err != nil {
+		panic(err)
+	}
+	if err := os.Unsetenv(browser.EnvBin); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
+
+// Not having riffle is the ordinary case. The server must start and simply
+// offer no browser, never refuse to launch.
+func TestAServerWithoutRiffleStartsWithoutABrowser(t *testing.T) {
+	session, err := resolveBrowser(context.Background())
+	if err != nil || session != nil {
+		t.Fatalf("expected no session and no error, got %v, %v", session, err)
+	}
+}
+
+// Naming an executable is a choice. If it cannot be started the process must
+// say so, not quietly serve without the browser the operator asked for.
+func TestANamedBrowserThatCannotStartStopsStartup(t *testing.T) {
+	t.Setenv(browser.EnvBin, "/nonexistent/riffle")
+
+	_, err := resolveBrowser(context.Background())
+	if err == nil || !strings.Contains(err.Error(), browser.EnvBin) {
+		t.Fatalf("expected an error naming %s, got %v", browser.EnvBin, err)
 	}
 }

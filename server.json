@@ -21,7 +21,7 @@
       "environmentVariables": [
         {
           "name": "NOETIVE_KEY_SECRET",
-          "description": "API key from the Noetive dashboard. Every tool reaches Noetive, so every tool needs it. Without it the server still starts and registers its tools, and each one explains what is missing.",
+          "description": "API key from the Noetive dashboard. Every Noetive tool reaches Noetive, so every one needs it. Without it the server still starts, offers only noetive_health (plus any browser tools), and the agent is told what is missing.",
           "isRequired": true,
           "isSecret": true
         },
@@ -55,6 +55,11 @@
           "description": "Bearer token for that endpoint, when it needs one. Endpoints running on your own machine usually do not.",
           "isRequired": false,
           "isSecret": true
+        },
+        {
+          "name": "NOETIVE_RIFFLE_BIN",
+          "description": "Path to the riffle executable, when it is not on PATH. With riffle installed the server also offers its browser tools. Unset and not found means no browser tools; set and unusable stops the server. Not available in the container image, which has no browser.",
+          "isRequired": false
         }
       ]
     },
@@ -81,6 +86,13 @@
           "name": "-e",
           "value": "NOETIVE_KEY_SECRET",
           "description": "Forwards the API key from the launching environment. Without a value, docker passes the variable through rather than writing the key into an argument list where `ps` would show it."
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "NOETIVE_RIFFLE_BIN",
+          "isRepeated": true,
+          "description": "Forwards the riffle path, when one is set. The image has no browser, so this only matters for a derived image that adds one."
         },
         {
           "type": "named",
@@ -128,7 +140,7 @@
       "environmentVariables": [
         {
           "name": "NOETIVE_KEY_SECRET",
-          "description": "API key from the Noetive dashboard. Every tool reaches Noetive, so every tool needs it. Without it the server still starts and registers its tools, and each one explains what is missing.",
+          "description": "API key from the Noetive dashboard. Every Noetive tool reaches Noetive, so every one needs it. Without it the server still starts, offers only noetive_health (plus any browser tools), and the agent is told what is missing.",
           "isRequired": true,
           "isSecret": true
         },
@@ -162,6 +174,11 @@
           "description": "Bearer token for that endpoint, when it needs one. Endpoints running on your own machine usually do not.",
           "isRequired": false,
           "isSecret": true
+        },
+        {
+          "name": "NOETIVE_RIFFLE_BIN",
+          "description": "Path to the riffle executable, when it is not on PATH. With riffle installed the server also offers its browser tools. Unset and not found means no browser tools; set and unusable stops the server. Not available in the container image, which has no browser.",
+          "isRequired": false
         }
       ]
     }
