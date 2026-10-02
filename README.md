@@ -99,6 +99,8 @@ If [riffle](https://github.com/noetive/riffle), a headless browser for agents, i
 
 The server looks for `riffle` on `PATH`, or at the path in `NOETIVE_RIFFLE_BIN`. With neither it simply offers no browser tools. If `NOETIVE_RIFFLE_BIN` is set to something that cannot be started, the server stops and says so rather than carrying on without the browser you asked for. riffle needs Chrome or Chromium on the same machine, so the container image does not include it.
 
+To let the browser log in to a site without the agent ever seeing the password, set `RIFFLE_SECRET_<NAME>` to the value and `RIFFLE_SECRET_<NAME>_ORIGIN` to the one origin it may be used on, for example `RIFFLE_SECRET_SHOP=...` and `RIFFLE_SECRET_SHOP_ORIGIN=https://shop.example.com`. The agent then writes `$secret:shop` in a browser program. A secret with no origin is refused, and one is never used on any other site. Set both in the environment your editor launches from. riffle's daemon reads them when it starts, so if one is already running, stop it first. This server passes every variable through to riffle except those beginning `NOETIVE_`, so your Noetive key never reaches the browser.
+
 What a page says comes back to the agent as text written by a stranger. The server tells the agent to treat it as data, but a hostile page can still try to steer the agent's later calls, including to Noetive, so publishing what a browser read onward is your call to make. If you also register riffle directly, the same two tools appear twice; use one entry or the other.
 
 ## Namespaces are named, never guessed
