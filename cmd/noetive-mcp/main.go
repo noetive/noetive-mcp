@@ -7,16 +7,19 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"math"
 	"os"
+	"os/exec"
 
 	mcpgo "github.com/mark3labs/mcp-go/server"
 	"go.noetive.io/noetive-sdk-go/semantik"
 
+	"go.noetive.io/noetive-mcp/internal/browser"
 	"go.noetive.io/noetive-mcp/internal/embedding"
 	"go.noetive.io/noetive-mcp/internal/mcpserver"
 	"go.noetive.io/noetive-mcp/internal/targeting"
@@ -97,7 +100,21 @@ func run(argv []string, stdout io.Writer, serve func(*mcpgo.MCPServer) error) er
 		return err
 	}
 
-	return serve(mcpserver.New(version, connect(endpoint), policy))
+	session, err := resolveBrowser(context.Background())
+	if err != nil {
+		return err
+	}
+	var opts []mcpserver.Option
+	if session != nil {
+		defer func() {
+			if err := session.Close(); err != nil {
+				log.Printf("stopping the browser: %v", err)
+			}
+		}()
+		opts = append(opts, mcpserver.WithBrowser(session))
+	}
+
+	return serve(mcpserver.New(version, connect(endpoint), policy, opts...))
 }
 
 // resolveEmbedder builds the embeddings endpoint an operator pointed this
@@ -210,4 +227,28 @@ func resolvePolicy(namespace, model string, dimensions uint, disableGlobal, disa
 	}
 
 	return policy, nil
+}
+
+// resolveBrowser starts riffle if there is one to start, or returns nil.
+//
+// The asymmetry is the same one resolveEmbedder draws. Not having riffle
+// installed is an ordinary state, and the server just offers no browser. Naming
+// an executable and having it fail is someone's choice not being honoured, and
+// serving without the browser they asked for would hide that.
+func resolveBrowser(ctx context.Context) (*browser.Session, error) {
+	path, explicit := browser.Locate(os.Getenv, exec.LookPath)
+	if path == "" {
+		log.Printf("riffle was not found on PATH, so no browser tools are offered. Install it, or set %s to its location.", browser.EnvBin)
+		return nil, nil
+	}
+
+	session, err := browser.Start(ctx, path, nil)
+	if err == nil {
+		return session, nil
+	}
+	if explicit {
+		return nil, fmt.Errorf("%s names %q, which could not be started: %w", browser.EnvBin, path, err)
+	}
+	log.Printf("riffle was found at %s but could not be started, so no browser tools are offered: %v", path, err)
+	return nil, nil
 }

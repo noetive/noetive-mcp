@@ -27,6 +27,7 @@ import (
 	json "github.com/goccy/go-json"
 	"gopkg.in/yaml.v3"
 
+	"go.noetive.io/noetive-mcp/internal/browser"
 	"go.noetive.io/noetive-mcp/internal/embedding"
 	"go.noetive.io/noetive-mcp/internal/mcpserver"
 	"go.noetive.io/noetive-mcp/internal/targeting"
@@ -644,7 +645,7 @@ func documentedEnvironmentIsComplete(root string) error {
 		return fmt.Errorf("server.json lists no packages")
 	}
 
-	want := slices.Concat([]string{mcpserver.APIKeyEnv}, targeting.EnvNames(), embedding.EnvNames())
+	want := slices.Concat([]string{mcpserver.APIKeyEnv}, targeting.EnvNames(), embedding.EnvNames(), browser.EnvNames())
 	slices.Sort(want)
 
 	for i, pkg := range document.Packages {

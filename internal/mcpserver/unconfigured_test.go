@@ -14,26 +14,26 @@ import (
 	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
-// A server with no credential must still register its tools. If it exited
-// instead, the editor would report only that the server failed to launch: with
-// no tools to call and nothing to ask, including the health tool whose job is to
-// say what is wrong.
-func TestUnconfiguredServerStillOffersItsTools(t *testing.T) {
+// Without a credential the tools that spend quota must not be offered: each one
+// could only fail, and still costs its description in every turn. Health is the
+// exception, because it is the one tool that can say what is wrong.
+func TestUnconfiguredServerOffersOnlyHealth(t *testing.T) {
 	srv := mcpserver.New("test", mcpserver.Unconfigured("NOETIVE_KEY_SECRET is not set"), targeting.Policy{})
 
-	srv.HandleMessage(context.Background(), json.RawMessage(initialize))
-	srv.HandleMessage(context.Background(), json.RawMessage(initialized))
-	resp := srv.HandleMessage(context.Background(), json.RawMessage(listTools))
-
-	var envelope struct {
-		Result struct {
-			Tools []mcp.Tool `json:"tools"`
-		} `json:"result"`
+	got := toolNamesOf(t, srv)
+	if len(got) != 1 || got[0] != "noetive_health" {
+		t.Fatalf("expected only noetive_health, got %v", got)
 	}
-	decode(t, resp, &envelope)
+}
 
-	if len(envelope.Result.Tools) != len(mcpserver.ToolNames()) {
-		t.Fatalf("expected every tool to remain registered, got %d", len(envelope.Result.Tools))
+// The agent reads the instructions first. They have to carry the warning, or it
+// goes looking for tools that are not there and reports the server broken.
+func TestUnconfiguredServerWarnsInItsInstructions(t *testing.T) {
+	srv := mcpserver.New("test", mcpserver.Unconfigured("NOETIVE_KEY_SECRET is not set"), targeting.Policy{})
+
+	got := instructionsOf(t, srv)
+	if !strings.Contains(got, "WARNING") || !strings.Contains(got, "NOETIVE_KEY_SECRET is not set") {
+		t.Errorf("expected a warning that names the cause, got: %s", got)
 	}
 }
 
