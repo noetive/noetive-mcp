@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"math"
 	"os"
 	"strings"
@@ -370,6 +371,24 @@ func TestAServerWithoutRiffleStartsWithoutABrowser(t *testing.T) {
 	session, err := resolveBrowser(context.Background())
 	if err != nil || session != nil {
 		t.Fatalf("expected no session and no error, got %v, %v", session, err)
+	}
+}
+
+// A browser missing from an editor launched from the desktop is usually a PATH
+// shorter than the terminal's. The log must show which PATH was searched, or
+// the operator is left comparing environments blind.
+func TestARiffleThatIsNotFoundLogsThePathSearched(t *testing.T) {
+	t.Setenv("PATH", "/an/editor/path")
+	var logged strings.Builder
+	prev := log.Writer()
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(prev) })
+
+	if _, err := resolveBrowser(context.Background()); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !strings.Contains(logged.String(), "/an/editor/path") {
+		t.Errorf("expected the log to name the PATH searched, got: %q", logged.String())
 	}
 }
 

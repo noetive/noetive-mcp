@@ -12,7 +12,7 @@ Five independent things can be wrong, and they need different fixes. Check them 
 
 4. **Tools registered.** With a key set, confirm all five Noetive tools are visible: `noetive_publish`, `noetive_search`, `noetive_subscribe`, `noetive_lint`, `noetive_health`. Fewer than five with a key set means the editor is running an older build than the one configured. With no key, `noetive_health` alone is correct, and the server instructions say why; the fix is the key, then a restart.
 
-5. **Browser (optional).** If `browser_run` and `browser_view` are listed, riffle was found. If they are absent and the user wants them, riffle is not on `PATH`: have them install it or set `NOETIVE_RIFFLE_BIN`. Their absence is INFO, not a failure.
+5. **Browser (optional).** If `browser_run` and `browser_view` are listed, riffle was found. If they are absent and the user wants them, riffle is not on the `PATH` this editor started the server with, which can be shorter than the terminal's, and an `npx` riffle entry does not count. The server log names the `PATH` it searched. Have them install the `riffle` executable (`go install github.com/noetive/riffle/cmd/riffle@latest`, or a binary from riffle's releases) or set `NOETIVE_RIFFLE_BIN` to its absolute path, then restart the editor. Their absence is INFO, not a failure.
 
 ## Output format
 

@@ -72,7 +72,7 @@ jobs:
           NOETIVE_KEY_SECRET: ${{ secrets.NOETIVE_KEY_SECRET }}
         run: |
           if [ -z "$NOETIVE_KEY_SECRET" ]; then
-            echo "NOETIVE_KEY_SECRET is unset; the suite would skip every test and report success." >&2
+            echo "NOETIVE_KEY_SECRET is unset; every Semantik test would skip and the run report success." >&2
             exit 1
           fi
           # Status captured rather than allowed to end the step, because the
@@ -104,6 +104,13 @@ jobs:
           # follows differs per test.
           if grep -q 'the broker did not answer' /tmp/integration.log; then
             echo "::warning::The broker did not answer; tests skipped rather than failed, so this run says nothing about whether the client is correct."
+          fi
+
+          # The browser tests need riffle and Chrome, and this runner installs no
+          # riffle. They skip on every run until it does, and this says so rather
+          # than letting the skip pass for coverage of the browser relay.
+          if grep -q 'riffle was not found' /tmp/integration.log; then
+            echo "::warning::riffle was not found; the browser tests skipped, so this run says nothing about the browser relay."
           fi
 
           exit $status

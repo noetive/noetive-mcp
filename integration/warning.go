@@ -16,3 +16,9 @@ package integration
 // matching, with no compile error and no red run to notice it by. warning_test
 // asserts the workflow still contains this value.
 const brokerDidNotAnswer = "the broker did not answer"
+
+// riffleNotFound opens the reason the browser tests give for skipping on a
+// machine without riffle. The scheduled workflow greps for it for the same
+// reason as above: a run that skipped them says nothing about the relay, and
+// would otherwise look exactly like one that passed.
+const riffleNotFound = "riffle was not found"
