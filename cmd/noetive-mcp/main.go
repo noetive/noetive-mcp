@@ -235,10 +235,14 @@ func resolvePolicy(namespace, model string, dimensions uint, disableGlobal, disa
 // installed is an ordinary state, and the server just offers no browser. Naming
 // an executable and having it fail is someone's choice not being honoured, and
 // serving without the browser they asked for would hide that.
+//
+// Not finding riffle logs the PATH that was searched. An editor launched from a
+// desktop can have a shorter PATH than the terminal riffle was installed from,
+// and this line is the only place that difference shows.
 func resolveBrowser(ctx context.Context) (*browser.Session, error) {
 	path, explicit := browser.Locate(os.Getenv, exec.LookPath)
 	if path == "" {
-		log.Printf("riffle was not found on PATH, so no browser tools are offered. Install it, or set %s to its location.", browser.EnvBin)
+		log.Printf("riffle was not found on PATH (%s), so no browser tools are offered. Install it, or set %s to its location.", os.Getenv("PATH"), browser.EnvBin)
 		return nil, nil
 	}
 

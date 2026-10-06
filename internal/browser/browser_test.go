@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -18,11 +21,16 @@ import (
 
 const childEnv = "BROWSER_TEST_FAKE_RIFFLE"
 
+// stderrMarker is what the fake riffle writes to stderr when it starts, as riffle
+// names its browser session there.
+const stderrMarker = "fake riffle: session fake-1"
+
 // TestMain lets the test binary stand in for riffle: started with childEnv set
 // it serves a small MCP server on stdio instead of running tests. This avoids
 // needing Chrome, or riffle itself, to test the relay.
 func TestMain(m *testing.M) {
 	if mode := os.Getenv(childEnv); mode != "" {
+		fmt.Fprintln(os.Stderr, stderrMarker)
 		srv := mcpgo.NewMCPServer("fake-riffle", "0")
 		srv.AddTool(mcp.NewTool("browser_env", mcp.WithDescription("report the environment")),
 			func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -230,5 +238,44 @@ func TestRiffleOnPathIsFoundAndAbsenceIsNotAnError(t *testing.T) {
 	path, _ = browser.Locate(none, func(string) (string, error) { return "", errors.New("not found") })
 	if path != "" {
 		t.Errorf("expected nothing, got %q", path)
+	}
+}
+
+// syncBuffer is a log destination the stderr drain can write to while the test
+// reads it.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+// riffle names its browser session, and says why it failed, on stderr. Dropped,
+// the operator has no way to find the page an agent is on or to learn why the
+// browser stopped.
+func TestWhatTheBrowserSaysOnStderrReachesTheLog(t *testing.T) {
+	var logged syncBuffer
+	prev := log.Writer()
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(prev) })
+
+	start(t, "ok")
+
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(logged.String(), stderrMarker) {
+		if time.Now().After(deadline) {
+			t.Fatalf("expected the browser's stderr in the log, got: %q", logged.String())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

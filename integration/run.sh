@@ -11,6 +11,9 @@
 # With no key the suite skips rather than fails, so it is safe to wire into a
 # pipeline that does not always have credentials.
 #
+# The browser tests need riffle and Chrome, and no key. They find riffle the way
+# the server does, on PATH or at NOETIVE_RIFFLE_BIN, and skip without it.
+#
 # The local-embedding tests need somewhere to embed and a namespace to write to.
 # They skip when NOETIVE_EMBEDDINGS_URL is unset, and fall back to the shared
 # namespace when the routing triple is not given:
@@ -25,7 +28,7 @@
 set -eu
 
 if [ -z "${NOETIVE_KEY_SECRET:-}" ]; then
-  echo "NOETIVE_KEY_SECRET is not set; the suite will skip every test." >&2
+  echo "NOETIVE_KEY_SECRET is not set; every Semantik test will skip." >&2
   echo "Get a key from https://noetive.io/dashboard to run it for real." >&2
 fi
 

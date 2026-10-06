@@ -56,7 +56,13 @@ func newSession(t *testing.T) *session {
 		t.Fatalf("could not build the client: %v", err)
 	}
 
-	srv := mcpserver.New("integration", client, shared)
+	return open(t, mcpserver.New("integration", client, shared))
+}
+
+// open completes the handshake an editor makes before its first call.
+func open(t *testing.T, srv *mcpgo.MCPServer) *session {
+	t.Helper()
+
 	ctx := context.Background()
 	srv.HandleMessage(ctx, json.RawMessage(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"integration","version":"1"}}}`))
 	srv.HandleMessage(ctx, json.RawMessage(`{"jsonrpc":"2.0","method":"notifications/initialized"}`))

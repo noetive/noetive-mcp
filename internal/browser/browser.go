@@ -50,6 +50,10 @@ const toolPrefix = "browser_"
 // start; it is not the time a page takes to load.
 const startBudget = 15 * time.Second
 
+// stderrGrace bounds how long stopping the process waits for the last of its
+// stderr to be written once it has exited.
+const stderrGrace = 5 * time.Second
+
 // Session is a running riffle process and the tools it offers. It is safe for
 // concurrent use.
 type Session struct {
@@ -84,6 +88,10 @@ func Locate(getenv func(string) string, lookPath func(string) (string, error)) (
 // environment, which is how riffle receives its own site secrets, except for
 // every NOETIVE_ variable: a browser that opens arbitrary pages has no use for
 // the Noetive key and must not be able to read it. extraEnv is added after.
+//
+// What the process writes to stderr goes to this server's log, never to the
+// agent: it is where riffle names the browser session it opened, so an operator
+// can look at the page with `riffle view -s`, and where it says why it failed.
 func Start(ctx context.Context, path string, extraEnv []string, args ...string) (*Session, error) {
 	ctx, cancel := context.WithTimeout(ctx, startBudget)
 	defer cancel()
@@ -125,7 +133,7 @@ func Start(ctx context.Context, path string, extraEnv []string, args ...string) 
 }
 
 // spawn builds the process with the Noetive configuration removed from its
-// environment.
+// environment and its stderr going to this server's log.
 func spawn(ctx context.Context, path string, extraEnv, args []string) (*exec.Cmd, error) {
 	cmd := exec.CommandContext(ctx, path, args...)
 	for _, kv := range os.Environ() {
@@ -134,6 +142,11 @@ func spawn(ctx context.Context, path string, extraEnv, args []string) (*exec.Cmd
 		}
 	}
 	cmd.Env = append(cmd.Env, extraEnv...)
+	// Written straight to the log rather than through the transport, which
+	// drops output it cannot keep up with and discards what is left when it
+	// closes: exactly the lines a riffle that fails at startup says why in.
+	cmd.Stderr = log.Writer()
+	cmd.WaitDelay = stderrGrace
 	return cmd, nil
 }
 
