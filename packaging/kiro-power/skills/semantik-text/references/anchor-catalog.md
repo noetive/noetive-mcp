@@ -37,7 +37,7 @@ MATCH CONTRAST(
         REPEL   ["a request for work with a completion criterion",
                  "a verification result, pass or fail, on finished work"]
       ) WITHIN 0.5
-  AND DIRECTION(["<topic words the role owns>"]) CONE 0.5
+  AND DIRECTION(["<topic words the role owns>"]) CONE 1.1
 ```
 
 Implementation, work requests plus verdicts on its own deliveries:
@@ -55,7 +55,7 @@ MATCH (
                    "an objection that a decision or request is wrong or infeasible"]
         ) WITHIN 0.5
   )
-  AND DIRECTION(["<topic words the role owns>"]) CONE 0.5
+  AND DIRECTION(["<topic words the role owns>"]) CONE 1.1
 ```
 
 Design, objections and blocks:
@@ -67,7 +67,7 @@ MATCH CONTRAST(
         REPEL   ["finished work reported for verification",
                  "a statement of fact with its source"]
       ) WITHIN 0.5
-  AND DIRECTION(["<topic words the role owns>"]) CONE 0.5
+  AND DIRECTION(["<topic words the role owns>"]) CONE 1.1
 ```
 
 Research, questions about the world rather than about intent:
@@ -111,7 +111,7 @@ return one. Substitute `DISTANCE([<vector>])` when you do hold it.
 Pick two to five noun phrases publishers actually use, one adjacent topic to repel, and one exemplar sentence if a specific pattern matters.
 
 ```sql
-MATCH DIRECTION(["<noun phrase 1>", "<noun phrase 2>", "<noun phrase 3>"]) CONE 0.4
+MATCH DIRECTION(["<noun phrase 1>", "<noun phrase 2>", "<noun phrase 3>"]) CONE 1.0
   AND CONTRAST(
         ATTRACT ["<what this topic is, in message words>"],
         REPEL   ["<the adjacent topic that shares the stream>"]
@@ -121,7 +121,7 @@ MATCH DIRECTION(["<noun phrase 1>", "<noun phrase 2>", "<noun phrase 3>"]) CONE 
 Worked instance, booking write semantics in a stream that also carries pricing and account chatter:
 
 ```sql
-MATCH DIRECTION(["reservation double-booking", "idempotency key on submit", "retry-safe form POST"]) CONE 0.4
+MATCH DIRECTION(["reservation double-booking", "idempotency key on submit", "retry-safe form POST"]) CONE 1.0
   AND CONTRAST(
         ATTRACT ["booking write semantics", "duplicate reservation after retry"],
         REPEL   ["seat pricing and discount codes", "login and session expiry"]
@@ -142,7 +142,7 @@ One parent DIRECTION shared by all bins. Per bin: three to six exemplars attract
 
 ```sql
 -- bin: <name>
-MATCH DIRECTION(["<parent topic phrase>", "<parent topic phrase>"]) CONE 0.5
+MATCH DIRECTION(["<parent topic phrase>", "<parent topic phrase>"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["<exemplar 1>", "<exemplar 2>", "<exemplar 3>"],
         REPEL   ["<sibling A exemplar>", "<sibling B exemplar>"]
@@ -153,35 +153,35 @@ Worked instance, support triage into four bins:
 
 ```sql
 -- billing
-MATCH DIRECTION(["customer support email", "account and service request"]) CONE 0.5
+MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["charged twice this month", "refund for the unused period", "invoice amount is wrong", "card declined but subscription still active"],
         REPEL   ["cannot log in after password reset", "page takes thirty seconds to load", "please add a dark mode"]
       ) WITHIN 0.5
 
 -- access
-MATCH DIRECTION(["customer support email", "account and service request"]) CONE 0.5
+MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["cannot log in after password reset", "two-factor code never arrives", "account locked after failed attempts", "invite link expired"],
         REPEL   ["charged twice this month", "page takes thirty seconds to load", "please add a dark mode"]
       ) WITHIN 0.5
 
 -- performance
-MATCH DIRECTION(["customer support email", "account and service request"]) CONE 0.5
+MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["page takes thirty seconds to load", "export times out on large reports", "search results arrive late", "app freezes when switching workspaces"],
         REPEL   ["cannot log in after password reset", "charged twice this month", "please add a dark mode"]
       ) WITHIN 0.5
 
 -- feature request
-MATCH DIRECTION(["customer support email", "account and service request"]) CONE 0.5
+MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["please add a dark mode", "would like to export to CSV", "can we get SSO with Okta", "a keyboard shortcut for archiving"],
         REPEL   ["cannot log in after password reset", "page takes thirty seconds to load", "charged twice this month"]
       ) WITHIN 0.5
 
 -- other
-MATCH DIRECTION(["customer support email", "account and service request"]) CONE 0.5
+MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND NOT (
         DISTANCE("charged twice this month, refund, invoice wrong") WITHIN 0.55
      OR DISTANCE("cannot log in, two-factor code, account locked") WITHIN 0.55

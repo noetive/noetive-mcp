@@ -66,7 +66,7 @@ SemQL thresholds on cosine similarity, and `WITHIN` is a floor: higher is tighte
 - same domain, different topic: lower middle
 - unrelated: low, but rarely below about 0.1
 
-The gaps between these bands are narrow, which is why thresholds must come from measurement rather than intuition, and why a threshold tuned on one model is wrong on the next. The semql skill's starting points (WITHIN 0.6 for a known pattern, 0.5 for a CONTRAST separating two close concepts, 0.85 for near-duplicates, CONE 0.2 to 0.5 for topics) are starting points only.
+The gaps between these bands are narrow, which is why thresholds must come from measurement rather than intuition, and why a threshold tuned on one model is wrong on the next. The semql skill's starting points (WITHIN 0.6 for a known pattern, 0.5 for a CONTRAST separating two close concepts, 0.85 for near-duplicates, CONE 0.85 to 1.1 for topics) are starting points only.
 
 A CONTRAST composite is not a piece of text and nothing sits especially close to it, so similarities to it run lower than similarities to a plain anchor of the same quality. A CONTRAST floor and a DISTANCE floor of the same number are not the same strictness; compare each against its own measured distribution.
 
