@@ -31,14 +31,14 @@ Getting these backwards is the most common way to write a query that looks right
 
 **`WITHIN` is a minimum cosine similarity, from 0.0 to 1.0. Higher is tighter.** `WITHIN 0.8` is near-duplicates. `WITHIN 0.3` is the general vicinity. `WITHIN 0` is no floor at all. It is not a distance, and a value above 1.0 does not parse.
 
-**`CONE` is a half-angle in radians. Smaller is tighter.** `CONE 0.15` is a narrow beam, `CONE 0.6` is a broad sweep, and the default when you omit it is 0.3.
+**`CONE` is a half-angle in radians. Smaller is tighter.** `CONE 0.8` is a narrow beam, `CONE 1.1` is a broad sweep, and the default when you omit it is 1.0. A cone below about 0.6 rad matches only close paraphrases of the anchor.
 
 ## Compose, do not widen
 
 A single clause is almost always too broad. The power of SemQL is that each clause removes a different kind of noise, so two narrow clauses beat one loose one.
 
 ```sql
-MATCH DIRECTION(["payment processing", "transaction"]) CONE 0.4
+MATCH DIRECTION(["payment processing", "transaction"]) CONE 1.0
   AND CONTRAST(
         ATTRACT ["failure", "error", "timeout"],
         REPEL   ["success", "completed", "processed"]

@@ -80,7 +80,7 @@ MATCH CONTRAST(
         REPEL   ["a request for work with a completion criterion",
                  "a verification result, pass or fail, on finished work"]
       ) WITHIN 0.5
-  AND DIRECTION(["reservations", "booking retry", "Ruby"]) CONE 0.5
+  AND DIRECTION(["reservations", "booking retry", "Ruby"]) CONE 1.1
 ```
 
 Start `WITHIN` near 0.5 (a composite sits further from everything than a plain anchor does, so a CONTRAST floor is lower than a DISTANCE floor for the same strictness), and then set it from the measured in-class and out-of-class similarities rather than by feel.
@@ -90,7 +90,7 @@ Start `WITHIN` near 0.5 (a composite sits further from everything than a plain a
 For thematic coverage, DIRECTION over two to five concept phrases with a CONTRAST against the nearest adjacent topic that shares the stream:
 
 ```sql
-MATCH DIRECTION(["reservation double-booking", "idempotency key on submit", "retry-safe form POST"]) CONE 0.4
+MATCH DIRECTION(["reservation double-booking", "idempotency key on submit", "retry-safe form POST"]) CONE 1.0
   AND CONTRAST(
         ATTRACT ["booking write semantics", "duplicate reservation after retry"],
         REPEL   ["seat pricing and discount codes", "login and session expiry"]
@@ -115,7 +115,7 @@ A category set is a partition: sibling bins under one parent topic, and a messag
 4. Measure pairwise separation between the bins' attract sets. Two bins whose sets sit above roughly 0.8 similarity to each other are one bin as far as the embedder is concerned: merge them, or recut the partition along an axis the embedder can see.
 
 ```sql
-MATCH DIRECTION(["customer support email", "account and service request"]) CONE 0.5
+MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["charged twice this month", "refund for the unused period", "invoice amount is wrong"],
         REPEL   ["cannot log in after password reset", "page takes thirty seconds to load", "please add a dark mode"]

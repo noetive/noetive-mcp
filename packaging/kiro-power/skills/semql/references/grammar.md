@@ -87,18 +87,18 @@ Thematic alignment, ignoring magnitude. A one-line mention and a long post-morte
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `toward` | string, string[] or float[] | yes | | The direction concept or concepts |
-| `cone` | number | no | `0.3` | Half-angle in radians, 0 to π |
+| `cone` | number | no | `1.0` | Half-angle in radians, 0 to π |
 
 An array of concepts becomes the normalised mean of their embeddings.
 
-`CONE` runs the opposite way to `WITHIN`: **smaller is tighter**. 0.1 to 0.2 is a narrow, high-precision beam; 0.5 to 0.8 is a broad sweep.
+`CONE` runs the opposite way to `WITHIN`: **smaller is tighter**. 0.8 to 0.9 is a narrow beam; 1.0 to 1.1 is a broad sweep. A cone below about 0.6 matches only close paraphrases of the anchor.
 
 ```sql
-DIRECTION(["customer frustration", "billing complaint"]) CONE 0.4
+DIRECTION(["customer frustration", "billing complaint"]) CONE 1.0
 ```
 
 ```json
-{ "direction": { "toward": ["customer frustration", "billing complaint"], "cone": 0.4 } }
+{ "direction": { "toward": ["customer frustration", "billing complaint"], "cone": 1.0 } }
 ```
 
 ### CONTRAST, attract and repel

@@ -11,7 +11,7 @@ Remember which way each knob turns. `WITHIN` is a similarity floor, so **higher 
 Watch a subject, but only the half of it you care about. `DIRECTION` sets the subject, `CONTRAST` picks the side.
 
 ```sql
-MATCH DIRECTION("service onboarding") CONE 0.4
+MATCH DIRECTION("service onboarding") CONE 1.0
   AND CONTRAST(
         ATTRACT ["friction", "confusion", "drop-off", "abandoned"],
         REPEL   ["success", "completed", "activated"]
@@ -37,15 +37,15 @@ Cover breadth with `OR` branches and keep precision inside each one.
 
 ```sql
 MATCH (
-        DIRECTION("payment processing") CONE 0.3
+        DIRECTION("payment processing") CONE 0.9
     AND CONTRAST(ATTRACT ["timeout", "failure"], REPEL ["success", "completed"])
   )
   OR (
-        DIRECTION("inventory reconciliation") CONE 0.3
+        DIRECTION("inventory reconciliation") CONE 0.9
     AND CONTRAST(ATTRACT ["stockout", "discrepancy"], REPEL ["balanced", "reconciled"])
   )
   OR (
-        DIRECTION("shipping fulfilment") CONE 0.3
+        DIRECTION("shipping fulfilment") CONE 0.9
     AND CONTRAST(ATTRACT ["delay", "lost package"], REPEL ["delivered", "on time"])
   )
 ```
@@ -57,7 +57,7 @@ One query broad enough to cover all three would be too noisy to read. Three narr
 Open wide with `DIRECTION`, then narrow with `DISTANCE`.
 
 ```sql
-MATCH DIRECTION("infrastructure cost reduction") CONE 0.5
+MATCH DIRECTION("infrastructure cost reduction") CONE 1.1
   AND DISTANCE("right-sizing container resource requests") WITHIN 0.5
 ```
 
@@ -90,7 +90,7 @@ MATCH CONTRAST(
 Bound the window and let the limit do the rest.
 
 ```sql
-MATCH DIRECTION(["incident", "outage", "regression"]) CONE 0.45
+MATCH DIRECTION(["incident", "outage", "regression"]) CONE 1.05
   AND CONTRAST(ATTRACT ["root cause", "resolved", "post-mortem"], REPEL ["speculation", "still investigating"])
 WINDOW 7d
 LIMIT 20
@@ -104,13 +104,13 @@ Useful before starting work in an area: it asks what peers concluded recently ra
 
 ```sql
 -- Matches anything remotely about payments.
-MATCH DIRECTION("payments") CONE 0.5
+MATCH DIRECTION("payments") CONE 1.1
 ```
 
 A generic concept with a wide cone covers an enormous region. Add a second clause, use a more specific anchor, or tighten the cone.
 
 ```sql
-MATCH DIRECTION("payment gateway integration") CONE 0.3
+MATCH DIRECTION("payment gateway integration") CONE 0.9
   AND CONTRAST(ATTRACT ["error", "failure"], REPEL ["reference guide", "walkthrough"])
 ```
 
@@ -142,7 +142,7 @@ MATCH CONTRAST(
 Concepts that sit close together partly cancel when subtracted, and the composite direction that survives is weak and unstable. Keep the two lists semantically far apart.
 
 ```sql
-MATCH DIRECTION("performance optimization") CONE 0.3
+MATCH DIRECTION("performance optimization") CONE 0.9
   AND CONTRAST(
         ATTRACT ["reduced latency", "throughput improvement"],
         REPEL   ["testing framework", "monitoring dashboard", "alerting setup"]
@@ -153,13 +153,13 @@ MATCH DIRECTION("performance optimization") CONE 0.3
 
 ```sql
 MATCH NOT DISTANCE("routine alert") WITHIN 0.5
-  AND DIRECTION("infrastructure") CONE 0.4
+  AND DIRECTION("infrastructure") CONE 1.0
 ```
 
 `NOT` binds tighter than `AND`, so this reads as `(NOT DISTANCE(...)) AND DIRECTION(...)`: everything about infrastructure that is not a routine alert. That is usually what people want, but it is not what the layout suggests. To negate the whole thing, group it.
 
 ```sql
-MATCH NOT (DISTANCE("routine alert") WITHIN 0.5 AND DIRECTION("infrastructure") CONE 0.4)
+MATCH NOT (DISTANCE("routine alert") WITHIN 0.5 AND DIRECTION("infrastructure") CONE 1.0)
 ```
 
 ### A namespace used as a topic
@@ -173,7 +173,7 @@ A namespace is an isolation boundary, not a label. There is no topic scheme to n
 
 ```sql
 MATCH DISTANCE("bug report") WITHIN 0.5
-  AND DIRECTION("frontend rendering") CONE 0.3
+  AND DIRECTION("frontend rendering") CONE 0.9
 ```
 
 Namespace names are also case-insensitive, so `acme-corp` and `Acme-Corp` are one namespace rather than two. Reaching for a second name to separate two kinds of message is the same mistake in a different form.
@@ -188,8 +188,8 @@ Copy one of these and adjust rather than starting from an empty query.
 
 | Goal | Shape |
 |---|---|
-| Watch a known pattern | `DIRECTION` at `CONE 0.2` and `DISTANCE` at `WITHIN 0.6` |
-| Broad topical sweep | `DIRECTION` at `CONE 0.5`, no `WITHIN` |
+| Watch a known pattern | `DIRECTION` at `CONE 0.85` and `DISTANCE` at `WITHIN 0.6` |
+| Broad topical sweep | `DIRECTION` at `CONE 1.1`, no `WITHIN` |
 | Find near-duplicates | `DISTANCE` alone at `WITHIN 0.85` |
 | Separate two close concepts | `CONTRAST` at `WITHIN 0.5` |
 | Rank rather than filter | `DISTANCE` with `TOP 20` and no `WITHIN` |
