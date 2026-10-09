@@ -125,7 +125,7 @@ func TestLocallyEmbeddedPublishIsFoundByALocallyEmbeddedSearch(t *testing.T) {
 	}
 
 	found := s.call("noetive_search", map[string]any{
-		"query": fmt.Sprintf(`MATCH DISTANCE(%q) WITHIN 0.6 LIMIT 20`, marker),
+		"query": fmt.Sprintf(`MATCH DISTANCE(%q) LIMIT 20`, marker),
 	})
 	if found.IsError {
 		skipInconclusive(t, s.text(found))
@@ -171,7 +171,7 @@ func TestALocallyEmbeddedQueryFindsABrokerEmbeddedMessage(t *testing.T) {
 	}
 
 	found := local.call("noetive_search", map[string]any{
-		"query": fmt.Sprintf(`MATCH DISTANCE(%q) WITHIN 0.6 LIMIT 20`, marker),
+		"query": fmt.Sprintf(`MATCH DISTANCE(%q) LIMIT 20`, marker),
 	})
 	if found.IsError {
 		skipInconclusive(t, local.text(found))
@@ -185,7 +185,7 @@ func TestALocallyEmbeddedQueryFindsABrokerEmbeddedMessage(t *testing.T) {
 	}
 
 	// That something matched is not the claim. The namespace holds other
-	// messages, and a coincidental hit at this threshold would read as proof of
+	// messages, and a coincidental hit at the server's relevance floor would read as proof of
 	// a space agreement that had not been shown.
 	id := messageID(t, published)
 	if !strings.Contains(marshal(t, found), id) {
@@ -231,10 +231,10 @@ func TestALocallyEmbeddedQueryParsesOnTheServer(t *testing.T) {
 	s := newLocalSession(t)
 
 	for _, query := range []string{
-		`MATCH DISTANCE("payment reconciliation failure") WITHIN 0.4 LIMIT 5`,
+		`MATCH DISTANCE("payment reconciliation failure") LIMIT 5`,
 		`MATCH DIRECTION(["customer frustration", "billing complaint"]) CONE 0.4 LIMIT 5`,
-		`MATCH CONTRAST(ATTRACT ["enterprise"], REPEL ["free tier"]) WITHIN 0.3 LIMIT 5`,
-		`{"match":{"distance":{"anchor":"deployment rollback","within":0.4}},"limit":5}`,
+		`MATCH CONTRAST(ATTRACT ["enterprise"], REPEL ["free tier"]) LIMIT 5`,
+		`{"match":{"distance":{"anchor":"deployment rollback"}},"limit":5}`,
 	} {
 		result := s.call("noetive_search", map[string]any{"query": query})
 		if !result.IsError {
@@ -252,7 +252,7 @@ func TestABlankedLintStillChecksTheQuery(t *testing.T) {
 	s := newLocalSession(t)
 
 	valid := s.call("noetive_lint", map[string]any{
-		"query": `MATCH DISTANCE("payroll incident") WITHIN 0.5`,
+		"query": `MATCH DISTANCE("payroll incident")`,
 	})
 	if valid.IsError {
 		t.Fatalf("lint failed: %s", s.text(valid))
@@ -261,15 +261,16 @@ func TestABlankedLintStillChecksTheQuery(t *testing.T) {
 		t.Errorf("expected a verdict on a well-formed query, got: %s", s.text(valid))
 	}
 
-	// A query that is wrong in a way blanking cannot hide must still come back
-	// wrong; otherwise blanking would be laundering real mistakes.
+	// A query the server refuses in a way blanking cannot hide must still come
+	// back wrong; otherwise blanking would be laundering real mistakes. WITHIN
+	// is refused outright because the server sets each clause's relevance floor.
 	broken := s.call("noetive_lint", map[string]any{
-		"query": `MATCH DISTANCE("payroll incident") WITHIN 5`,
+		"query": `MATCH DISTANCE("payroll incident") WITHIN 0.5`,
 	})
 	if broken.IsError {
 		t.Fatalf("lint failed: %s", s.text(broken))
 	}
 	if !strings.Contains(s.text(broken), "not valid") {
-		t.Errorf("expected an out-of-range threshold to still be caught, got: %s", s.text(broken))
+		t.Errorf("expected a refused WITHIN to still be caught, got: %s", s.text(broken))
 	}
 }

@@ -25,13 +25,15 @@ Three clauses, three different questions about the space. Picking the wrong one 
 
 `CONTRAST` builds a composite from concepts you want and concepts you do not. Use it when the thing you are after has no good single anchor because its neighbours are too close.
 
-## Which way the numbers run
+## Thresholds and the cone
 
-Getting these backwards is the most common way to write a query that looks right and does nothing.
+Semantik decides the bar, and you decide the angle.
 
-**`WITHIN` is a minimum cosine similarity, from 0.0 to 1.0. Higher is tighter.** `WITHIN 0.8` is near-duplicates. `WITHIN 0.3` is the general vicinity. `WITHIN 0` is no floor at all. It is not a distance, and a value above 1.0 does not parse.
+**There is no threshold to set.** Semantik sets the relevance bar itself, per clause: a clause holds for a message only when the message is closer to it than general reference text is. `A AND B` matches only when each clause holds on its own; a strong match on one does not make up for the other. Clauses of one kind ORed together (`A OR B OR C`, all DISTANCE, say) share one bar measured on the group as a whole, which rises with the group's breadth. Clauses of different kinds in one OR (DISTANCE, DIRECTION, CONTRAST) each keep their own bar, so a CONTRAST branch still fires next to DISTANCE branches. **Semantik refuses `WITHIN`** on any DISTANCE or CONTRAST clause with `400 invalid_request`, and `noetive_lint` reports it as an error, even though `WITHIN` is part of the SemQL language elsewhere. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity.
 
-**`CONE` is a half-angle in radians. Smaller is tighter.** `CONE 0.8` is a narrow beam, `CONE 1.1` is a broad sweep, and the default when you omit it is 1.0. A cone below about 0.6 rad matches only close paraphrases of the anchor.
+**`NOT` is supported only directly under an `AND` that also has a positive clause.** `A AND NOT DISTANCE("x")` excludes messages closer to x than general reference text is; the `NOT` only filters and does not raise the score. Anywhere else (`A OR NOT B`, `NOT A AND NOT B`, `A AND (B OR NOT C)`) Semantik refuses the query with `400 invalid_request`, because it would match nearly every message.
+
+**`CONE` is a half-angle in radians. Smaller is tighter.** `CONE` can only tighten: a message must be inside the cone and above the bar, so a cone wider than the bar changes nothing. `CONE 0.8` is a narrow beam, `CONE 1.1` is a broad sweep, and the default when you omit it is 1.0. A cone below about 0.6 rad matches only close paraphrases of the anchor.
 
 ## Compose, do not widen
 
@@ -43,10 +45,10 @@ MATCH DIRECTION(["payment processing", "transaction"]) CONE 1.0
         ATTRACT ["failure", "error", "timeout"],
         REPEL   ["success", "completed", "processed"]
       )
-  AND DISTANCE("intermittent drops under load") WITHIN 0.5
+  AND DISTANCE("intermittent drops under load")
 ```
 
-Thematically about payments, specifically the failure side of it, and close to one particular pattern. If you find yourself loosening a threshold to get results, try adding a clause instead.
+Thematically about payments, specifically the failure side of it, and close to one particular pattern. If a query returns too little, OR in another anchor of similar specificity rather than hunting for a looser setting.
 
 ## Scope comes from the tool call
 
@@ -55,6 +57,10 @@ Through these tools, the `namespace` argument on `noetive_search` or `noetive_su
 SemQL has a `NAMESPACE` clause, and `references/grammar.md` documents it, but it is not how you scope a call made through this server. Use clauses to narrow meaning and the tool argument to choose the namespace. If you do write the clause, it must name the same namespace as the tool argument and no more than one: the broker checks it and answers `400 invalid_request` on a disagreement, on several names, on a `NOT` exclusion, and on `ALL`.
 
 A namespace is an isolation boundary, never a topic label. `NAMESPACE "topic:networking"` is not a thing; narrowing by subject is what `DIRECTION` and `CONTRAST` are for.
+
+## Groups
+
+To split one stream between several subscribers, give their subscribe calls the same `group` field (1 to 64 letters, digits, `-` or `_`). Each message then goes only to the member that scores highest against it, and match frames carry `lead`. Members must match on the same clause kinds (DISTANCE, DIRECTION, CONTRAST; clauses under `NOT` are ignored): a subscription whose kinds differ from the group's current members is refused with `400 invalid_request`. For DISTANCE the members must also use the same metric (mixing metrics is refused like mixing kinds). Write members in the same shape as well: an AND member scores the mean of its clauses and an OR member the best, so an AND member loses to an OR member it would otherwise tie. Groups belong to the account, so any of your keys can join your groups, and another account's identically named group never competes with yours. See the semantik-text skill.
 
 ## Text for people, JSON for machines
 
@@ -69,31 +75,31 @@ Some servers embed on the machine they run on and replace each text anchor with 
 ## Writing a query
 
 1. Name the core concept. What region of meaning is this about?
-2. Name what should not match. That becomes a `REPEL` list or a `NOT`.
+2. Name what should not match. That becomes a `REPEL` list or an `AND NOT`.
 3. Choose a clause for each, using the table above.
-4. Compose with `AND`, `OR` and `NOT`. Remember `NOT` binds tighter than `AND`, which binds tighter than `OR`.
+4. Compose with `AND`, `OR` and `NOT`. Remember `NOT` binds tighter than `AND`, which binds tighter than `OR`, and that `NOT` is only valid directly under an `AND` with a positive clause.
 5. Set the numbers, checking which direction each one runs.
 6. Bound it. `WINDOW` for recency, `LIMIT` for volume.
 7. Check it with `noetive_lint` before running it.
 
 ## Before you hand a query over
 
-Give the text form, the JSON form, a sentence per clause saying why it is there, and which numbers to adjust first if the results come back too wide or too narrow.
+Give the text form, the JSON form, a sentence per clause saying why it is there, and what to change first (anchor wording, an OR'd anchor, `CONE`) if the results come back too wide or too narrow.
 
 ## When a search is refused
 
 `invalid_request` from `noetive_search` means the query did not parse, and it does not say which part. Run `noetive_lint` on it: it reports the parse error and suggests completions. Lint first, then retry.
 
-Empty results are a different problem. The query parsed and matched nothing, so loosen one knob at a time: drop `WITHIN` by 0.1, or widen `CONE` by 0.1. Changing two at once tells you nothing about which one mattered.
+Empty results are a different problem. The query parsed and matched nothing, so change one thing at a time: reword an anchor to be less specific, OR in another anchor of similar specificity, or widen `CONE` by 0.1. Changing two at once tells you nothing about which one mattered.
 
 ## Reviewing someone else's query
 
 The mistakes worth looking for, in the order they turn up:
 
-- `WITHIN` used as a distance, so a query meant to be tight is wide open.
+- `WITHIN` written at all, which Semantik answers with `400 invalid_request`.
 - A single clause, which is nearly always too broad.
 - `CONTRAST` whose attract and repel lists overlap, so the composite cancels itself out.
-- `NOT` at a tighter precedence than the author intended.
+- `NOT` at a tighter precedence than the author intended, or `NOT` anywhere but directly under an `AND` with a positive clause (refused with `400 invalid_request`).
 - A namespace used to narrow meaning instead of a clause.
 - A raw vector where a text anchor would read better and survive longer.
 

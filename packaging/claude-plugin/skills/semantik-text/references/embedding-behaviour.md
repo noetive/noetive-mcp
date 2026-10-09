@@ -57,18 +57,18 @@ Two ways to close it:
 1. Exemplar anchors. Write the anchor the way a matching message would be written. For topics and categories this is the right default.
 2. Canonical phrases. Have the publisher include a fixed phrase and put the identical phrase in the anchor. Now the message contains the anchor's text, and the gap is closed by construction. For intent this is the only method that works, because intent has no content words to write an exemplar with.
 
-## Similarity and thresholds
+## Similarity
 
-SemQL thresholds on cosine similarity, and `WITHIN` is a floor: higher is tighter. For text it runs from about 0 to 1. Modern embedders compress that range from both ends: unrelated texts do not fall to 0, and close paraphrases do not reach 1. Rough shape, to be measured per model:
+Semantik compares by cosine similarity and sets each query's relevance bar itself; you never choose a floor. For text similarity runs from about 0 to 1. Modern embedders compress that range from both ends: unrelated texts do not fall to 0, and close paraphrases do not reach 1. Rough shape, to be measured per model:
 
 - near-paraphrase and retells: high, upper eighties and nineties
 - same topic, different claim: middle
 - same domain, different topic: lower middle
 - unrelated: low, but rarely below about 0.1
 
-The gaps between these bands are narrow, which is why thresholds must come from measurement rather than intuition, and why a threshold tuned on one model is wrong on the next. The semql skill's starting points (WITHIN 0.6 for a known pattern, 0.5 for a CONTRAST separating two close concepts, 0.85 for near-duplicates, CONE 0.85 to 1.1 for topics) are starting points only.
+The gaps between these bands are narrow, which is why wording must be measured rather than trusted to intuition, and why anchors tuned on one model are wrong on the next. Semantik's bar is per clause and means "closer than general reference text is", so a message needs to sit in a clearly more related band than unrelated traffic. Clauses ANDed together must each clear their own bar, and DISTANCE clauses ORed together share one bar that rises with how broad the group is. CONE (0.85 to 1.1 rad for topics) is the only angle you set.
 
-A CONTRAST composite is not a piece of text and nothing sits especially close to it, so similarities to it run lower than similarities to a plain anchor of the same quality. A CONTRAST floor and a DISTANCE floor of the same number are not the same strictness; compare each against its own measured distribution.
+A CONTRAST composite is not a piece of text and nothing sits especially close to it, so similarities to it run lower than similarities to a plain anchor of the same quality. Compare composites against their own measured distribution, never against numbers from plain anchors.
 
 DIRECTION ignores magnitude and compares angle to a mean direction, so it tolerates length and specificity differences better than DISTANCE. DISTANCE is sensitive to both. That is why a specific exemplar sentence belongs in DISTANCE and a set of concept phrases belongs in DIRECTION.
 
@@ -80,8 +80,8 @@ A reply that says "re your last message, agreed" carries no topic. It embeds nea
 
 ## Retells and duplicates
 
-Two texts that say the same thing embed very close to each other, usually above 0.85 to 0.9 similarity on most models. This is the one place where a raw-vector anchor is the right tool: a subscriber that wants to suppress retells of a message it just published uses DISTANCE on that message's own vector with a high WITHIN, and gets exactly the retells.
+Two texts that say the same thing embed very close to each other, usually above 0.85 to 0.9 similarity on most models. This is the one place where a raw-vector anchor is the right tool (the vector must come from the namespace's model, since the bar is measured in that model's space): a subscriber that wants to suppress retells of a message it just published uses DISTANCE on that message's own text, and gets the retells along with every other message about the same subject. Semantik cannot narrow that to near-duplicates, because it accepts no floor, so treat the matches as candidates and compare them in the consumer.
 
 ## What the embedder cannot do
 
-Some distinctions are invisible at any threshold: pass versus fail stated only by one word, do versus done stated only by tense, a claim versus its negation, the difference between two option letters. When routing depends on such a distinction, one of two things is true: the publisher can add content words that make the distinction visible (a fail states what failed; a done states what was finished), or the distinction is not routable and must be read by the consumer after delivery. Deciding which is the case is part of writing the protocol, not part of writing the anchor.
+Some distinctions are invisible to the embedder: pass versus fail stated only by one word, do versus done stated only by tense, a claim versus its negation, the difference between two option letters. When routing depends on such a distinction, one of two things is true: the publisher can add content words that make the distinction visible (a fail states what failed; a done states what was finished), or the distinction is not routable and must be read by the consumer after delivery. Deciding which is the case is part of writing the protocol, not part of writing the anchor.

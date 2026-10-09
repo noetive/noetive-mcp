@@ -50,13 +50,13 @@ const leakMarker = "NOETIVE_LEAK_"
 // shapes a malformed query produces around a namespace selector. %s is the
 // phrase, already quoted by the template.
 var clauseTemplates = []string{
-	`MATCH DISTANCE("%s") WITHIN 0.4`,
+	`MATCH DISTANCE("%s")`,
 	`MATCH DIRECTION(["%s", "b"]) CONE 0.3`,
-	`MATCH CONTRAST(ATTRACT "%s", REPEL "b") WITHIN 0.45`,
+	`MATCH CONTRAST(ATTRACT "%s", REPEL "b")`,
 	`MATCH (DISTANCE("%s") OR DIRECTION("b")) NAMESPACE "acme"`,
 	`MATCH DISTANCE("a") NAMESPACE "acme" AND DISTANCE "%s"`,
 	`MATCH DISTANCE("a") NAMESPACE "acme", NOT "staging" WINDOW 7d DISTANCE "%s"`,
-	`{"match":{"distance":{"anchor":"%s","within":0.4}}}`,
+	`{"match":{"distance":{"anchor":"%s"}}}`,
 	`{"match":{"and":[{"distance":{"anchor":"%s"}},{"not":{"direction":{"toward":["b"]}}}]}}`,
 }
 

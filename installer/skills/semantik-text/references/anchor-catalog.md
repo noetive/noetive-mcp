@@ -2,7 +2,7 @@
 
 Ready phrases and templates. Every phrase here is a draft until it has passed validation on the namespace's pinned model (see `validation.md`). When a phrase is changed on one side it must change on the other; publisher prefix and subscriber ATTRACT are the same bytes.
 
-Every `WITHIN` below is a cosine similarity floor, so higher is tighter, and every number is a starting point to be replaced by a measured one.
+Semantik sets the relevance bar itself, per clause, so none of these queries carries a `WITHIN`. `AND` needs every clause to hold on its own, and `NOT` appears only directly under an `AND` with a positive clause. Every phrase is a draft to be validated; to match less, make an anchor more specific, and to match more, OR in another anchor of similar specificity: anchors of one kind ORed together share one bar, so ORing in a much broader anchor raises the bar for the narrower ones and can drop their marginal matches.
 
 ## Intent phrases for agent-to-agent protocols
 
@@ -23,7 +23,7 @@ These serve a ten-move protocol where each message starts with a move word. The 
 
 Unknown or coined move words are rendered as themselves ("warn", "offer", "bid"); a bare English word lands near its meaning and degrades gracefully.
 
-Expected confusion pairs, in order of risk: do/done, ask/object, tell/fix, decide/object, block/take. If validation shows one of these pairs inseparable at the intended WITHIN, lengthen both phrases with a distinguishing noun before touching the threshold. For example "finished work reported for verification, tests listed" against "a request for work with a completion criterion, not yet started".
+Expected confusion pairs, in order of risk: do/done, ask/object, tell/fix, decide/object, block/take. If validation shows one of these pairs inseparable in validation, lengthen both phrases with a distinguishing noun. For example "finished work reported for verification, tests listed" against "a request for work with a completion criterion, not yet started".
 
 ## Role inboxes
 
@@ -36,7 +36,7 @@ MATCH CONTRAST(
         ATTRACT ["finished work reported for verification"],
         REPEL   ["a request for work with a completion criterion",
                  "a verification result, pass or fail, on finished work"]
-      ) WITHIN 0.5
+      )
   AND DIRECTION(["<topic words the role owns>"]) CONE 1.1
 ```
 
@@ -48,12 +48,12 @@ MATCH (
           ATTRACT ["a request for work with a completion criterion"],
           REPEL   ["finished work reported for verification",
                    "a commitment to carry out an open request"]
-        ) WITHIN 0.5
+        )
      OR CONTRAST(
           ATTRACT ["a verification result, pass or fail, on finished work"],
           REPEL   ["finished work reported for verification",
                    "an objection that a decision or request is wrong or infeasible"]
-        ) WITHIN 0.5
+        )
   )
   AND DIRECTION(["<topic words the role owns>"]) CONE 1.1
 ```
@@ -66,7 +66,7 @@ MATCH CONTRAST(
                  "work stopped, waiting on a missing input"],
         REPEL   ["finished work reported for verification",
                  "a statement of fact with its source"]
-      ) WITHIN 0.5
+      )
   AND DIRECTION(["<topic words the role owns>"]) CONE 1.1
 ```
 
@@ -77,7 +77,7 @@ MATCH CONTRAST(
         ATTRACT ["a question that blocks work until answered"],
         REPEL   ["an objection that a decision or request is wrong or infeasible",
                  "work stopped, waiting on a missing input"]
-      ) WITHIN 0.5
+      )
   AND CONTRAST(
         ATTRACT ["documented behaviour of an external service or library", "published specification or reference"],
         REPEL   ["choice between design alternatives", "priority or scope of our own work"]
@@ -92,19 +92,19 @@ Open work anyone may take, unaddressed requests:
 MATCH CONTRAST(
         ATTRACT ["a request for work with a completion criterion", "work stopped, waiting on a missing input"],
         REPEL   ["a commitment to carry out an open request", "finished work reported for verification"]
-      ) WITHIN 0.5
+      )
 ```
 
-Retell suppression, anchored on the message just published:
+Retell candidates, anchored on the message just published. This matches everything about the same subject, not only retells, so the consumer compares the text and decides:
 
 ```sql
-MATCH DISTANCE("<the text just published>") WITHIN 0.85
+MATCH DISTANCE("<the text just published>")
 WINDOW 24h
 ```
 
 The text, not a vector. A publisher always has the text it just sent; it has a
 vector only when embedding runs on its own machine, because Semantik does not
-return one. Substitute `DISTANCE([<vector>])` when you do hold it.
+return one. Substitute `DISTANCE([<vector>])` when you do hold it, provided it came from the namespace's model.
 
 ## Topic template
 
@@ -146,7 +146,7 @@ MATCH DIRECTION(["<parent topic phrase>", "<parent topic phrase>"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["<exemplar 1>", "<exemplar 2>", "<exemplar 3>"],
         REPEL   ["<sibling A exemplar>", "<sibling B exemplar>"]
-      ) WITHIN 0.5
+      )
 ```
 
 Worked instance, support triage into four bins:
@@ -157,36 +157,36 @@ MATCH DIRECTION(["customer support email", "account and service request"]) CONE 
   AND CONTRAST(
         ATTRACT ["charged twice this month", "refund for the unused period", "invoice amount is wrong", "card declined but subscription still active"],
         REPEL   ["cannot log in after password reset", "page takes thirty seconds to load", "please add a dark mode"]
-      ) WITHIN 0.5
+      )
 
 -- access
 MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["cannot log in after password reset", "two-factor code never arrives", "account locked after failed attempts", "invite link expired"],
         REPEL   ["charged twice this month", "page takes thirty seconds to load", "please add a dark mode"]
-      ) WITHIN 0.5
+      )
 
 -- performance
 MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["page takes thirty seconds to load", "export times out on large reports", "search results arrive late", "app freezes when switching workspaces"],
         REPEL   ["cannot log in after password reset", "charged twice this month", "please add a dark mode"]
-      ) WITHIN 0.5
+      )
 
 -- feature request
 MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND CONTRAST(
         ATTRACT ["please add a dark mode", "would like to export to CSV", "can we get SSO with Okta", "a keyboard shortcut for archiving"],
         REPEL   ["cannot log in after password reset", "page takes thirty seconds to load", "charged twice this month"]
-      ) WITHIN 0.5
+      )
 
 -- other
 MATCH DIRECTION(["customer support email", "account and service request"]) CONE 1.1
   AND NOT (
-        DISTANCE("charged twice this month, refund, invoice wrong") WITHIN 0.55
-     OR DISTANCE("cannot log in, two-factor code, account locked") WITHIN 0.55
-     OR DISTANCE("page slow to load, export times out, app freezes") WITHIN 0.55
-     OR DISTANCE("please add a feature, export to CSV, SSO, shortcut") WITHIN 0.55
+        DISTANCE("charged twice this month, refund, invoice wrong")
+     OR DISTANCE("cannot log in, two-factor code, account locked")
+     OR DISTANCE("page slow to load, export times out, app freezes")
+     OR DISTANCE("please add a feature, export to CSV, SSO, shortcut")
   )
 ```
 

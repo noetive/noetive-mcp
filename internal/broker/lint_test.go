@@ -16,7 +16,7 @@ func TestLintNeedsNoNamespace(t *testing.T) {
 	stub := &stubBroker{lintResp: semantik.LintResponse{Valid: true}}
 	_, handler := broker.LintTool(stub)
 
-	result := call(t, handler, map[string]any{"query": "MATCH DISTANCE(\"x\") WITHIN 0.4"})
+	result := call(t, handler, map[string]any{"query": "MATCH DISTANCE(\"x\")"})
 	requireSuccess(t, result)
 
 	if stub.lintReq.Query == "" {
@@ -27,10 +27,10 @@ func TestLintNeedsNoNamespace(t *testing.T) {
 // A valid verdict has to be legible in the text fallback, not only in
 // structured content, since not every client reads structured results.
 func TestValidQueryIsReportedInWords(t *testing.T) {
-	stub := &stubBroker{lintResp: semantik.LintResponse{Valid: true, Normalized: "MATCH DISTANCE(\"x\") WITHIN 0.4"}}
+	stub := &stubBroker{lintResp: semantik.LintResponse{Valid: true, Normalized: "MATCH DISTANCE(\"x\")"}}
 	_, handler := broker.LintTool(stub)
 
-	result := call(t, handler, map[string]any{"query": "match distance(\"x\") within 0.4"})
+	result := call(t, handler, map[string]any{"query": "match distance(\"x\")"})
 	requireSuccess(t, result)
 
 	got := text(t, result)

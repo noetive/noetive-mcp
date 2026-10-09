@@ -36,7 +36,7 @@ func FuzzPublishArguments(f *testing.F) {
 }
 
 func FuzzSearchArguments(f *testing.F) {
-	f.Add("MATCH DISTANCE(\"x\") WITHIN 0.4", "incidents", "model-a", 1024, 10)
+	f.Add("MATCH DISTANCE(\"x\")", "incidents", "model-a", 1024, 10)
 	f.Add("", "", "", 0, 0)
 	f.Add("\x00", "\ufeff", "\xff", -2147483648, -2147483648)
 	f.Add("MATCH", "ns", "m", 2147483647, 2147483647)

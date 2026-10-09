@@ -19,9 +19,9 @@ atom             = clause | "(" expression ")" ;
 
 clause           = distance | direction | contrast ;
 
-distance         = "DISTANCE" "(" anchor ")" [ "WITHIN" number | "TOP" integer ] ;
+distance         = "DISTANCE" "(" anchor ")" [ "TOP" integer ] ;
 direction        = "DIRECTION" "(" anchor_list ")" [ "CONE" number ] ;
-contrast         = "CONTRAST" "(" "ATTRACT" anchor_list [ "," "REPEL" anchor_list ] ")" [ "WITHIN" number ] ;
+contrast         = "CONTRAST" "(" "ATTRACT" anchor_list [ "," "REPEL" anchor_list ] ")" ;
 
 (* Plural forms parse but the broker rejects them; see Namespace selector. *)
 namespace_selector = namespace_ref { "," namespace_ref } | "ALL" | "GLOBAL" ;
@@ -35,27 +35,18 @@ duration         = integer ( "s" | "m" | "h" | "d" | "w" ) ;
 
 Precedence, tightest first: `NOT`, `AND`, `OR`.
 
+`NOT` is supported only directly under an `AND` that also has a positive clause. `A AND NOT DISTANCE("x")` excludes messages that are closer to x than general reference text is; the `NOT` only filters and does not raise the score. Anywhere else (`A OR NOT B`, `NOT A AND NOT B`, `A AND (B OR NOT C)`) the query is refused with `400 invalid_request`, because it would match nearly every message.
+
 Reserved words are case-insensitive in the text syntax:
 `MATCH AND OR NOT DISTANCE DIRECTION CONTRAST ATTRACT REPEL WITHIN TOP CONE WINDOW NAMESPACE ALL GLOBAL LIMIT`.
 
 JSON keys are lowercase, always.
 
-## WITHIN is a similarity floor, not a distance
+## No threshold, and WITHIN is refused
 
-This is the single most common way to get a query wrong, so it is worth stating on its own.
+The SemQL language has a `WITHIN` clause on DISTANCE and CONTRAST (text and JSON `within`), but Semantik does not accept it: any query that sets it is answered `400 invalid_request` on search and subscribe, and `noetive_lint` reports it as an error. Do not write it from general SemQL knowledge.
 
-`WITHIN` is the **minimum cosine similarity** a message must reach to pass the clause. It runs from 0.0 to 1.0, and **higher is tighter**:
-
-| `WITHIN` | Meaning |
-|---|---|
-| `0.0` | No floor. Every message survives the clause and it acts as a scoring signal only. |
-| `0.3` | Loose. Anything in the general vicinity of the anchor. |
-| `0.5` | Moderate. Recognisably about the same thing. |
-| `0.7` | Tight. Close paraphrases and restatements. |
-| `0.9` | Near-duplicate. |
-| `1.0` | Exact match only. |
-
-A value outside 0.0 to 1.0 is rejected. If you find yourself writing `WITHIN 1.5` you are thinking in distances, where lower means closer. SemQL is the other way round.
+Semantik sets the relevance bar itself, per clause. A clause holds for a message only when the message is closer to it than general reference text is. `A AND B` matches only when each clause holds on its own; a strong match on one does not make up for the other. Clauses of one kind ORed together (`A OR B OR C`, all DISTANCE, say) share one bar measured on the group as a whole, which rises with the group's breadth. Clauses of different kinds in one OR (DISTANCE, DIRECTION, CONTRAST) each keep their own bar, so a CONTRAST branch still fires next to DISTANCE branches. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity.
 
 ## Clauses
 
@@ -66,18 +57,15 @@ Proximity to one anchor. Both topic and specificity matter: a passing mention an
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `anchor` | string or float[] | yes | | The centre point |
-| `within` | number | no | | Minimum cosine similarity, 0.0 to 1.0 |
-| `top_k` | integer | no | | Return the k nearest instead of applying a floor |
+| `top_k` | integer | no | | Return the k nearest messages that also clear the bar (search only), so it can return fewer than k |
 | `metric` | string | no | `cosine` | `cosine`, `euclidean` or `dot` |
 
-Set `within` or `top_k`, not both. Setting neither scores without thresholding.
-
 ```sql
-DISTANCE("payment reconciliation failure") WITHIN 0.55
+DISTANCE("payment reconciliation failure")
 ```
 
 ```json
-{ "distance": { "anchor": "payment reconciliation failure", "within": 0.55 } }
+{ "distance": { "anchor": "payment reconciliation failure" } }
 ```
 
 ### DIRECTION, a cone around an axis
@@ -91,7 +79,7 @@ Thematic alignment, ignoring magnitude. A one-line mention and a long post-morte
 
 An array of concepts becomes the normalised mean of their embeddings.
 
-`CONE` runs the opposite way to `WITHIN`: **smaller is tighter**. 0.8 to 0.9 is a narrow beam; 1.0 to 1.1 is a broad sweep. A cone below about 0.6 matches only close paraphrases of the anchor.
+`CONE`: **smaller is tighter**. 0.8 to 0.9 is a narrow beam; 1.0 to 1.1 is a broad sweep. A cone below about 0.6 matches only close paraphrases of the anchor. `CONE` can only tighten: a message must be inside the cone and above the bar, so a cone wider than the bar changes nothing.
 
 ```sql
 DIRECTION(["customer frustration", "billing complaint"]) CONE 1.0
@@ -109,20 +97,18 @@ Vector arithmetic. It answers "in the direction of A, away from B", which carves
 |---|---|---|---|---|
 | `attract` | string[] | yes | | At least one concept |
 | `repel` | string[] | no | | Concepts to subtract |
-| `within` | number | no | | Minimum cosine similarity to the composite, 0.0 to 1.0 |
 
 With both lists the composite is `normalize(mean(embed(attract)) - mean(embed(repel)))`. With `attract` alone it is `normalize(mean(embed(attract)))`.
 
 ```sql
-CONTRAST(ATTRACT ["enterprise", "high-value account"], REPEL ["self-serve", "free tier"]) WITHIN 0.45
+CONTRAST(ATTRACT ["enterprise", "high-value account"], REPEL ["self-serve", "free tier"])
 ```
 
 ```json
 {
   "contrast": {
     "attract": ["enterprise", "high-value account"],
-    "repel": ["self-serve", "free tier"],
-    "within": 0.45
+    "repel": ["self-serve", "free tier"]
   }
 }
 ```
@@ -179,14 +165,14 @@ Text: `30s`, `15m`, `24h`, `7d`, `4w`.
 JSON: ISO 8601, so `"PT30S"`, `"PT15M"`, `"PT24H"`, `"P7D"`, `"P28D"`.
 
 ```sql
-MATCH DISTANCE("deployment rollback") WITHIN 0.5
+MATCH DISTANCE("deployment rollback")
 WINDOW 7d
 LIMIT 20
 ```
 
 ```json
 {
-  "match": { "distance": { "anchor": "deployment rollback", "within": 0.5 } },
+  "match": { "distance": { "anchor": "deployment rollback" } },
   "window": "P7D",
   "limit": 20
 }

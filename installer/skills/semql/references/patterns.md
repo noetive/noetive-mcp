@@ -2,7 +2,7 @@
 
 Worked examples. Every query here is written for the Noetive MCP tools, so the `namespace` argument on the tool call decides where it runs and nothing in the query needs to say so.
 
-Remember which way each knob turns. `WITHIN` is a similarity floor, so **higher is tighter**. `CONE` is a half-angle, so **smaller is tighter**.
+Semantik sets each query's relevance bar itself and refuses `WITHIN` (`400 invalid_request`), so there is no threshold to tune. `CONE` is a half-angle, so **smaller is tighter**. `CONE` can only tighten: a message must be inside the cone and above the bar, so a cone wider than the bar changes nothing. To match less, make an anchor more specific; to match more, OR in another anchor of similar specificity: anchors of one kind ORed together share one bar, so ORing in a much broader anchor raises the bar for the narrower ones and can drop their marginal matches.
 
 ## Patterns that work
 
@@ -25,8 +25,8 @@ MATCH DIRECTION("service onboarding") CONE 1.0
 Pin the thing you want, then subtract the thing that always comes with it.
 
 ```sql
-MATCH DISTANCE("connection pool exhaustion under sustained load") WITHIN 0.55
-  AND NOT DISTANCE("connection pool configuration guide") WITHIN 0.5
+MATCH DISTANCE("connection pool exhaustion under sustained load")
+  AND NOT DISTANCE("connection pool configuration guide")
 ```
 
 The incident and the guide sit close together, because both are about connection pools. Without the `NOT`, every guide matches. The `NOT` removes that neighbourhood and leaves the incidents.
@@ -58,7 +58,7 @@ Open wide with `DIRECTION`, then narrow with `DISTANCE`.
 
 ```sql
 MATCH DIRECTION("infrastructure cost reduction") CONE 1.1
-  AND DISTANCE("right-sizing container resource requests") WITHIN 0.5
+  AND DISTANCE("right-sizing container resource requests")
 ```
 
 `DIRECTION` keeps recall high across the whole topic. `DISTANCE` pulls it down to the one technique. The pairing also stops the query drifting into container content that has nothing to do with cost.
@@ -80,7 +80,7 @@ MATCH CONTRAST(
           "API versioning",
           "API documentation"
         ]
-      ) WITHIN 0.5
+      )
 ```
 
 "API rate limiting" sits inside a dense cluster of API topics, so `DISTANCE` on it returns auth and versioning too. The repel list pushes the composite away from the general API cluster and leaves the throttling corner of it.
@@ -114,20 +114,18 @@ MATCH DIRECTION("payment gateway integration") CONE 0.9
   AND CONTRAST(ATTRACT ["error", "failure"], REPEL ["reference guide", "walkthrough"])
 ```
 
-### `WITHIN` read as a distance
+### `WITHIN` written from general SemQL knowledge
 
 ```sql
--- Meant "near-exact matches only". Actually says "almost no floor".
-MATCH DISTANCE("microservice decomposition") WITHIN 0.1
-```
-
-This is the mistake that looks like a working query. `WITHIN 0.1` is a similarity floor of 0.1, which nearly everything clears, so the query returns the whole namespace and reads as though the threshold did something. Tight means high.
-
-```sql
+-- Semantik answers 400 invalid_request.
 MATCH DISTANCE("microservice decomposition") WITHIN 0.7
 ```
 
-A value above 1.0 does not parse at all, which is the easier version of this mistake to catch.
+`WITHIN` exists in the SemQL language but Semantik does not accept it. Drop it and put the specificity in the anchor.
+
+```sql
+MATCH DISTANCE("splitting a monolith into independently deployed microservices")
+```
 
 ### Attract and repel that overlap
 
@@ -151,15 +149,18 @@ MATCH DIRECTION("performance optimization") CONE 0.9
 
 ### `NOT` binding tighter than expected
 
+`NOT` is supported only directly under an `AND` that also has a positive clause. `A AND NOT DISTANCE("x")` excludes messages that are closer to x than general reference text is; it only filters and does not raise the score. Anywhere else (`A OR NOT B`, `NOT A AND NOT B`, `A AND (B OR NOT C)`) the query is refused with `400 invalid_request`, because it would match nearly every message.
+
 ```sql
-MATCH NOT DISTANCE("routine alert") WITHIN 0.5
+MATCH NOT DISTANCE("routine alert")
   AND DIRECTION("infrastructure") CONE 1.0
 ```
 
-`NOT` binds tighter than `AND`, so this reads as `(NOT DISTANCE(...)) AND DIRECTION(...)`: everything about infrastructure that is not a routine alert. That is usually what people want, but it is not what the layout suggests. To negate the whole thing, group it.
+`NOT` binds tighter than `AND`, so this reads as `(NOT DISTANCE(...)) AND DIRECTION(...)`: everything about infrastructure that is not a routine alert. That is usually what people want, but it is not what the layout suggests. To exclude several things at once, negate a group, still directly under the `AND` with its positive clause.
 
 ```sql
-MATCH NOT (DISTANCE("routine alert") WITHIN 0.5 AND DIRECTION("infrastructure") CONE 1.0)
+MATCH DIRECTION("infrastructure") CONE 1.0
+  AND NOT (DISTANCE("routine alert") OR DISTANCE("scheduled maintenance"))
 ```
 
 ### A namespace used as a topic
@@ -172,7 +173,7 @@ NAMESPACE "topic:frontend-bugs"
 A namespace is an isolation boundary, not a label. There is no topic scheme to name. Narrow with clauses and let the tool call's `namespace` argument decide the scope.
 
 ```sql
-MATCH DISTANCE("bug report") WITHIN 0.5
+MATCH DISTANCE("bug report")
   AND DIRECTION("frontend rendering") CONE 0.9
 ```
 
@@ -188,10 +189,13 @@ Copy one of these and adjust rather than starting from an empty query.
 
 | Goal | Shape |
 |---|---|
-| Watch a known pattern | `DIRECTION` at `CONE 0.85` and `DISTANCE` at `WITHIN 0.6` |
-| Broad topical sweep | `DIRECTION` at `CONE 1.1`, no `WITHIN` |
-| Find near-duplicates | `DISTANCE` alone at `WITHIN 0.85` |
-| Separate two close concepts | `CONTRAST` at `WITHIN 0.5` |
-| Rank rather than filter | `DISTANCE` with `TOP 20` and no `WITHIN` |
+| Watch a known pattern | `DIRECTION` at `CONE 0.85` and a specific `DISTANCE` |
+| Broad topical sweep | `DIRECTION` at `CONE 1.1` |
+| Separate two close concepts | `CONTRAST` with sibling concepts in REPEL |
+| Rank rather than filter | `DISTANCE` with `TOP 20` (search; returns the 20 nearest that also clear the bar, so possibly fewer) |
 
-If a search comes back empty, loosen one knob at a time: drop `WITHIN` by 0.1, or widen `CONE` by 0.1. If it comes back flooded, tighten the same way. Changing two at once tells you nothing about which one mattered.
+If a search comes back empty, change one thing at a time: make the anchor wording less specific, OR in another anchor of similar specificity, or widen `CONE` by 0.1. If it comes back flooded, go the other way: a more specific anchor, a CONTRAST or NOT, or a narrower `CONE`. Changing two at once tells you nothing about which one mattered.
+
+## Groups
+
+To split one stream between several subscribers so each message has one owner, give their `/v1/subscribe` calls the same `group` name (1 to 64 letters, digits, `-` or `_`). Members compete on score and a message goes only to the closest; matches carry `lead`. Members must match on the same clause kinds (DISTANCE, DIRECTION, CONTRAST; clauses under NOT ignored), or the subscription is refused with `400 invalid_request`. For DISTANCE the members must also use the same metric (mixing metrics is refused like mixing kinds). Write members in the same shape as well: an AND member scores the mean of its clauses and an OR member the best, so an AND member loses to an OR member it would otherwise tie. Groups belong to the account: all your keys share its group names, and another account's identically named group never competes with yours. See the semantik-text skill, "Roles that split a stream".

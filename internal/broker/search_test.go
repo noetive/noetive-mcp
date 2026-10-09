@@ -22,7 +22,7 @@ func TestSearchReturnsContentAndMetadata(t *testing.T) {
 	}}}}
 	_, handler := broker.SearchTool(stub, configured)
 
-	result := call(t, handler, map[string]any{"query": "MATCH DISTANCE(\"gateway\") WITHIN 0.4"})
+	result := call(t, handler, map[string]any{"query": "MATCH DISTANCE(\"gateway\")"})
 	if requireSuccess(t, result) == nil {
 		t.Fatal("expected structured content carrying the matches")
 	}
@@ -80,7 +80,7 @@ func TestOmittedLimitLeavesTheQueryInCharge(t *testing.T) {
 	stub := &stubBroker{}
 	_, handler := broker.SearchTool(stub, configured)
 
-	call(t, handler, map[string]any{"query": "MATCH DISTANCE(\"x\") WITHIN 0.4 LIMIT 50"})
+	call(t, handler, map[string]any{"query": "MATCH DISTANCE(\"x\") LIMIT 50"})
 
 	if stub.searchReq.Limit != 0 {
 		t.Errorf("expected no limit to be sent, got %d", stub.searchReq.Limit)

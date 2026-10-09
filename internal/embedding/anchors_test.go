@@ -22,8 +22,8 @@ func TestEveryClauseKindHasItsAnchorsReplaced(t *testing.T) {
 	}{
 		{
 			name:  "distance",
-			query: `MATCH DISTANCE("payroll incident") WITHIN 0.5`,
-			want:  `MATCH DISTANCE([1,0,0]) WITHIN 0.5`,
+			query: `MATCH DISTANCE("payroll incident")`,
+			want:  `MATCH DISTANCE([1,0,0])`,
 		},
 		{
 			name:  "direction with one anchor",
@@ -37,13 +37,13 @@ func TestEveryClauseKindHasItsAnchorsReplaced(t *testing.T) {
 		},
 		{
 			name:  "contrast",
-			query: `MATCH CONTRAST(ATTRACT ["enterprise"], REPEL ["free tier"]) WITHIN 0.45`,
-			want:  `MATCH CONTRAST(ATTRACT [[1,0,0]], REPEL [[2,0,0]]) WITHIN 0.45`,
+			query: `MATCH CONTRAST(ATTRACT ["enterprise"], REPEL ["free tier"])`,
+			want:  `MATCH CONTRAST(ATTRACT [[1,0,0]], REPEL [[2,0,0]])`,
 		},
 		{
 			name:  "nested through boolean operators and a group",
-			query: `MATCH (DISTANCE("alpha") WITHIN 0.4 OR NOT DISTANCE("beta") WITHIN 0.4) AND DISTANCE("gamma") TOP 5`,
-			want:  `MATCH (DISTANCE([1,0,0]) WITHIN 0.4 OR NOT DISTANCE([2,0,0]) WITHIN 0.4) AND DISTANCE([3,0,0]) TOP 5`,
+			query: `MATCH (DISTANCE("alpha") AND NOT DISTANCE("beta")) AND DISTANCE("gamma") TOP 5`,
+			want:  `MATCH (DISTANCE([1,0,0]) AND NOT DISTANCE([2,0,0])) AND DISTANCE([3,0,0]) TOP 5`,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -66,9 +66,9 @@ func TestEveryClauseKindHasItsAnchorsReplaced(t *testing.T) {
 func TestOnlyTheAnchorsChange(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
-	searchWith(t, b, e, `MATCH DISTANCE("alpha") WITHIN 0.5 AND NOT DIRECTION(["beta", "gamma"]) CONE 0.2 WINDOW 7d LIMIT 20`)
+	searchWith(t, b, e, `MATCH DISTANCE("alpha") AND NOT DIRECTION(["beta", "gamma"]) CONE 0.2 WINDOW 7d LIMIT 20`)
 
-	want := `MATCH DISTANCE([1,0,0]) WITHIN 0.5 AND NOT DIRECTION([[2,0,0], [3,0,0]]) CONE 0.2 WINDOW 7d LIMIT 20`
+	want := `MATCH DISTANCE([1,0,0]) AND NOT DIRECTION([[2,0,0], [3,0,0]]) CONE 0.2 WINDOW 7d LIMIT 20`
 	if b.searchReq.Query != want {
 		t.Errorf("expected\n  %s\ngot\n  %s", want, b.searchReq.Query)
 	}
@@ -82,9 +82,9 @@ func TestTheVectorLiteralKeepsEveryDigit(t *testing.T) {
 	b := &stubBroker{}
 	e := &stubEmbedder{vector: []float32{0.125, -0.5, 0.0009765625}}
 
-	searchWith(t, b, e, `MATCH DISTANCE("alpha") WITHIN 0.5`)
+	searchWith(t, b, e, `MATCH DISTANCE("alpha")`)
 
-	want := `MATCH DISTANCE([0.125,-0.5,0.0009765625]) WITHIN 0.5`
+	want := `MATCH DISTANCE([0.125,-0.5,0.0009765625])`
 	if b.searchReq.Query != want {
 		t.Errorf("expected\n  %s\ngot\n  %s", want, b.searchReq.Query)
 	}
@@ -98,7 +98,7 @@ func TestAQueryThatExactlyFillsTheBudgetIsAllowed(t *testing.T) {
 
 	var clauses []string
 	for _, phrase := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
-		clauses = append(clauses, `DISTANCE("`+phrase+`") WITHIN 0.4`)
+		clauses = append(clauses, `DISTANCE("`+phrase+`")`)
 	}
 
 	// Eight anchors at 1024 dimensions is 8192 floats, which is the limit
@@ -118,7 +118,7 @@ func TestTheLargestAllowedDimensionalityIsNotRefused(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
 	if _, err := embedding.Precomputed(b, e).Search(context.Background(), semantik.SearchRequest{
-		Query: `MATCH DISTANCE("alpha") WITHIN 0.4`, Namespace: "incidents", Model: model, Dimensions: 4096,
+		Query: `MATCH DISTANCE("alpha")`, Namespace: "incidents", Model: model, Dimensions: 4096,
 	}); err != nil {
 		t.Fatalf("expected 4096 dimensions to be allowed, got: %v", err)
 	}
@@ -130,9 +130,9 @@ func TestTheLargestAllowedDimensionalityIsNotRefused(t *testing.T) {
 func TestNamespaceNamesAreLeftAloneAndAnchorsAreNot(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
-	searchWith(t, b, e, `MATCH DISTANCE("global warming") WITHIN 0.5 NAMESPACE "acme-*", NOT "acme-staging"`)
+	searchWith(t, b, e, `MATCH DISTANCE("global warming") NAMESPACE "acme-*", NOT "acme-staging"`)
 
-	want := `MATCH DISTANCE([1,0,0]) WITHIN 0.5 NAMESPACE "acme-*", NOT "acme-staging"`
+	want := `MATCH DISTANCE([1,0,0]) NAMESPACE "acme-*", NOT "acme-staging"`
 	if b.searchReq.Query != want {
 		t.Errorf("expected\n  %s\ngot\n  %s", want, b.searchReq.Query)
 	}
@@ -151,19 +151,19 @@ func TestTheNamespaceKeywordIsRecognisedExactly(t *testing.T) {
 		query   string
 		refused bool
 	}{
-		{"upper case", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACE "acme"`, false},
-		{"lower case", `MATCH DISTANCE("a") WITHIN 0.4 namespace "acme"`, false},
-		{"mixed case", `MATCH DISTANCE("a") WITHIN 0.4 NameSpace "acme"`, false},
-		{"the selector runs to the end", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACE "acme", NOT "acme-staging"`, false},
-		{"a window closes the selector", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACE "acme" WINDOW 7d`, false},
+		{"upper case", `MATCH DISTANCE("a") NAMESPACE "acme"`, false},
+		{"lower case", `MATCH DISTANCE("a") namespace "acme"`, false},
+		{"mixed case", `MATCH DISTANCE("a") NameSpace "acme"`, false},
+		{"the selector runs to the end", `MATCH DISTANCE("a") NAMESPACE "acme", NOT "acme-staging"`, false},
+		{"a window closes the selector", `MATCH DISTANCE("a") NAMESPACE "acme" WINDOW 7d`, false},
 		// A word that merely ends with the keyword is not the keyword, and a
 		// phrase after it is a phrase.
-		{"a longer word ending in the keyword", `MATCH DISTANCE("a") WITHIN 0.4 MYNAMESPACE "acme"`, true},
-		{"a longer word starting with the keyword", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACES "acme"`, true},
+		{"a longer word ending in the keyword", `MATCH DISTANCE("a") MYNAMESPACE "acme"`, true},
+		{"a longer word starting with the keyword", `MATCH DISTANCE("a") NAMESPACES "acme"`, true},
 		// The selector is a list of names, so any word that is not one closes it.
 		// A word nobody can parse closes it too: a phrase sitting after some
 		// unrecognised token is a query that does not parse, not a second name.
-		{"an unrecognised word closes the selector", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACE "acme" NOLIMIT "beta"`, true},
+		{"an unrecognised word closes the selector", `MATCH DISTANCE("a") NAMESPACE "acme" NOLIMIT "beta"`, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			b, e := &stubBroker{}, &stubEmbedder{}
@@ -210,7 +210,7 @@ func TestAPhraseAfterANamespaceIsNeverForwardedAsAName(t *testing.T) {
 func TestARepeatedPhraseIsEmbeddedOnceAndAppliedTwice(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
-	searchWith(t, b, e, `MATCH DISTANCE("rollback") WITHIN 0.4 OR DIRECTION(["rollback", "incident"]) CONE 0.3`)
+	searchWith(t, b, e, `MATCH DISTANCE("rollback") OR DIRECTION(["rollback", "incident"]) CONE 0.3`)
 
 	if e.calls != 1 {
 		t.Errorf("expected one call to the endpoint, got %d", e.calls)
@@ -218,7 +218,7 @@ func TestARepeatedPhraseIsEmbeddedOnceAndAppliedTwice(t *testing.T) {
 	if len(e.texts) != 2 {
 		t.Fatalf("expected two distinct phrases, got %v", e.texts)
 	}
-	want := `MATCH DISTANCE([1,0,0]) WITHIN 0.4 OR DIRECTION([[1,0,0], [2,0,0]]) CONE 0.3`
+	want := `MATCH DISTANCE([1,0,0]) OR DIRECTION([[1,0,0], [2,0,0]]) CONE 0.3`
 	if b.searchReq.Query != want {
 		t.Errorf("expected\n  %s\ngot\n  %s", want, b.searchReq.Query)
 	}
@@ -229,7 +229,7 @@ func TestARepeatedPhraseIsEmbeddedOnceAndAppliedTwice(t *testing.T) {
 func TestAQueryThatIsAlreadyVectorsIsPassedThroughUnchanged(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
-	query := `MATCH DISTANCE([0.1,0.2,0.3]) WITHIN 0.5`
+	query := `MATCH DISTANCE([0.1,0.2,0.3])`
 	searchWith(t, b, e, query)
 
 	if b.searchReq.Query != query {
@@ -249,15 +249,15 @@ func TestAQueryThatCannotBeAccountedForIsRefused(t *testing.T) {
 		query string
 		says  string
 	}{
-		{"an unclosed bracket", `MATCH DISTANCE("alpha" WITHIN 0.4`, "never closed"},
-		{"a stray closing bracket", `MATCH DISTANCE("alpha")) WITHIN 0.4`, "nothing to close"},
-		{"an unterminated phrase", `MATCH DISTANCE("alpha) WITHIN 0.4`, "never closed"},
-		{"an escape we cannot read", `MATCH DISTANCE("alpha\nbeta") WITHIN 0.4`, "backslash"},
+		{"an unclosed bracket", `MATCH DISTANCE("alpha"`, "never closed"},
+		{"a stray closing bracket", `MATCH DISTANCE("alpha"))`, "nothing to close"},
+		{"an unterminated phrase", `MATCH DISTANCE("alpha)`, "never closed"},
+		{"an escape we cannot read", `MATCH DISTANCE("alpha\nbeta")`, "backslash"},
 		// A forgotten bracket leaves the phrase outside any clause. Forwarding
 		// it because it happens to sit at depth zero would send the words on a
 		// query the broker was going to reject anyway.
-		{"a phrase with no clause around it", `MATCH DISTANCE "payroll incident" WITHIN 0.4`, "inside no clause"},
-		{"a phrase after the namespace selector ends", `MATCH DISTANCE("a") WITHIN 0.4 NAMESPACE "acme" LIMIT 5 "payroll incident"`, "inside no clause"},
+		{"a phrase with no clause around it", `MATCH DISTANCE "payroll incident"`, "inside no clause"},
+		{"a phrase after the namespace selector ends", `MATCH DISTANCE("a") NAMESPACE "acme" LIMIT 5 "payroll incident"`, "inside no clause"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			b, e := &stubBroker{}, &stubEmbedder{}
@@ -282,7 +282,7 @@ func TestAQueryThatCannotBeAccountedForIsRefused(t *testing.T) {
 func TestAnEscapedQuoteInAnAnchorIsEmbeddedAsWritten(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
-	searchWith(t, b, e, `MATCH DISTANCE("the \"soft delete\" path") WITHIN 0.5`)
+	searchWith(t, b, e, `MATCH DISTANCE("the \"soft delete\" path")`)
 
 	if len(e.texts) != 1 || e.texts[0] != `the "soft delete" path` {
 		t.Errorf("expected the unescaped phrase, got %q", e.texts)
@@ -298,7 +298,7 @@ func TestTooManyAnchorsIsRefusedWithTheCeilingNamed(t *testing.T) {
 
 	var clauses []string
 	for _, phrase := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"} {
-		clauses = append(clauses, `DISTANCE("`+phrase+`") WITHIN 0.4`)
+		clauses = append(clauses, `DISTANCE("`+phrase+`")`)
 	}
 	query := "MATCH " + strings.Join(clauses, " AND ")
 
@@ -325,7 +325,7 @@ func TestADimensionalityLargerThanAQueryCanCarryIsRefused(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
 	_, err := embedding.Precomputed(b, e).Search(context.Background(), semantik.SearchRequest{
-		Query: `MATCH DISTANCE("alpha") WITHIN 0.4`, Namespace: "incidents", Model: model, Dimensions: 5000,
+		Query: `MATCH DISTANCE("alpha")`, Namespace: "incidents", Model: model, Dimensions: 5000,
 	})
 	if err == nil {
 		t.Fatal("expected a 5000-dimensional anchor to be refused")
@@ -358,10 +358,10 @@ func TestJSONAnchorsAreReplacedInEveryClauseKind(t *testing.T) {
 		name  string
 		query string
 	}{
-		{"distance", `{"match":{"distance":{"anchor":"payroll incident","within":0.5}}}`},
+		{"distance", `{"match":{"distance":{"anchor":"payroll incident"}}}`},
 		{"direction with a bare phrase", `{"match":{"direction":{"toward":"customer frustration","cone":0.4}}}`},
 		{"direction with a list", `{"match":{"direction":{"toward":["customer frustration","billing complaint"]}}}`},
-		{"contrast", `{"match":{"contrast":{"attract":["enterprise"],"repel":["free tier"],"within":0.45}}}`},
+		{"contrast", `{"match":{"contrast":{"attract":["enterprise"],"repel":["free tier"]}}}`},
 		{"nested", `{"match":{"and":[{"not":{"distance":{"anchor":"alpha"}}},{"or":[{"distance":{"anchor":"beta"}},{"distance":{"anchor":"gamma"}}]}]}}`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -402,14 +402,14 @@ func TestABarePhraseInAnAnchorListBecomesANestedVector(t *testing.T) {
 }
 
 // Numbers this server does not touch must come back as the agent wrote them.
-// A threshold re-rendered as 0.5000000001 changes what matches.
+// A count re-rendered as 7.0 or 7e0 changes what the server reads.
 func TestJSONNumbersSurviveTheRoundTrip(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
-	searchWith(t, b, e, `{"match":{"distance":{"anchor":"alpha","within":0.45,"top_k":7}},"window":"P7D","limit":20}`)
+	searchWith(t, b, e, `{"match":{"distance":{"anchor":"alpha","top_k":7}},"window":"P7D","limit":20}`)
 
 	sent := b.searchReq.Query
-	for _, want := range []string{`"within":0.45`, `"top_k":7`, `"window":"P7D"`, `"limit":20`} {
+	for _, want := range []string{`"top_k":7`, `"window":"P7D"`, `"limit":20`} {
 		if !strings.Contains(sent, want) {
 			t.Errorf("expected %s to survive, got %s", want, sent)
 		}
@@ -470,7 +470,7 @@ func TestBlankingUnderstandsAnEscapedQuote(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
 	if _, err := embedding.Precomputed(b, e).Lint(context.Background(), semantik.LintRequest{
-		Query: `MATCH DISTANCE("the \"soft delete\" path") WITHIN 0.5`,
+		Query: `MATCH DISTANCE("the \"soft delete\" path")`,
 	}); err != nil {
 		t.Fatalf("lint: %v", err)
 	}
@@ -480,7 +480,7 @@ func TestBlankingUnderstandsAnEscapedQuote(t *testing.T) {
 			t.Fatalf("the phrase leaked through blanking: %s", b.lintReq.Query)
 		}
 	}
-	if want := `MATCH DISTANCE("x") WITHIN 0.5`; b.lintReq.Query != want {
+	if want := `MATCH DISTANCE("x")`; b.lintReq.Query != want {
 		t.Errorf("expected %q, got %q", want, b.lintReq.Query)
 	}
 }
@@ -502,7 +502,7 @@ func TestLintBlanksAJSONQuery(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
 	if _, err := embedding.Precomputed(b, e).Lint(context.Background(), semantik.LintRequest{
-		Query: `{"match":{"distance":{"anchor":"payroll incident","within":0.5}}}`,
+		Query: `{"match":{"distance":{"anchor":"payroll incident","top_k":7}}}`,
 	}); err != nil {
 		t.Fatalf("lint: %v", err)
 	}
@@ -510,7 +510,22 @@ func TestLintBlanksAJSONQuery(t *testing.T) {
 	if strings.Contains(b.lintReq.Query, "payroll") {
 		t.Fatalf("the anchor text reached the lint endpoint: %s", b.lintReq.Query)
 	}
-	if !strings.Contains(b.lintReq.Query, `"within":0.5`) {
+	if !strings.Contains(b.lintReq.Query, `"top_k":7`) {
 		t.Errorf("expected the rest of the query to survive, got %s", b.lintReq.Query)
+	}
+}
+
+// This client is a faithful pass-through for every clause key it knows about,
+// including `within`. The server, not the client, refuses WITHIN, so refusing
+// it here as well would hide the server's own error code and message from the
+// agent. Pinning the pass-through keeps the two from drifting into a second,
+// divergent opinion about the grammar.
+func TestAWithinKeyIsPassedThroughForTheServerToRefuse(t *testing.T) {
+	b, e := &stubBroker{}, &stubEmbedder{}
+
+	searchWith(t, b, e, `{"match":{"distance":{"anchor":"alpha","within":0.5}}}`)
+
+	if !strings.Contains(b.searchReq.Query, `"within":0.5`) {
+		t.Errorf("expected the within key to reach the server unchanged, got %s", b.searchReq.Query)
 	}
 }
