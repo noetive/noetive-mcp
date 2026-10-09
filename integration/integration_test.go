@@ -136,7 +136,7 @@ func TestLintAgainstProduction(t *testing.T) {
 	s := newSession(t)
 
 	result := s.call("noetive_lint", map[string]any{
-		"query": `MATCH DISTANCE("machine learning") WITHIN 0.4 LIMIT 5`,
+		"query": `MATCH DISTANCE("machine learning") LIMIT 5`,
 	})
 
 	if result.IsError {
@@ -251,7 +251,7 @@ func TestPublishThenSearchAgainstProduction(t *testing.T) {
 	}
 
 	found := s.call("noetive_search", map[string]any{
-		"query": fmt.Sprintf(`MATCH DISTANCE(%q) WITHIN 0.6 LIMIT 20`, marker),
+		"query": fmt.Sprintf(`MATCH DISTANCE(%q) LIMIT 20`, marker),
 	})
 	if found.IsError {
 		// Search embeds the query, so it blocks on the same component publish
@@ -308,7 +308,7 @@ func TestSubscribeSetupAgainstProduction(t *testing.T) {
 	s := newSession(t)
 
 	result := s.call("noetive_subscribe", map[string]any{
-		"query":        `MATCH DISTANCE("integration probe") WITHIN 0.5`,
+		"query":        `MATCH DISTANCE("integration probe")`,
 		"max_matches":  float64(1),
 		"wait_seconds": float64(5),
 	})

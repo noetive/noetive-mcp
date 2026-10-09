@@ -146,7 +146,7 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 		),
 		mcp.WithString("query",
 			mcp.Required(),
-			mcp.Description("SemQL query describing the region of meaning to watch, for example: MATCH DISTANCE(\"gpu shortage\") WITHIN 0.5"),
+			mcp.Description("SemQL query describing the region of meaning to watch, for example: MATCH DISTANCE(\"gpu shortage\")"),
 		),
 		mcp.WithNumber("max_matches",
 			mcp.Description(fmt.Sprintf("Stop early once this many matches have arrived. Defaults to %d, capped at %d.", defaultMax, maxMatchCap)),

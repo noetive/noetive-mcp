@@ -16,9 +16,9 @@ If the server was started with these configured, calls can omit them. Otherwise 
 
 ## Writing queries
 
-Queries use SemQL, which describes a region of meaning rather than matching text. `MATCH DISTANCE("payment reconciliation") WITHIN 0.5 LIMIT 10` finds messages close to that idea however they were worded.
+Queries use SemQL, which describes a region of meaning rather than matching text. `MATCH DISTANCE("payment reconciliation") LIMIT 10` finds messages close to that idea however they were worded.
 
-`WITHIN` is a minimum similarity from 0.0 to 1.0, so higher is tighter. `CONE` is a half-angle in radians, so smaller is tighter. Getting either backwards produces a query that runs and returns the wrong thing.
+There is no similarity threshold to set: Semantik sets the relevance bar itself, per clause (a clause holds only when the message is closer to it than general reference text is, and `A AND B` needs both to hold), and refuses `WITHIN` with `400 invalid_request`. To match less, make the anchor text more specific; to match more, OR in another anchor of similar specificity: anchors of one kind ORed together share one bar, so ORing in a much broader anchor raises the bar for the narrower ones and can drop their marginal matches. `CONE` on `DIRECTION` is a half-angle in radians, so smaller is tighter. `CONE` can only tighten: a message must be inside the cone and above the bar, so a cone wider than the bar changes nothing.
 
 The `semql` skill has the full grammar, worked patterns and the mistakes worth checking for. When a query is unfamiliar, or a search comes back with `invalid_request`, run `noetive_lint` before retrying: it reports the parse error and suggests completions, which is cheaper than guessing at syntax.
 

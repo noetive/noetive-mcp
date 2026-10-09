@@ -214,7 +214,7 @@ func TestSearchNeverReachesNoetiveWhenEmbeddingFails(t *testing.T) {
 	b := &stubBroker{}
 	e := &stubEmbedder{err: errors.New("connection refused")}
 
-	searchError(t, b, e, `MATCH DISTANCE("payroll incident") WITHIN 0.5`)
+	searchError(t, b, e, `MATCH DISTANCE("payroll incident")`)
 
 	if b.calls != 0 {
 		t.Fatal("the query reached Noetive despite the embedding failing")
@@ -226,7 +226,7 @@ func TestSubscribeNeverReachesNoetiveWhenEmbeddingFails(t *testing.T) {
 	e := &stubEmbedder{err: errors.New("connection refused")}
 
 	if _, err := embedding.Precomputed(b, e).Subscribe(context.Background(), semantik.SubscribeRequest{
-		Query: `MATCH DISTANCE("gpu shortage") WITHIN 0.5`, Namespace: "incidents", Model: model, Dimensions: dims,
+		Query: `MATCH DISTANCE("gpu shortage")`, Namespace: "incidents", Model: model, Dimensions: dims,
 	}); err == nil {
 		t.Fatal("expected the subscribe to fail")
 	}
@@ -241,7 +241,7 @@ func TestAShortBatchIsRefusedRatherThanPartiallyApplied(t *testing.T) {
 	b := &stubBroker{}
 	e := &stubEmbedder{short: true}
 
-	searchError(t, b, e, `MATCH DISTANCE("alpha") WITHIN 0.4 AND DISTANCE("beta") WITHIN 0.4`)
+	searchError(t, b, e, `MATCH DISTANCE("alpha") AND DISTANCE("beta")`)
 
 	if b.calls != 0 {
 		t.Fatal("a partially rewritten query reached Noetive")
@@ -254,13 +254,13 @@ func TestSubscribeRewritesItsQueryToo(t *testing.T) {
 	// The stub cannot return a *semantik.Subscription, so the error is expected
 	// and what matters is the query that reached it.
 	_, _ = embedding.Precomputed(b, e).Subscribe(context.Background(), semantik.SubscribeRequest{
-		Query: `MATCH DISTANCE("gpu shortage") WITHIN 0.5`, Namespace: "incidents", Model: model, Dimensions: dims,
+		Query: `MATCH DISTANCE("gpu shortage")`, Namespace: "incidents", Model: model, Dimensions: dims,
 	})
 
 	if strings.Contains(b.subscribeReq.Query, "gpu shortage") {
 		t.Fatalf("the anchor text reached the wire: %s", b.subscribeReq.Query)
 	}
-	if want := `MATCH DISTANCE([1,0,0]) WITHIN 0.5`; b.subscribeReq.Query != want {
+	if want := `MATCH DISTANCE([1,0,0])`; b.subscribeReq.Query != want {
 		t.Errorf("expected %q, got %q", want, b.subscribeReq.Query)
 	}
 }
@@ -270,10 +270,10 @@ func TestSubscribeRewritesItsQueryToo(t *testing.T) {
 // typed to reach Noetive on a server whose whole point is that they do not.
 func TestLintSendsTheQueryWithItsAnchorTextRemoved(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
-	b.lintResp = semantik.LintResponse{Valid: true, Normalized: `MATCH DISTANCE("x") WITHIN 0.5`}
+	b.lintResp = semantik.LintResponse{Valid: true, Normalized: `MATCH DISTANCE("x")`}
 
 	resp, err := embedding.Precomputed(b, e).Lint(context.Background(), semantik.LintRequest{
-		Query: `MATCH DISTANCE("payroll incident") WITHIN 0.5`,
+		Query: `MATCH DISTANCE("payroll incident")`,
 	})
 	if err != nil {
 		t.Fatalf("lint: %v", err)
@@ -282,7 +282,7 @@ func TestLintSendsTheQueryWithItsAnchorTextRemoved(t *testing.T) {
 	if strings.Contains(b.lintReq.Query, "payroll") {
 		t.Fatalf("the anchor text reached the lint endpoint: %s", b.lintReq.Query)
 	}
-	if want := `MATCH DISTANCE("x") WITHIN 0.5`; b.lintReq.Query != want {
+	if want := `MATCH DISTANCE("x")`; b.lintReq.Query != want {
 		t.Errorf("expected %q, got %q", want, b.lintReq.Query)
 	}
 	// Returning the normalized form would hand back a query with the
@@ -333,7 +333,7 @@ func TestLintWorksOnAQueryThatIsStillBeingTyped(t *testing.T) {
 func TestLintClampsACursorThatBlankingPutOutOfBounds(t *testing.T) {
 	b, e := &stubBroker{}, &stubEmbedder{}
 
-	query := `MATCH DISTANCE("payroll incident") WITHIN 0.5`
+	query := `MATCH DISTANCE("payroll incident")`
 	if _, err := embedding.Precomputed(b, e).Lint(context.Background(), semantik.LintRequest{
 		Query: query, Cursor: len(query),
 	}); err != nil {

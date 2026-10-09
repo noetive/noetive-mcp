@@ -7,13 +7,13 @@ Semantik delivers a message to every subscription whose SemQL predicate holds on
 
 Read `references/embedding-behaviour.md` when you need the reasoning behind a rule or the user asks why. Read `references/anchor-catalog.md` for ready intent anchors, role inboxes and category templates. Read `references/validation.md` before declaring any anchor set finished.
 
-Thresholds throughout are cosine **similarity**: `WITHIN` is a floor, so higher is tighter, and `CONE` is a half-angle, so smaller is tighter. The semql skill owns both knobs; this skill owns the words inside the clauses.
+There is no threshold to tune. Semantik sets the relevance bar itself, per clause: a clause holds for a message only when the message is closer to it than general reference text is. `A AND B` matches only when each clause holds on its own; a strong match on one does not make up for the other. Clauses of one kind ORed together (`A OR B OR C`, all DISTANCE, say) share one bar measured on the group as a whole, which rises with the group's breadth, because broad groups sit closer to everything. Clauses of different kinds in one OR (DISTANCE, DIRECTION, CONTRAST) each keep their own bar. Semantik refuses `WITHIN` with `400 invalid_request`, so the words in the anchors are the lever, plus `CONE` on DIRECTION (a half-angle in radians, smaller is tighter, default 1.0). `CONE` can only tighten: a message must be inside the cone and above the bar, so a cone wider than the bar changes nothing. The semql skill owns the grammar; this skill owns the words inside the clauses.
 
 Every query below narrows meaning and nothing else. Where it runs is the `namespace` argument on the tool call, not a `NAMESPACE` clause: the clause exists, but writing one that disagrees with the argument is answered `400 invalid_request`. See the semql skill.
 
 ## Two facts that decide everything
 
-**Only `text` is embedded.** Metadata travels with the message and comes back to consumers, but SemQL v1 has no clause over metadata. Anything that must influence routing goes in the text. Anything that would only add noise to the vector (ids, URLs, hashes, timestamps, roles, sequence numbers, code) goes in metadata, where it is still available to the consumer.
+**Only `text` is embedded.** Metadata travels with the message and comes back to consumers, but SemQL v1 has no clause over metadata. Anything that must influence routing goes in the text. Anything that would only add noise to the vector (ids, URLs, hashes, timestamps, roles, sequence numbers, code) goes in metadata, where it is still available to the consumer. A message published with your own vector must carry one from the namespace's model, because the bar is measured in that model's space.
 
 **Similarity is symmetric and both sides use one model.** A subscription anchor is just another piece of text embedded the same way as messages. It matches messages written the way it is written. An anchor that *describes* a class ("messages reporting completed work") sits in a meta register; a message that *is* a completed-work report sits in the object register, and the two are farther apart than intuition suggests. So either write anchors as exemplars of the messages, or have publishers carry a canonical phrase that the anchor repeats verbatim.
 
@@ -65,7 +65,7 @@ Rules for any anchor string, whatever clause it sits in:
 
 - **Same register as the messages.** Write what a matching message would say, or the exact canonical phrase the publisher uses. Never a description of the class.
 - **Concrete nouns, no meta words.** "message", "content", "information", "update", "about", "issue", "thing" carry almost no direction.
-- **No negation inside an anchor.** "not a tutorial" embeds next to "tutorial". Negation lives in REPEL or NOT DISTANCE, never in the words.
+- **No negation inside an anchor.** "not a tutorial" embeds next to "tutorial". Negation lives in REPEL or `AND NOT DISTANCE`, never in the words. `NOT` is only valid directly under an `AND` that also has a positive clause; `A OR NOT B`, `NOT A AND NOT B` and `A AND (B OR NOT C)` are refused with `400 invalid_request` because they would match nearly every message.
 - **Several short phrases over one long sentence** for DIRECTION and for attract/repel lists, because the composite is a normalised mean and short phrases contribute clean concepts.
 - **Attract and repel never share a head word.** "performance optimization" against "performance testing" cancels. "reduced latency" against "monitoring dashboard" separates.
 - **Measured before trusted.** See Validation below.
@@ -79,11 +79,11 @@ MATCH CONTRAST(
         ATTRACT ["finished work reported for verification"],
         REPEL   ["a request for work with a completion criterion",
                  "a verification result, pass or fail, on finished work"]
-      ) WITHIN 0.5
+      )
   AND DIRECTION(["reservations", "booking retry", "Ruby"]) CONE 1.1
 ```
 
-Start `WITHIN` near 0.5 (a composite sits further from everything than a plain anchor does, so a CONTRAST floor is lower than a DISTANCE floor for the same strictness), and then set it from the measured in-class and out-of-class similarities rather than by feel.
+There is no floor to choose: Semantik sets the bar. If the composite matches too much or too little, change the words (more specific attract phrases, different repel siblings), not a number.
 
 ### Information topic
 
@@ -100,7 +100,7 @@ MATCH DIRECTION(["reservation double-booking", "idempotency key on submit", "ret
 For one specific pattern, DISTANCE over a single exemplar written as a message would be, not as a label:
 
 ```sql
-MATCH DISTANCE("a retried PUT after response headers produced a duplicate object") WITHIN 0.6
+MATCH DISTANCE("a retried PUT after response headers produced a duplicate object")
 ```
 
 Use the nouns publishers actually use. If publishers write "conditional PUT" and the anchor says "optimistic concurrency on object writes", the cone misses them even though a human sees the link. When you do not know the publishers' vocabulary, sample their messages first.
@@ -119,26 +119,54 @@ MATCH DIRECTION(["customer support email", "account and service request"]) CONE 
   AND CONTRAST(
         ATTRACT ["charged twice this month", "refund for the unused period", "invoice amount is wrong"],
         REPEL   ["cannot log in after password reset", "page takes thirty seconds to load", "please add a dark mode"]
-      ) WITHIN 0.5
+      )
 ```
 
-Write the residual bin ("other") as NOT of the union of the named bins, never as a positive anchor. "Miscellaneous" has no direction.
+Write the residual bin ("other") as `NOT` of the union of the named bins, directly under the parent DIRECTION's `AND`, never as a positive anchor. "Miscellaneous" has no direction.
 
 ## When a subscription misbehaves
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Matches nearly everything | single DIRECTION with a generic anchor, or a `WITHIN` floor below about 0.3 | add CONTRAST or a specific DISTANCE, raise `WITHIN`, narrow `CONE` |
+| Matches nearly everything | single DIRECTION with a generic anchor, or many OR'd broad anchors | make the anchor text more specific, add CONTRAST or REPEL, narrow `CONE` |
 | Matches the opposite polarity | negation in the anchor or in the messages | polarity words on both sides, REPEL the opposite |
 | Misses messages a human would match | meta-register anchor against object-register messages, or messages that point instead of name | rewrite anchors as exemplars, rewrite publish text to name things |
 | Two categories bleed into each other | sibling overlap, shared head words | recut, repel each other's exemplars, or merge |
 | Intent routing looks random | no canonical prefix, relying on tense and mood | agree the prefix, attract it, repel its siblings |
 | A reply never reaches the original's subscribers | reply written with deixis | restate the original's subject in the reply |
-| Everything drifts after a model change | anchors tuned to the old embedder | re-run validation, re-phrase, re-threshold |
+| Everything drifts after a model change | anchors tuned to the old embedder | re-run validation and re-phrase |
+
+## Roles that split a stream
+
+When several agents or teams share one stream and each message should have one owner, write each role's subscription like this:
+
+- A few short anchors in the words that role's messages actually use.
+- OR in one sentence stating what the role is responsible for, naming the concrete things it handles.
+- Put every role in the same `group` on `/v1/subscribe`, so each message goes to one owner.
+
+```sql
+MATCH DISTANCE("beds full, ICU at capacity")
+   OR DISTANCE("ventilators running short")
+   OR DISTANCE("Coordinates hospital capacity: beds, ICU, ventilators, clinical staffing and facility-level PPE.")
+```
+
+Subscriptions on the same account in the same namespace with the same group name compete. A message that matches several members goes only to the member it scores highest against (exact ties go to every tied member). Grouped match frames carry `lead`: this member's score minus the best score among the other matching members, 0 for a tie, absent when uncontested. Notes:
+
+- Only open streams compete. Once Semantik sees that a member's stream has closed, the next-closest open member receives what it would have won; until then, messages that member wins are lost with the stream.
+- A member's seq has gaps for messages a peer won, so in a group a gap does not by itself mean a lost message. Messages are still dropped when the winning member's stream is not read fast enough, and they are not passed to the next member.
+- Members must match on the same clause kinds (DISTANCE, DIRECTION, CONTRAST; clauses under NOT ignored). A subscription whose kinds differ from the group's current members is refused with `400 invalid_request`. For DISTANCE the members must also use the same metric (mixing metrics is refused like mixing kinds). Write members in the same shape as well: an AND member scores the mean of its clauses and an OR member the best, so an AND member loses to an OR member it would otherwise tie.
+- A message relevant to two members reaches only the closer one unless they tie.
+- Groups belong to the account: every API key on the account shares its group names, so any of your keys can join your groups, and another account's identically named group never competes with yours.
+
+Short anchors alone are decent, the responsibility sentence on its own is poor (a long description by itself is one blurred vector), and both together are best. In replay tests the owner ranked first most often with both together, less often with short anchors alone, and least often with the sentence alone. Grouping sharply cut deliveries to non-owners.
+
+Two things that did not help: rewriting published messages into formal operational summaries before publishing (it made unrelated chatter look on-topic and lowered owner recall), and instruction-style prefixes on anchors.
+
+Known limit: a message that is on the subscribers' topic but is nobody's job still reaches the closest matching subscription. Semantik tells "about my topic" apart from unrelated traffic, not "my job" from "someone's topic", unless the words say so. Let consuming agents decline a message.
 
 ## Validation
 
-Do not ship an anchor set on judgment. Embed the anchors and a labelled sample of real messages with the namespace's pinned model, then compute anchor separation, nearest-anchor and contrast accuracy, the confusion pairs, and a `WITHIN` per anchor with the precision and recall it buys. On unit-normalised vectors each of those is one line of arithmetic; `references/validation.md` gives the sample, the formulas, the pass bar and what to change when it fails. Re-run on every embedder change; anchors belong to the model that embeds them.
+Do not ship an anchor set on judgment. Semantik sets the relevance bar, per clause, so validation checks the words: embed the anchors and a labelled sample of real messages with the namespace's pinned model, then compute anchor separation, nearest-anchor accuracy, whether each labelled message's owner ranks first among the roles, and the confusion pairs. On unit-normalised vectors each of those is one line of arithmetic; `references/validation.md` gives the sample, the checks, the pass bar and what to change when it fails. Re-run on every embedder change; anchors belong to the model that embeds them.
 
 ## Output shape
 

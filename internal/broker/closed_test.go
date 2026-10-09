@@ -31,7 +31,7 @@ func TestNoRoutingToolReachesAClosedNamespace(t *testing.T) {
 		{
 			name:    "search",
 			build:   func(s *stubBroker) (mcp.Tool, mcpserver.ToolHandlerFunc) { return broker.SearchTool(s, closedGlobal) },
-			args:    map[string]any{"query": `MATCH DISTANCE("payment reconciliation") WITHIN 0.4`},
+			args:    map[string]any{"query": `MATCH DISTANCE("payment reconciliation")`},
 			reached: func(s *stubBroker) bool { return s.searchReq.Query != "" },
 		},
 		{
@@ -39,7 +39,7 @@ func TestNoRoutingToolReachesAClosedNamespace(t *testing.T) {
 			build: func(s *stubBroker) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 				return broker.SubscribeTool(s, closedGlobal)
 			},
-			args:    map[string]any{"query": `MATCH DISTANCE("payment reconciliation") WITHIN 0.4`, "max_matches": float64(1), "wait_seconds": float64(60)},
+			args:    map[string]any{"query": `MATCH DISTANCE("payment reconciliation")`, "max_matches": float64(1), "wait_seconds": float64(60)},
 			reached: func(s *stubBroker) bool { return s.subReq.Query != "" },
 		},
 	}

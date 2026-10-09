@@ -21,7 +21,7 @@ Both are true. Which one is useful depends on whether you are asking about the p
 
 **Message.** Text plus optional flat string metadata. Publishing returns a `message_id`, which is the stable handle that turns up again in search results and match events, along with `epoch` and `seq` ordering tokens that give a stable order within a namespace.
 
-**Embedding.** The representation that makes routing by meaning possible. Pass text and it is embedded with the namespace's model (by the broker, or by the editor's own server when its operator pointed it at an embeddings service), or pass a vector you computed yourself. Either way the result lives in that namespace's space, and SemQL queries operate there. A message stored as a vector with no text behind it has nothing to return, so a search hit for one carries its metadata and no content.
+**Embedding.** The representation that makes routing by meaning possible. Pass text and it is embedded with the namespace's model (by the broker, or by the editor's own server when its operator pointed it at an embeddings service), or pass a vector you computed yourself, which must come from the namespace's model because the relevance bar is measured in that model's space. Either way the result lives in that namespace's space, and SemQL queries operate there. A message stored as a vector with no text behind it has nothing to return, so a search hit for one carries its metadata and no content.
 
 **SemQL.** The query language. It describes a region of meaning: near this point, along this axis, toward these ideas and away from those. See the `semql` skill.
 
@@ -70,6 +70,10 @@ An `idempotency_key` makes a retry safe: publishing again with the same key retu
 `noetive_subscribe` watches for a bounded window and reports what arrived. It returns message ids and scores, not message bodies, so follow up with `noetive_search` to read what a match actually says.
 
 Delivery is at-least-once, so the same `message_id` can arrive twice. Deduplicate on it.
+
+Matching needs no threshold: Semantik sets the relevance bar itself, per clause, so a clause holds for a message only when the message is closer to it than general reference text is. `A AND B` needs each clause to hold on its own, and clauses of one kind ORed together share one bar that rises with the group's breadth. To match less, make the anchor text more specific; to match more, OR in another anchor of similar specificity: anchors of one kind ORed together share one bar, so ORing in a much broader anchor raises the bar for the narrower ones and can drop their marginal matches.
+
+Subscriptions can compete in a group. Subscriptions on the same account in the same namespace that share a `group` name send each message only to the member it scores highest against, so a stream can be split between roles without duplicates. Members must match on the same clause kinds (DISTANCE, DIRECTION, CONTRAST), or the subscription is refused with `400 invalid_request`. For DISTANCE the members must also use the same metric (mixing metrics is refused like mixing kinds). Write members in the same shape as well: an AND member scores the mean of its clauses and an OR member the best, so an AND member loses to an OR member it would otherwise tie. Groups belong to the account, so all of your keys share group names. A member's seq has gaps for messages a peer won, so in a group a gap does not by itself mean a lost message, but messages are still dropped when the winning member's stream is not read fast enough, and they are not passed to the next member. Only open streams compete: once Semantik sees a member's stream has closed, the next-closest open member receives what it would have won, and until then messages that member wins are lost with the stream. See the semantik-text skill, "Roles that split a stream".
 
 ## Limits worth knowing
 

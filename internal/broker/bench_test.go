@@ -54,7 +54,7 @@ func BenchmarkSearch(b *testing.B) {
 
 			_, handler := broker.SearchTool(&stubBroker{searchResp: semantik.SearchResponse{Results: results}}, configured)
 			run(b, handler, benchRequest(map[string]any{
-				"query": `MATCH DISTANCE("payment reconciliation") WITHIN 0.4 LIMIT 50`,
+				"query": `MATCH DISTANCE("payment reconciliation") LIMIT 50`,
 			}))
 		})
 	}
@@ -109,8 +109,8 @@ func BenchmarkErrorShaping(b *testing.B) {
 func BenchmarkLint(b *testing.B) {
 	_, handler := broker.LintTool(&stubBroker{lintResp: semantik.LintResponse{
 		Valid:      true,
-		Normalized: `MATCH DISTANCE("payment reconciliation") WITHIN 0.4 LIMIT 10`,
+		Normalized: `MATCH DISTANCE("payment reconciliation") LIMIT 10`,
 	}})
 
-	run(b, handler, benchRequest(map[string]any{"query": `match distance("payment reconciliation") within 0.4`}))
+	run(b, handler, benchRequest(map[string]any{"query": `match distance("payment reconciliation")`}))
 }
