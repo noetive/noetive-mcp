@@ -3,7 +3,7 @@ module go.noetive.io/noetive-mcp
 go 1.26.9
 
 require (
-	github.com/goccy/go-json v0.10.6
+	github.com/goccy/go-json v0.11.2
 	github.com/mark3labs/mcp-go v1.1.1
 	go.noetive.io/noetive-sdk-go v0.0.0-20261007080819-6823fc7f9278
 	gopkg.in/yaml.v3 v3.0.1
