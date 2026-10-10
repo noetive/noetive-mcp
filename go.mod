@@ -1,6 +1,6 @@
 module go.noetive.io/noetive-mcp
 
-go 1.25.13
+go 1.26.9
 
 require (
 	github.com/goccy/go-json v0.10.6

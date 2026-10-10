@@ -7,7 +7,7 @@
 # runner; under QEMU the same build takes minutes. TARGETOS and TARGETARCH are
 # supplied by BuildKit and default to the host, so a plain `docker build` still
 # produces an image for the machine that ran it.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 
 ARG VERSION=docker
 ARG TARGETOS
