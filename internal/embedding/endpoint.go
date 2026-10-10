@@ -225,9 +225,14 @@ type embedResponse struct {
 // embedDatum is one embedding. Index is authoritative for which input it
 // belongs to; see Embed for why it is not treated as advisory.
 //
+// Embedding is decoded as float64 and narrowed in scatter. Decoded straight
+// into float32, an element beyond float32 range fails the whole decode with a
+// JSON error that does not say the vector is unusable; narrowed, it becomes
+// ±Inf and is refused by name.
+//
 // Field ordering: slice (24 B) > int (8 B).
 type embedDatum struct {
-	Embedding []float32 `json:"embedding"`
+	Embedding []float64 `json:"embedding"`
 	Index     int       `json:"index"`
 }
 
@@ -369,18 +374,22 @@ func (e *Endpoint) scatter(model string, dimensions uint16, texts []string, data
 				Message: fmt.Sprintf("returned a %d-dimensional vector for input %d, but the namespace is %d-dimensional; either the endpoint is serving a different model or %s does not match it", len(d.Embedding), d.Index, dimensions, "NOETIVE_DIMENSIONS"),
 			}
 		}
+		vector := make([]float32, len(d.Embedding))
 		for i, v := range d.Embedding {
 			// A non-finite element cannot be published, the SDK rejects it,
 			// and written into a query it would serialise as a bare NaN, which
-			// is not valid JSON and not a valid SemQL number.
-			if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			// is not valid JSON and not a valid SemQL number. Checked after
+			// narrowing, which is where an out-of-range element becomes ±Inf.
+			f := float32(v)
+			if math.IsNaN(float64(f)) || math.IsInf(float64(f), 0) {
 				return nil, &Error{
 					Endpoint: e.url, Model: model,
 					Message: fmt.Sprintf("returned a vector for input %d whose element %d is not a finite number", d.Index, i),
 				}
 			}
+			vector[i] = f
 		}
-		out[d.Index] = d.Embedding
+		out[d.Index] = vector
 	}
 
 	for i := range out {
