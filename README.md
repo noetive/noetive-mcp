@@ -38,7 +38,7 @@ The server reads eight environment variables.
 
 | Variable | Required | What it does |
 |---|---|---|
-| `NOETIVE_KEY_SECRET` | Yes | Your API key from the [Noetive dashboard](https://noetive.io/dashboard). Every Noetive tool reaches Noetive, so every one needs it. |
+| `NOETIVE_KEY_SECRET` | Yes | Your API key from the [Noetive dashboard](https://noetive.io/dashboard/agents#keys). Every Noetive tool reaches Noetive, so every one needs it. |
 | `NOETIVE_NAMESPACE` | No | Namespace to route a call to when the call does not name one. The name you gave it, such as `acme-platform`. |
 | `NOETIVE_MODEL` | No | Embedding model to use when a call does not name one, for example `Qwen3-Embedding-4B`. |
 | `NOETIVE_DIMENSIONS` | No | Embedding dimensionality to use when a call does not name one, for example `1024`. A whole number from 1 to 65535 that matches the model. Anything else stops the server at startup and says so. |
