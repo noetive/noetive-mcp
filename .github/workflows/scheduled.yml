@@ -169,11 +169,11 @@ jobs:
       contents: read
       issues: write
     steps:
-      # A scheduled failure turns no pull request red and mails no author. An
+      # A failure here turns no pull request red and mails no author. An
       # issue is the only artefact anyone will see.
       #
       # One open issue at a time, commented on rather than reopened: a failure
-      # that persists is one problem, and a week of it should not be seven
+      # that persists is one problem, and seven runs of it should not be seven
       # issues. The label is the identity, so the title can carry the date.
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
