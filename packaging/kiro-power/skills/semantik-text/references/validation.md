@@ -2,7 +2,7 @@
 
 An anchor set is a claim that certain phrases separate certain messages under a certain embedder. Claims get checked. This is the check, and it is a few dozen lines of arithmetic over vectors you already have.
 
-Every number here is a cosine similarity: higher is closer. Semantik sets the relevance bar for each query itself, so there is no floor to derive. What you validate is the words.
+Every number here is a cosine similarity: higher is closer. There is no floor to derive. What you validate is the words.
 
 ## 1. Build the sample
 

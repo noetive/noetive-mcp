@@ -30,6 +30,6 @@ Five independent things can be wrong, and they need different fixes. Check them 
 | Tools registered | PASS/FAIL | the tool names seen |
 | Browser | PASS/INFO | whether riffle was found |
 
-If the API key check reports the literal text `${NOETIVE_KEY_SECRET}` rather than a key, the editor did not substitute the variable, usually because it was started from a desktop launcher, which does not read the user's shell profile. The fix is to launch it from a terminal where the variable is exported, or to re-run `init` with `--api-key`.
+If the API key check reports the literal text `${NOETIVE_KEY_SECRET}` rather than a key, the editor did not substitute the variable, usually because it was started from a desktop launcher, which does not read the user's shell profile. The fix is to launch it from a terminal where the variable is exported, or to re-run `init` with `--api-key-from-env`.
 
 For every FAIL, give the one command that fixes it. Do not suggest a fix for a check that passed, and do not speculate past the first failure. A key that cannot be read makes every later result meaningless.

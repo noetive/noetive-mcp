@@ -27,13 +27,13 @@ Three clauses, three different questions about the space. Picking the wrong one 
 
 ## Thresholds and the cone
 
-Semantik decides the bar, and you decide the angle.
+Semantik decides how close a match must be, and you decide the angle.
 
-**There is no threshold to set.** Semantik sets the relevance bar itself, per clause: a clause holds for a message only when the message is closer to it than general reference text is. `A AND B` matches only when each clause holds on its own; a strong match on one does not make up for the other. Clauses of one kind ORed together (`A OR B OR C`, all DISTANCE, say) share one bar measured on the group as a whole, which rises with the group's breadth. Clauses of different kinds in one OR (DISTANCE, DIRECTION, CONTRAST) each keep their own bar, so a CONTRAST branch still fires next to DISTANCE branches. **Semantik refuses `WITHIN`** on any DISTANCE or CONTRAST clause with `400 invalid_request`, and `noetive_lint` reports it as an error, even though `WITHIN` is part of the SemQL language elsewhere. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity.
+**There is no threshold to set.** `A AND B` matches only when each clause matches on its own; a strong match on one does not make up for the other. **Semantik refuses `WITHIN`** on any DISTANCE or CONTRAST clause with `400 invalid_request`, and `noetive_lint` reports it as an error, even though `WITHIN` is part of the SemQL language elsewhere. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity. Broad anchors match less readily than narrow ones, so do not OR a much broader anchor in with narrow ones: it can drop their marginal matches.
 
-**`NOT` is supported only directly under an `AND` that also has a positive clause.** `A AND NOT DISTANCE("x")` excludes messages closer to x than general reference text is; the `NOT` only filters and does not raise the score. Anywhere else (`A OR NOT B`, `NOT A AND NOT B`, `A AND (B OR NOT C)`) Semantik refuses the query with `400 invalid_request`, because it would match nearly every message.
+**`NOT` is supported only directly under an `AND` that also has a positive clause.** `A AND NOT DISTANCE("x")` excludes messages that match x; the `NOT` only filters and does not raise the score. Anywhere else (`A OR NOT B`, `NOT A AND NOT B`, `A AND (B OR NOT C)`) Semantik refuses the query with `400 invalid_request`, because it would match nearly every message.
 
-**`CONE` is a half-angle in radians. Smaller is tighter.** `CONE` can only tighten: a message must be inside the cone and above the bar, so a cone wider than the bar changes nothing. `CONE 0.8` is a narrow beam, `CONE 1.1` is a broad sweep, and the default when you omit it is 1.0. A cone below about 0.6 rad matches only close paraphrases of the anchor.
+**`CONE` is a half-angle in radians. Smaller is tighter.** `CONE` can only tighten a match: a message must be inside the cone and also match the clause, so a wide cone never adds matches. `CONE 0.8` is a narrow beam, `CONE 1.1` is a broad sweep, and the default when you omit it is 1.0. A cone below about 0.6 rad matches only close paraphrases of the anchor.
 
 ## Compose, do not widen
 
@@ -60,7 +60,7 @@ A namespace is an isolation boundary, never a topic label. `NAMESPACE "topic:net
 
 ## Groups
 
-To split one stream between several subscribers, give their subscribe calls the same `group` field (1 to 64 letters, digits, `-` or `_`). Each message then goes only to the member that scores highest against it, and match frames carry `lead`. Members must match on the same clause kinds (DISTANCE, DIRECTION, CONTRAST; clauses under `NOT` are ignored): a subscription whose kinds differ from the group's current members is refused with `400 invalid_request`. For DISTANCE the members must also use the same metric (mixing metrics is refused like mixing kinds). Write members in the same shape as well: an AND member scores the mean of its clauses and an OR member the best, so an AND member loses to an OR member it would otherwise tie. Groups belong to the account, so any of your keys can join your groups, and another account's identically named group never competes with yours. See the semantik-text skill.
+To split one stream between several subscribers, give their subscribe calls the same `group` field (1 to 64 letters, digits, `-` or `_`). Each message then goes only to the member that scores highest against it, and match frames carry `lead`. Members must match on the same clause kinds (DISTANCE, DIRECTION, CONTRAST; clauses under `NOT` are ignored): a subscription whose kinds differ from the group's current members is refused with `400 invalid_request`. For DISTANCE the members must also use the same metric (mixing metrics is refused like mixing kinds). Do not mix AND and OR members in one group. Groups belong to the account, so any of your keys can join your groups, and another account's identically named group never competes with yours. See the semantik-text skill.
 
 ## Text for people, JSON for machines
 

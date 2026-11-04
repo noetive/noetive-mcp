@@ -35,7 +35,7 @@ duration         = integer ( "s" | "m" | "h" | "d" | "w" ) ;
 
 Precedence, tightest first: `NOT`, `AND`, `OR`.
 
-`NOT` is supported only directly under an `AND` that also has a positive clause. `A AND NOT DISTANCE("x")` excludes messages that are closer to x than general reference text is; the `NOT` only filters and does not raise the score. Anywhere else (`A OR NOT B`, `NOT A AND NOT B`, `A AND (B OR NOT C)`) the query is refused with `400 invalid_request`, because it would match nearly every message.
+`NOT` is supported only directly under an `AND` that also has a positive clause. `A AND NOT DISTANCE("x")` excludes messages that match x; the `NOT` only filters and does not raise the score. Anywhere else (`A OR NOT B`, `NOT A AND NOT B`, `A AND (B OR NOT C)`) the query is refused with `400 invalid_request`, because it would match nearly every message.
 
 Reserved words are case-insensitive in the text syntax:
 `MATCH AND OR NOT DISTANCE DIRECTION CONTRAST ATTRACT REPEL WITHIN TOP CONE WINDOW NAMESPACE ALL GLOBAL LIMIT`.
@@ -46,7 +46,7 @@ JSON keys are lowercase, always.
 
 The SemQL language has a `WITHIN` clause on DISTANCE and CONTRAST (text and JSON `within`), but Semantik does not accept it: any query that sets it is answered `400 invalid_request` on search and subscribe, and `noetive_lint` reports it as an error. Do not write it from general SemQL knowledge.
 
-Semantik sets the relevance bar itself, per clause. A clause holds for a message only when the message is closer to it than general reference text is. `A AND B` matches only when each clause holds on its own; a strong match on one does not make up for the other. Clauses of one kind ORed together (`A OR B OR C`, all DISTANCE, say) share one bar measured on the group as a whole, which rises with the group's breadth. Clauses of different kinds in one OR (DISTANCE, DIRECTION, CONTRAST) each keep their own bar, so a CONTRAST branch still fires next to DISTANCE branches. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity.
+There is no threshold to set. `A AND B` matches only when each clause matches on its own; a strong match on one does not make up for the other. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity. Broad anchors match less readily than narrow ones, so do not OR a much broader anchor in with narrow ones: it can drop their marginal matches.
 
 ## Clauses
 
@@ -57,7 +57,7 @@ Proximity to one anchor. Both topic and specificity matter: a passing mention an
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `anchor` | string or float[] | yes | | The centre point |
-| `top_k` | integer | no | | Return the k nearest messages that also clear the bar (search only), so it can return fewer than k |
+| `top_k` | integer | no | | Return the k nearest messages that also match the clause (search only), so it can return fewer than k |
 | `metric` | string | no | `cosine` | `cosine`, `euclidean` or `dot` |
 
 ```sql
@@ -79,7 +79,7 @@ Thematic alignment, ignoring magnitude. A one-line mention and a long post-morte
 
 An array of concepts becomes the normalised mean of their embeddings.
 
-`CONE`: **smaller is tighter**. 0.8 to 0.9 is a narrow beam; 1.0 to 1.1 is a broad sweep. A cone below about 0.6 matches only close paraphrases of the anchor. `CONE` can only tighten: a message must be inside the cone and above the bar, so a cone wider than the bar changes nothing.
+`CONE`: **smaller is tighter**. 0.8 to 0.9 is a narrow beam; 1.0 to 1.1 is a broad sweep. A cone below about 0.6 matches only close paraphrases of the anchor. `CONE` can only tighten a match: a message must be inside the cone and also match the clause, so a wide cone never adds matches.
 
 ```sql
 DIRECTION(["customer frustration", "billing complaint"]) CONE 1.0

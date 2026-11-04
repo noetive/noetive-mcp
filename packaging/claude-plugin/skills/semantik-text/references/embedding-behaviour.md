@@ -59,14 +59,14 @@ Two ways to close it:
 
 ## Similarity
 
-Semantik compares by cosine similarity and sets each query's relevance bar itself; you never choose a floor. For text similarity runs from about 0 to 1. Modern embedders compress that range from both ends: unrelated texts do not fall to 0, and close paraphrases do not reach 1. Rough shape, to be measured per model:
+Semantik compares by cosine similarity; you never choose a floor. For text similarity runs from about 0 to 1. Modern embedders compress that range from both ends: unrelated texts do not fall to 0, and close paraphrases do not reach 1. Rough shape, to be measured per model:
 
 - near-paraphrase and retells: high, upper eighties and nineties
 - same topic, different claim: middle
 - same domain, different topic: lower middle
 - unrelated: low, but rarely below about 0.1
 
-The gaps between these bands are narrow, which is why wording must be measured rather than trusted to intuition, and why anchors tuned on one model are wrong on the next. Semantik's bar is per clause and means "closer than general reference text is", so a message needs to sit in a clearly more related band than unrelated traffic. Clauses ANDed together must each clear their own bar, and DISTANCE clauses ORed together share one bar that rises with how broad the group is. CONE (0.85 to 1.1 rad for topics) is the only angle you set.
+The gaps between these bands are narrow, which is why wording must be measured rather than trusted to intuition, and why anchors tuned on one model are wrong on the next. A message needs to sit in a clearly more related band than unrelated traffic. Clauses ANDed together must each match, and broad anchors match less readily than narrow ones. CONE (0.85 to 1.1 rad for topics) is the only angle you set.
 
 A CONTRAST composite is not a piece of text and nothing sits especially close to it, so similarities to it run lower than similarities to a plain anchor of the same quality. Compare composites against their own measured distribution, never against numbers from plain anchors.
 
@@ -80,7 +80,7 @@ A reply that says "re your last message, agreed" carries no topic. It embeds nea
 
 ## Retells and duplicates
 
-Two texts that say the same thing embed very close to each other, usually above 0.85 to 0.9 similarity on most models. This is the one place where a raw-vector anchor is the right tool (the vector must come from the namespace's model, since the bar is measured in that model's space): a subscriber that wants to suppress retells of a message it just published uses DISTANCE on that message's own text, and gets the retells along with every other message about the same subject. Semantik cannot narrow that to near-duplicates, because it accepts no floor, so treat the matches as candidates and compare them in the consumer.
+Two texts that say the same thing embed very close to each other, usually above 0.85 to 0.9 similarity on most models. This is the one place where a raw-vector anchor is the right tool (the vector must come from the namespace's model): a subscriber that wants to suppress retells of a message it just published uses DISTANCE on that message's own text, and gets the retells along with every other message about the same subject. Semantik cannot narrow that to near-duplicates, because it accepts no floor, so treat the matches as candidates and compare them in the consumer.
 
 ## What the embedder cannot do
 

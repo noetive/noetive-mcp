@@ -2,7 +2,7 @@
 
 Ready phrases and templates. Every phrase here is a draft until it has passed validation on the namespace's pinned model (see `validation.md`). When a phrase is changed on one side it must change on the other; publisher prefix and subscriber ATTRACT are the same bytes.
 
-Semantik sets the relevance bar itself, per clause, so none of these queries carries a `WITHIN`. `AND` needs every clause to hold on its own, and `NOT` appears only directly under an `AND` with a positive clause. Every phrase is a draft to be validated; to match less, make an anchor more specific, and to match more, OR in another anchor of similar specificity: anchors of one kind ORed together share one bar, so ORing in a much broader anchor raises the bar for the narrower ones and can drop their marginal matches.
+None of these queries carries a `WITHIN`, which Semantik refuses. `AND` needs every clause to match on its own, and `NOT` appears only directly under an `AND` with a positive clause. Every phrase is a draft to be validated; to match less, make an anchor more specific, and to match more, OR in another anchor of similar specificity. Broad anchors match less readily than narrow ones, so do not OR a much broader anchor in with narrow ones: it can drop their marginal matches.
 
 ## Intent phrases for agent-to-agent protocols
 

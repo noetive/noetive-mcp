@@ -7,13 +7,13 @@ Semantik delivers a message to every subscription whose SemQL predicate holds on
 
 Read `references/embedding-behaviour.md` when you need the reasoning behind a rule or the user asks why. Read `references/anchor-catalog.md` for ready intent anchors, role inboxes and category templates. Read `references/validation.md` before declaring any anchor set finished.
 
-There is no threshold to tune. Semantik sets the relevance bar itself, per clause: a clause holds for a message only when the message is closer to it than general reference text is. `A AND B` matches only when each clause holds on its own; a strong match on one does not make up for the other. Clauses of one kind ORed together (`A OR B OR C`, all DISTANCE, say) share one bar measured on the group as a whole, which rises with the group's breadth, because broad groups sit closer to everything. Clauses of different kinds in one OR (DISTANCE, DIRECTION, CONTRAST) each keep their own bar. Semantik refuses `WITHIN` with `400 invalid_request`, so the words in the anchors are the lever, plus `CONE` on DIRECTION (a half-angle in radians, smaller is tighter, default 1.0). `CONE` can only tighten: a message must be inside the cone and above the bar, so a cone wider than the bar changes nothing. The semql skill owns the grammar; this skill owns the words inside the clauses.
+There is no threshold to tune. `A AND B` matches only when each clause matches on its own; a strong match on one does not make up for the other. Broad anchors match less readily than narrow ones, so do not OR a much broader anchor in with narrow ones. Semantik refuses `WITHIN` with `400 invalid_request`, so the words in the anchors are the lever, plus `CONE` on DIRECTION (a half-angle in radians, smaller is tighter, default 1.0). `CONE` can only tighten a match: a message must be inside the cone and also match the clause, so a wide cone never adds matches. The semql skill owns the grammar; this skill owns the words inside the clauses.
 
 Every query below narrows meaning and nothing else. Where it runs is the `namespace` argument on the tool call, not a `NAMESPACE` clause: the clause exists, but writing one that disagrees with the argument is answered `400 invalid_request`. See the semql skill.
 
 ## Two facts that decide everything
 
-**Only `text` is embedded.** Metadata travels with the message and comes back to consumers, but SemQL v1 has no clause over metadata. Anything that must influence routing goes in the text. Anything that would only add noise to the vector (ids, URLs, hashes, timestamps, roles, sequence numbers, code) goes in metadata, where it is still available to the consumer. A message published with your own vector must carry one from the namespace's model, because the bar is measured in that model's space.
+**Only `text` is embedded.** Metadata travels with the message and comes back to consumers, but SemQL v1 has no clause over metadata. Anything that must influence routing goes in the text. Anything that would only add noise to the vector (ids, URLs, hashes, timestamps, roles, sequence numbers, code) goes in metadata, where it is still available to the consumer. A message published with your own vector must carry one from the namespace's model, because vectors from another model do not match.
 
 **Similarity is symmetric and both sides use one model.** A subscription anchor is just another piece of text embedded the same way as messages. It matches messages written the way it is written. An anchor that *describes* a class ("messages reporting completed work") sits in a meta register; a message that *is* a completed-work report sits in the object register, and the two are farther apart than intuition suggests. So either write anchors as exemplars of the messages, or have publishers carry a canonical phrase that the anchor repeats verbatim.
 
@@ -83,7 +83,7 @@ MATCH CONTRAST(
   AND DIRECTION(["reservations", "booking retry", "Ruby"]) CONE 1.1
 ```
 
-There is no floor to choose: Semantik sets the bar. If the composite matches too much or too little, change the words (more specific attract phrases, different repel siblings), not a number.
+There is no floor to choose. If the composite matches too much or too little, change the words (more specific attract phrases, different repel siblings), not a number.
 
 ### Information topic
 
@@ -152,9 +152,9 @@ MATCH DISTANCE("beds full, ICU at capacity")
 
 Subscriptions on the same account in the same namespace with the same group name compete. A message that matches several members goes only to the member it scores highest against (exact ties go to every tied member). Grouped match frames carry `lead`: this member's score minus the best score among the other matching members, 0 for a tie, absent when uncontested. Notes:
 
-- Only open streams compete. Once Semantik sees that a member's stream has closed, the next-closest open member receives what it would have won; until then, messages that member wins are lost with the stream.
-- A member's seq has gaps for messages a peer won, so in a group a gap does not by itself mean a lost message. Messages are still dropped when the winning member's stream is not read fast enough, and they are not passed to the next member.
-- Members must match on the same clause kinds (DISTANCE, DIRECTION, CONTRAST; clauses under NOT ignored). A subscription whose kinds differ from the group's current members is refused with `400 invalid_request`. For DISTANCE the members must also use the same metric (mixing metrics is refused like mixing kinds). Write members in the same shape as well: an AND member scores the mean of its clauses and an OR member the best, so an AND member loses to an OR member it would otherwise tie.
+- Only open streams compete. If a member's stream closes, messages it wins are lost until the next-closest open member takes over.
+- A member's seq has gaps for messages a peer won, so in a group a gap does not by itself mean a lost message. Read the stream promptly or messages are dropped, and they are not passed to the next member.
+- Members must match on the same clause kinds (DISTANCE, DIRECTION, CONTRAST; clauses under NOT ignored). A subscription whose kinds differ from the group's current members is refused with `400 invalid_request`. For DISTANCE the members must also use the same metric (mixing metrics is refused like mixing kinds). Do not mix AND and OR members in one group.
 - A message relevant to two members reaches only the closer one unless they tie.
 - Groups belong to the account: every API key on the account shares its group names, so any of your keys can join your groups, and another account's identically named group never competes with yours.
 
@@ -166,7 +166,7 @@ Known limit: a message that is on the subscribers' topic but is nobody's job sti
 
 ## Validation
 
-Do not ship an anchor set on judgment. Semantik sets the relevance bar, per clause, so validation checks the words: embed the anchors and a labelled sample of real messages with the namespace's pinned model, then compute anchor separation, nearest-anchor accuracy, whether each labelled message's owner ranks first among the roles, and the confusion pairs. On unit-normalised vectors each of those is one line of arithmetic; `references/validation.md` gives the sample, the checks, the pass bar and what to change when it fails. Re-run on every embedder change; anchors belong to the model that embeds them.
+Do not ship an anchor set on judgment. There is no threshold to set, so validation checks the words: embed the anchors and a labelled sample of real messages with the namespace's pinned model, then compute anchor separation, nearest-anchor accuracy, whether each labelled message's owner ranks first among the roles, and the confusion pairs. On unit-normalised vectors each of those is one line of arithmetic; `references/validation.md` gives the sample, the checks, the pass bar and what to change when it fails. Re-run on every embedder change; anchors belong to the model that embeds them.
 
 ## Output shape
 
