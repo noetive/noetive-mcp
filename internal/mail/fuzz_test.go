@@ -31,15 +31,18 @@ func FuzzReadRoutesOnlyByAPrefixItNames(f *testing.F) {
 		}
 
 		trimmed := strings.TrimSpace(id)
+		hasPart := strings.TrimSpace(part) != ""
 		want := ""
 		switch {
+		case hasPart && !strings.HasPrefix(trimmed, bud.PrefixMessage):
+			// A part belongs to a message; on any other id it is refused, not ignored.
 		case trimmed == "me":
 			want = "DescribeMe"
 		case trimmed == "catalog":
 			want = "DescribeCatalog"
 		case strings.HasPrefix(trimmed, bud.PrefixAgent):
 			want = "DescribeMailbox"
-		case strings.HasPrefix(trimmed, bud.PrefixMessage) && part != "":
+		case strings.HasPrefix(trimmed, bud.PrefixMessage) && hasPart:
 			want = "DescribePart"
 		case strings.HasPrefix(trimmed, bud.PrefixMessage):
 			want = "DescribeMessage"
