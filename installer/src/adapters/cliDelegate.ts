@@ -161,12 +161,14 @@ export class CliDelegateAdapter implements ClientAdapter {
    */
   private assertTerminal(request: InstallRequest | Omit<InstallRequest, "entryOptions">): void {
     const spec = request.spec.cli;
-    if (!spec?.interactive || (process.stdin.isTTY && process.stdout.isTTY)) return;
+    if (!spec?.interactive) return;
+    if (!request.noInput && process.stdin.isTTY && process.stdout.isTTY) return;
 
+    const why = request.noInput ? "--no-input says nobody will answer it" : "this is not one";
     const entryOptions = "entryOptions" in request ? request.entryOptions : {};
     throw new Error(
       `${request.spec.displayName} is configured through \`${spec.command} mcp\`, which asks which tools to enable. ` +
-        `That needs a terminal and this is not one, so nothing was written. Run this again from an interactive shell, ` +
+        `That needs a terminal and ${why}, so nothing was written. Run this again from an interactive shell, ` +
         `or put this in ${configPath(request.spec, request.scope, request.workspace)} yourself:\n\n` +
         renderYamlEntry(request.spec, entryOptions)
           .split("\n")

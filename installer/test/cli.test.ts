@@ -4,7 +4,9 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { parse, run } from "../src/cli";
+import { parse, run, useBinaryResolver, usePrompter } from "../src/cli";
+import { resolveBinary } from "../src/resolveBinary";
+import { terminalPrompter } from "../src/prompt";
 import { clientIds, clientSpec } from "../src/clients";
 
 /** capture runs a command and collects everything it wrote. */
@@ -117,7 +119,7 @@ test("help names each command and each supported editor", async () => {
 // before they can install anything, and the ids are ours rather than theirs.
 // One installed editor is an unambiguous answer, so it is the answer.
 test("init without a client configures the one editor that is installed", async () => {
-  const { code, out } = await withHome([".cursor"], () => capture(["init", "--dry-run"]));
+  const { code, out } = await withHome([".cursor"], () => capture(["init", "--yes", "--dry-run"]));
 
   assert.equal(code, 0);
   assert.match(out, /\.cursor/, `detection did not pick Cursor: ${out}`);
@@ -200,11 +202,44 @@ test("--json emits parseable output and nothing else", async () => {
 // doctor's exit code is what a script keys off. A missing binary is a genuine
 // fault and must be non-zero.
 test("doctor exits non-zero when the binary cannot be found", async () => {
-  const { code, out } = await capture(["doctor"]);
+  // Everything else healthy, so the binary is the only thing that can fail.
+  await withHome([".cursor"], () => withoutEditorCLIs(() => inWorkspace(async () => {
+    await capture(["init", "--yes", "--client", "cursor"]);
+    const { code, out } = await withBinary(undefined, () => withKey("keya_present", () => capture(["doctor"])));
 
-  assert.equal(code, 1, "a missing binary did not fail the check");
-  assert.match(out, /binary/);
+    assert.equal(code, 1, "a missing binary did not fail the check");
+    assert.match(out, /FAIL\s+binary/);
+  })));
 });
+
+// The exit code is what a script keys off. A healthy install has to exit zero,
+// or every script that runs doctor treats a working setup as broken.
+test("doctor exits zero when every check passes", async () => {
+  await withHome([".cursor"], () => withoutEditorCLIs(() => inWorkspace(async () => {
+    await capture(["init", "--yes", "--client", "cursor"]);
+    const { code, out } = await withBinary("/bin/noetive-mcp", () => withKey("keya_present", () => capture(["doctor"])));
+
+    assert.doesNotMatch(out, /FAIL/);
+    assert.equal(code, 0, out);
+  })));
+});
+
+/**
+ * withBinary runs body with doctor's binary lookup answering path, or failing
+ * for undefined, so the result does not depend on what a local build left in
+ * the tree.
+ */
+async function withBinary<T>(path: string | undefined, body: () => Promise<T>): Promise<T> {
+  useBinaryResolver(() => {
+    if (path === undefined) throw new Error("could not find the noetive-mcp binary (test)");
+    return path;
+  });
+  try {
+    return await body();
+  } finally {
+    useBinaryResolver(() => resolveBinary());
+  }
+}
 
 test("doctor --json is parseable", async () => {
   const { out } = await capture(["doctor", "--json"]);
@@ -221,7 +256,7 @@ test("a dry run reports the change and writes nothing", async () => {
   const cwd = process.cwd();
   process.chdir(workspace);
   try {
-    const { code, out } = await capture(["init", "--client", "cursor", "--scope", "project", "--dry-run"]);
+    const { code, out } = await capture(["init", "--yes", "--client", "cursor", "--scope", "project", "--dry-run"]);
 
     assert.equal(code, 0);
     assert.match(out, /Dry run: nothing was written/);
@@ -254,7 +289,7 @@ test("add is an alias for init", async () => {
   const cwd = process.cwd();
   process.chdir(workspace);
   try {
-    const { code, out } = await capture(["add", "--client", "cursor", "--scope", "project", "--dry-run"]);
+    const { code, out } = await capture(["add", "--yes", "--client", "cursor", "--scope", "project", "--dry-run"]);
 
     assert.equal(code, 0);
     assert.match(out, /noetive/);
@@ -332,25 +367,13 @@ test("asking to both close and open the shared namespace is refused", async () =
 test("both answers about the shared namespace reach the config", async () => {
   for (const [flag, expected] of [["--disable-global-ns", "1"], ["--allow-global-ns", "0"]] as const) {
     await inWorkspace(async (dir) => {
-      const { code } = await capture(["init", "--client", "cursor", "--scope", "project", flag]);
+      const { code } = await capture(["init", "--yes", "--client", "cursor", "--scope", "project", "--namespace", "acme", flag]);
       assert.equal(code, 0);
 
       const config = JSON.parse(readFileSync(join(dir, ".cursor", "mcp.json"), "utf8"));
       assert.equal(config.mcpServers.noetive.env.NOETIVE_DISABLE_GLOBAL_NS, expected);
     });
   }
-});
-
-// Neither flag means neither answer, which is what every release before the
-// interview wrote. An install nobody could be asked about must not acquire a
-// setting nobody chose.
-test("an unanswered shared-namespace question writes no variable", async () => {
-  await inWorkspace(async (dir) => {
-    await capture(["init", "--client", "cursor", "--scope", "project"]);
-
-    const config = JSON.parse(readFileSync(join(dir, ".cursor", "mcp.json"), "utf8"));
-    assert.equal("NOETIVE_DISABLE_GLOBAL_NS" in config.mcpServers.noetive.env, false);
-  });
 });
 
 // A typo in --skills would otherwise report a successful install of a skill
@@ -363,6 +386,38 @@ test("a skill nobody ships is refused by name", async () => {
 
     assert.equal(code, 1);
     assert.match(err, /nonsense/);
+    // The refusal is only useful if it says what would have worked.
+    assert.match(err, /available: [^\n]*semql/);
+  }));
+});
+
+// Naming skills one by one is the third way to answer --skills. It must install
+// exactly those, not refuse a name that ships and not add ones nobody named.
+test("a named list of skills installs exactly those", async () => {
+  await withoutEditorCLIs(async () => await inWorkspace(async (dir) => {
+    const { code, err } = await capture([
+      "init", "--yes", "--client", "claude-code", "--scope", "project", "--skills", "semql",
+    ]);
+
+    assert.equal(code, 0, err);
+    assert.ok(existsSync(join(dir, ".claude", "skills", "semql", "SKILL.md")));
+    assert.equal(existsSync(join(dir, ".claude", "skills", "doctor")), false);
+  }));
+});
+
+// A rerun is the normal way to change one setting. Reporting "Installed 0
+// skill files" there reads as a failure to install, and "up to date" after
+// --skills none reads as skills being present that are not.
+test("the skills report says what happened: installed, already current, or nothing", async () => {
+  await withoutEditorCLIs(async () => await inWorkspace(async () => {
+    const argv = ["init", "--yes", "--client", "claude-code", "--scope", "project", "--skills", "all"];
+    await capture(argv);
+    const again = await capture(argv);
+    const none = await capture(["init", "--yes", "--client", "claude-code", "--scope", "project", "--skills", "none"]);
+
+    assert.match(again.out, /already up to date/);
+    assert.doesNotMatch(again.out, /Installed \d+ skill/);
+    assert.doesNotMatch(none.out, /skill/i);
   }));
 });
 
@@ -370,7 +425,7 @@ test("a skill nobody ships is refused by name", async () => {
 test("skills none installs the server and no skills", async () => {
   await withoutEditorCLIs(async () => await inWorkspace(async (dir) => {
     const { code } = await capture([
-      "init", "--client", "claude-code", "--scope", "project", "--skills", "none",
+      "init", "--yes", "--client", "claude-code", "--scope", "project", "--skills", "none",
     ]);
 
     assert.equal(code, 0);
@@ -381,7 +436,7 @@ test("skills none installs the server and no skills", async () => {
 test("skills all installs every skill the package ships", async () => {
   await withoutEditorCLIs(async () => await inWorkspace(async (dir) => {
     const { code, out } = await capture([
-      "init", "--client", "claude-code", "--scope", "project", "--skills", "all",
+      "init", "--yes", "--client", "claude-code", "--scope", "project", "--skills", "all",
     ]);
 
     assert.equal(code, 0);
@@ -396,7 +451,7 @@ test("skills all installs every skill the package ships", async () => {
 // no longer has.
 test("remove takes the installed skills with it", async () => {
   await withoutEditorCLIs(async () => await inWorkspace(async (dir) => {
-    await capture(["init", "--client", "claude-code", "--scope", "project", "--skills", "all"]);
+    await capture(["init", "--yes", "--client", "claude-code", "--scope", "project", "--skills", "all"]);
     const { code } = await capture(["remove", "--client", "claude-code", "--scope", "project"]);
 
     assert.equal(code, 0);
@@ -408,7 +463,7 @@ test("remove takes the installed skills with it", async () => {
 // files in a shape it silently ignores.
 test("an editor with no skills directory says so", async () => {
   await inWorkspace(async () => {
-    const { out } = await capture(["init", "--client", "cursor", "--scope", "project", "--skills", "all"]);
+    const { out } = await capture(["init", "--yes", "--client", "cursor", "--scope", "project", "--skills", "all"]);
 
     assert.match(out, /no skills directory/);
   });
@@ -420,7 +475,7 @@ test("an editor with no skills directory says so", async () => {
 test("a dry run does not print the API key it would write", async () => {
   await inWorkspace(async () => {
     const { out } = await capture([
-      "init", "--client", "cursor", "--scope", "project", "--api-key", "keya_notInTheOutput", "--dry-run",
+      "init", "--yes", "--client", "cursor", "--scope", "project", "--api-key", "keya_notInTheOutput", "--dry-run",
     ]);
 
     assert.equal(out.includes("keya_notInTheOutput"), false, "the key reached the terminal");
@@ -432,24 +487,24 @@ test("a dry run does not print the API key it would write", async () => {
 // unable to show the one thing it is meant to show.
 test("the variable reference survives a dry run intact", async () => {
   await inWorkspace(async () => {
-    const { out } = await capture(["init", "--client", "cursor", "--scope", "project", "--dry-run"]);
+    const { out } = await capture(["init", "--yes", "--client", "cursor", "--scope", "project", "--dry-run"]);
 
     assert.match(out, /\$\{NOETIVE_KEY_SECRET\}/);
   });
 });
 
-// This is load-bearing. postinstall, CI and editors all invoke init with no
-// terminal, and a prompt in front of any of them is not a question but a
-// process that never exits.
-test("an install with no terminal asks nothing and still writes", async () => {
+// '$NOETIVE_KEY_SECRET' single-quoted reaches us unexpanded. Written into the
+// config it is sent to Noetive as the key and comes back "unauthorized", which
+// sends the user to check an account that is fine.
+test("a variable reference passed as --api-key is refused", async () => {
   await inWorkspace(async (dir) => {
-    // The test runner has no TTY on stdin, which is the same condition CI and
-    // an editor present. Anything that tried to prompt here would hang.
-    const { code } = await capture(["init", "--client", "cursor", "--scope", "project", "--namespace", "acme"]);
+    const { code, err } = await capture([
+      "init", "--yes", "--client", "kiro", "--scope", "workspace", "--api-key", "$NOETIVE_KEY_SECRET",
+    ]);
 
-    assert.equal(code, 0);
-    const config = JSON.parse(readFileSync(join(dir, ".cursor", "mcp.json"), "utf8"));
-    assert.equal(config.mcpServers.noetive.env.NOETIVE_NAMESPACE, "acme");
+    assert.equal(code, 1);
+    assert.match(err, /variable reference/);
+    assert.equal(existsSync(join(dir, ".kiro")), false);
   });
 });
 
@@ -465,5 +520,327 @@ test("ambiguous detection with no terminal refuses and names the candidates", as
       assert.match(err, /several editors/);
       assert.match(err, /cursor/);
     });
+  });
+});
+
+/** withKey runs body with NOETIVE_KEY_SECRET set to value, or unset for undefined. */
+async function withKey<T>(value: string | undefined, body: () => Promise<T>): Promise<T> {
+  const previous = process.env.NOETIVE_KEY_SECRET;
+  if (value === undefined) delete process.env.NOETIVE_KEY_SECRET;
+  else process.env.NOETIVE_KEY_SECRET = value;
+  try {
+    return await body();
+  } finally {
+    if (previous === undefined) delete process.env.NOETIVE_KEY_SECRET;
+    else process.env.NOETIVE_KEY_SECRET = previous;
+  }
+}
+
+interface DoctorCheck {
+  readonly name: string;
+  readonly status: string;
+  readonly detail: string;
+}
+
+/** doctorChecks runs doctor --json and returns its exit code and checks. */
+async function doctorChecks(): Promise<{ code: number; checks: DoctorCheck[] }> {
+  const { code, out } = await capture(["doctor", "--json"]);
+  return { code, checks: JSON.parse(out) as DoctorCheck[] };
+}
+
+// `--api-key "$NOETIVE_KEY_SECRET"` with the variable unset expands to an empty
+// argument. Accepted, it is the "write no key" answer and the install succeeds
+// with every later call refused. `--api-key=` is how to mean empty on purpose,
+// and it must keep working: it is how a Kiro or Codex user says "no key here".
+test("an empty separate value is refused, and --flag= still means empty on purpose", async () => {
+  await inWorkspace(async (dir) => {
+    const unset = await capture(["init", "--yes", "--client", "kiro", "--scope", "workspace", "--api-key", ""]);
+    assert.equal(unset.code, 2);
+    assert.match(unset.err, /not set in this shell/);
+    assert.match(unset.err, /--api-key=/);
+    assert.equal(existsSync(join(dir, ".kiro")), false);
+
+    const deliberate = await capture(["init", "--yes", "--client", "kiro", "--scope", "workspace", "--api-key="]);
+    assert.equal(deliberate.code, 0, deliberate.err);
+  });
+});
+
+// An editor nobody configured is either one nothing can read (Hermes) or simply
+// not configured. Calling every unconfigured editor "cannot tell" would hide
+// the one fix that applies, running init.
+test("list says 'cannot tell' only for an editor nothing can read", async () => {
+  const rows = await withHome([".cursor", ".hermes"], async () =>
+    JSON.parse((await capture(["list", "--json"])).out) as { client: string; undetermined: boolean }[]);
+
+  assert.equal(rows.find((row) => row.client === "hermes")?.undetermined, true);
+  assert.equal(rows.find((row) => row.client === "cursor")?.undetermined, false);
+});
+
+// An installed, unconfigured editor gets the command that configures it. Telling
+// a Cursor user their editor "cannot be checked" sends them nowhere.
+test("doctor prescribes init for an installed editor that is not configured", async () => {
+  const { checks } = await withHome([".cursor"], () => withKey(undefined, doctorChecks));
+
+  const cursor = checks.find((check) => check.name === clientSpec("cursor").displayName);
+  assert.match(cursor?.detail ?? "", /not configured; run: .*init --client cursor/);
+  assert.doesNotMatch(cursor?.detail ?? "", /cannot be checked/);
+});
+
+// No editor installed is not "no editor configured": there is nothing to
+// configure yet. And with nothing configured, a missing key is a real fault.
+// Every check failing here also pins the exit code to the failures, not to
+// the passes.
+test("doctor on a machine with no editors fails on the key, not on the editors", async () => {
+  const { code, checks } = await withHome([], () => withKey(undefined, doctorChecks));
+
+  assert.equal(checks.some((check) => check.name === "editors"), false, "blamed editors on a machine that has none");
+  assert.equal(checks.find((check) => check.name === "api key")?.status, "fail");
+  assert.equal(code, 1);
+});
+
+// An editor configured with --api-key carries its own key, so a shell without
+// one is worth mentioning, not a fault. Failing here makes doctor red on a
+// working install.
+test("doctor treats a missing shell key as information once an editor is configured", async () => {
+  await withHome([".cursor"], () => withoutEditorCLIs(() => inWorkspace(async () => {
+    await capture(["init", "--yes", "--client", "cursor", "--api-key", "keya_configured"]);
+    const { checks } = await withKey(undefined, doctorChecks);
+
+    assert.equal(checks.find((check) => check.name === "api key")?.status, "info");
+  })));
+});
+
+// Windows writes an unexpanded variable as %NAME%. Exported as the "key", it
+// is sent to Noetive verbatim and comes back unauthorized, so doctor has to
+// name it for what it is.
+test("doctor fails a shell key that is an unexpanded variable in either syntax", async () => {
+  for (const placeholder of ["${NOETIVE_KEY_SECRET}", "%NOETIVE_KEY_SECRET%"]) {
+    const { checks } = await withHome([], () => withKey(placeholder, doctorChecks));
+    const key = checks.find((check) => check.name === "api key");
+
+    assert.equal(key?.status, "fail", `${placeholder} was accepted as a key`);
+    assert.match(key?.detail ?? "", /literal text/);
+  }
+});
+
+/** envOf reads the noetive entry's env block from a project-scoped Cursor config. */
+function envOf(dir: string): Record<string, string> {
+  return JSON.parse(readFileSync(join(dir, ".cursor", "mcp.json"), "utf8")).mcpServers.noetive.env;
+}
+
+// A first install from an agent's shell has nobody to answer questions. It must
+// still produce a server whose first call works, pointed at the shared
+// namespace with the model and dimensions that namespace is provisioned with.
+test("an install with no terminal and no answers uses the testing defaults", async () => {
+  await inWorkspace(async (dir) => {
+    const { code, err } = await capture(["init", "--client", "cursor", "--scope", "project"]);
+
+    assert.equal(code, 0, err);
+    const env = envOf(dir);
+    assert.equal(env.NOETIVE_NAMESPACE, "global");
+    assert.equal(env.NOETIVE_MODEL, "Qwen3-Embedding-4B");
+    assert.equal(env.NOETIVE_DIMENSIONS, "1024");
+    // Open, because closing the namespace the install routes to refuses every call.
+    assert.equal(env.NOETIVE_DISABLE_GLOBAL_NS, "0");
+  });
+});
+
+// The shared namespace is cross-tenant. A default the user does not notice
+// means their agents publish where other Noetive users can read, so the
+// install has to say so, and say how to move off it.
+test("a defaulted shared namespace is flagged with how to change it", async () => {
+  await inWorkspace(async () => {
+    const { out } = await capture(["init", "--client", "cursor", "--scope", "project"]);
+
+    assert.match(out, /WARNING: namespace is "global"/);
+    assert.match(out, /shared by every Noetive user/);
+    assert.match(out, /--namespace <name> --disable-global-ns/);
+  });
+});
+
+// A namespace the user chose is not a default and earns no warning; what was
+// still filled in is listed, so nothing changes behind their back.
+test("a named namespace is not flagged, and what was filled in around it is listed", async () => {
+  await inWorkspace(async (dir) => {
+    const { out } = await capture(["init", "--client", "cursor", "--scope", "project", "--namespace", "acme"]);
+
+    assert.doesNotMatch(out, /WARNING/);
+    assert.match(out, /model\s+Qwen3-Embedding-4B/);
+    // Once they have their own namespace, the shared one is only a place for
+    // an unsure agent to leak into, so it is closed unless they say otherwise.
+    assert.equal(envOf(dir).NOETIVE_DISABLE_GLOBAL_NS, "1");
+  });
+});
+
+// An install that answered everything has nothing to report as defaulted, and
+// listing defaults anyway would teach people to skip the list.
+test("an install with every answer given lists no defaults", async () => {
+  await inWorkspace(async () => {
+    const { code, out } = await capture([
+      "init", "--client", "cursor", "--scope", "project",
+      "--namespace", "acme", "--model", "m", "--dimensions", "8", "--allow-global-ns",
+    ]);
+
+    assert.equal(code, 0);
+    assert.doesNotMatch(out, /Not asked|WARNING/);
+  });
+});
+
+// The warning's advice is the rerun. Following it must replace the defaults,
+// not merge with them, or the user ends up in their namespace with the shared
+// one still open.
+test("rerunning with the suggested change moves the install off the shared namespace", async () => {
+  await inWorkspace(async (dir) => {
+    await capture(["init", "--client", "cursor", "--scope", "project"]);
+    await capture(["init", "--client", "cursor", "--scope", "project", "--namespace", "acme", "--disable-global-ns"]);
+
+    assert.equal(envOf(dir).NOETIVE_NAMESPACE, "acme");
+    assert.equal(envOf(dir).NOETIVE_DISABLE_GLOBAL_NS, "1");
+  });
+});
+
+// "name one on every call" is a legitimate answer. Model and dimensions then
+// describe nothing, so none are written, and the shared namespace is closed
+// because nothing routes there.
+test("an empty namespace gets no model or dimensions", async () => {
+  await inWorkspace(async (dir) => {
+    await capture(["init", "--client", "cursor", "--scope", "project", "--namespace="]);
+
+    const env = envOf(dir);
+    assert.equal("NOETIVE_NAMESPACE" in env, false);
+    assert.equal("NOETIVE_MODEL" in env, false);
+    assert.equal("NOETIVE_DIMENSIONS" in env, false);
+    assert.equal(env.NOETIVE_DISABLE_GLOBAL_NS, "1", "nothing routes to the shared namespace, so it should be closed");
+  });
+});
+
+// Routing to a namespace and closing it on the same command line produces a
+// server that refuses every call. Names are case-insensitive, so the check is.
+test("naming the shared namespace and closing it is refused", async () => {
+  await inWorkspace(async (dir) => {
+    const { code, err } = await capture(["init", "--client", "cursor", "--scope", "project", "--namespace", "Global", "--disable-global-ns"]);
+
+    assert.equal(code, 1);
+    assert.match(err, /every call would be refused/);
+    assert.equal(existsSync(join(dir, ".cursor")), false);
+  });
+});
+
+// An agent reads --json, not prose. The defaults have to be there, each with a
+// change made of flags the command line accepts, or following it is refused.
+test("--json lists each default with a change the command line accepts", async () => {
+  await inWorkspace(async () => {
+    const { code, out } = await capture(["init", "--client", "claude-code", "--scope", "project", "--json"]);
+
+    assert.equal(code, 0);
+    const { defaulted } = JSON.parse(out) as { defaulted: { setting: string; value: string; change: string; warning?: string }[] };
+    assert.ok(defaulted.find((d) => d.setting === "namespace")?.warning, "the shared namespace default carried no warning");
+    assert.ok(defaulted.some((d) => d.setting === "skills"), "claude-code has a skills directory, so skills were defaulted");
+    for (const item of defaulted) {
+      const argv = ["init", ...item.change.split(" ").map((word) => (word.startsWith("<") ? "x" : word))];
+      assert.doesNotThrow(() => parse(argv), `the change "${item.change}" is not a valid command line`);
+    }
+  });
+});
+
+// Every editor the installer can write without its own CLI must come out of a
+// bare first install configured, or the README prompt fails for that editor.
+// Derived from the manifest so a new editor is covered.
+test("a bare first install configures every editor", async () => {
+  const merged = clientIds().filter((id) => clientSpec(id).cli?.fallback !== "none");
+  assert.ok(merged.length >= 4, "fewer editors under test than expected; the filter is wrong");
+
+  for (const id of merged) {
+    await withHome([], () => withoutEditorCLIs(() => inWorkspace(async () => {
+      const { code, err } = await capture(["init", "--client", id]);
+      assert.equal(code, 0, `${id}: ${err}`);
+
+      const rows = JSON.parse((await capture(["list", "--json"])).out) as { client: string; configured: boolean }[];
+      assert.equal(rows.find((row) => row.client === id)?.configured, true, `${id}: reported success but is not configured`);
+    })));
+  }
+});
+
+// Some agents run commands inside a real terminal. There, without --no-input,
+// init would draw a prompt nobody answers and the agent would hang.
+test("--no-input asks nothing even in a terminal, and uses the defaults", async () => {
+  const tty = { stdin: process.stdin.isTTY, stdout: process.stdout.isTTY };
+  process.stdin.isTTY = true;
+  process.stdout.isTTY = true;
+  usePrompter(() => {
+    throw new Error("prompted despite --no-input");
+  });
+  try {
+    await inWorkspace(async (dir) => {
+      const { code, err } = await capture(["init", "--no-input", "--client", "cursor", "--scope", "project"]);
+
+      assert.equal(code, 0, err);
+      assert.equal(envOf(dir).NOETIVE_NAMESPACE, "global");
+    });
+  } finally {
+    process.stdin.isTTY = tty.stdin;
+    process.stdout.isTTY = tty.stdout;
+    usePrompter(() => terminalPrompter());
+  }
+});
+
+// An editor installed and none configured is the one state where nothing can
+// reach Noetive, so it is the one doctor must fail on. Cursor's state can be
+// read, so it neither counts as configured nor holds the failure back the way
+// an editor nothing can read does.
+test("doctor fails when an editor is installed and none is configured", async () => {
+  const { code, checks } = await withHome([".cursor"], () => withBinary("/bin/noetive-mcp", () => withKey("keya_present", doctorChecks)));
+
+  assert.equal(checks.find((check) => check.name === "editors")?.status, "fail");
+  assert.equal(code, 1);
+});
+
+// "Close the shared namespace" is an instruction an agent will pass on its
+// own. With no namespace named, the install would default to the very
+// namespace it closes and refuse every call, so the pair is refused with the
+// flag that fixes it.
+test("closing the shared namespace without naming another is refused", async () => {
+  await inWorkspace(async (dir) => {
+    const { code, err } = await capture(["init", "--client", "cursor", "--scope", "project", "--disable-global-ns"]);
+
+    assert.equal(code, 1);
+    assert.match(err, /every call would be refused/);
+    assert.match(err, /--namespace <name>/);
+    assert.equal(existsSync(join(dir, ".cursor")), false);
+  });
+});
+
+// The shared namespace is provisioned with one model at one size. A model
+// passed without a namespace lands there and fails every call at the server,
+// which reports it far from the install that caused it.
+test("a model the shared namespace does not use is refused there", async () => {
+  await inWorkspace(async (dir) => {
+    const { code, err } = await capture(["init", "--client", "cursor", "--scope", "project", "--model", "other-model"]);
+
+    assert.equal(code, 1);
+    assert.match(err, /provisioned with Qwen3-Embedding-4B at 1024/);
+    assert.equal(existsSync(join(dir, ".cursor")), false);
+  });
+});
+
+// Namespace names are case-insensitive, so GLOBAL is the shared namespace and
+// gets the shared namespace's treatment: left open, and warned about only if
+// defaulted, which it was not.
+test("the shared namespace is recognised in any case", async () => {
+  await inWorkspace(async (dir) => {
+    const { code, err } = await capture(["init", "--client", "cursor", "--scope", "project", "--namespace", "GLOBAL"]);
+
+    assert.equal(code, 0, err);
+    assert.equal(envOf(dir).NOETIVE_DISABLE_GLOBAL_NS, "0");
+  });
+});
+
+// Keeping the shared namespace open beside your own is a legitimate choice.
+// The default for a named namespace is to close it, so the flag has to win.
+test("--allow-global-ns keeps the shared namespace open beside a named one", async () => {
+  await inWorkspace(async (dir) => {
+    await capture(["init", "--client", "cursor", "--scope", "project", "--namespace", "acme", "--allow-global-ns"]);
+
+    assert.equal(envOf(dir).NOETIVE_DISABLE_GLOBAL_NS, "0");
   });
 });

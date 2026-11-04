@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { interview, SuggestedDimensions, SuggestedModel } from "../src/interview";
+import { interview, keyComplaint, SuggestedDimensions, SuggestedModel, withDefaults } from "../src/interview";
 import type { Choice, Prompter, TextOptions } from "../src/prompt";
 
 interface Asked {
@@ -129,13 +129,25 @@ test("model and dimensions are not asked for when no namespace was named", async
 
 // The shared namespace spans tenants and is the example value in every piece of
 // guidance an agent reads, which makes it what an agent reaches for when it is
-// unsure. Defaulting a fresh install to leaving it open is a leak nobody chose.
-test("closing the shared namespace is the default answer", async () => {
-  const { prompter } = scripted({});
+// unsure. Once the user names their own, leaving it open is a leak nobody chose.
+test("closing the shared namespace is the default answer once a namespace is named", async () => {
+  const { prompter } = scripted({ "Namespace for calls": "acme" });
 
   const answers = await interview(prompter, editor);
 
   assert.equal(answers.disableGlobalNamespace, true);
+});
+
+// Pressing Enter on the namespace takes the shared one. Asking next whether to
+// close it would offer an answer that refuses every call the install routes.
+test("the close question is not asked while the shared namespace is in use", async () => {
+  const { prompter, asked } = scripted({});
+
+  const answers = await interview(prompter, editor);
+
+  assert.equal(answers.namespace, "global");
+  assert.equal(answers.disableGlobalNamespace, false);
+  assert.equal(asked.some((a) => a.question.startsWith("Close the shared")), false);
 });
 
 // The answer is written whichever way it went, so an exported variable
@@ -233,4 +245,105 @@ test("the interview asks for the key before anything else", async () => {
     questions.findIndex((q) => q.includes("Namespace")) < questions.findIndex((q) => q.includes("Close the shared")),
     "expected the namespace before the shared-namespace question",
   );
+});
+
+// Pasting the key is fine; pasting the name of the variable that should have
+// held it is the mistake, in either shell syntax.
+test("a variable reference is not a key, and a key or an empty value is not a complaint", () => {
+  assert.ok(keyComplaint("${NOETIVE_KEY_SECRET}"));
+  assert.ok(keyComplaint("%NOETIVE_KEY_SECRET%"));
+  assert.equal(keyComplaint("keya_abc"), undefined);
+  assert.equal(keyComplaint(""), undefined);
+});
+
+// An agent's shell gets withDefaults; a person in a terminal pressing Enter
+// gets the interview's suggestions. The two must be the same install, or the
+// README prompt and the terminal install quietly configure different things.
+// Checked across every combination of what the flags can leave open.
+test("pressing Enter through the interview gives the same install as no terminal", async () => {
+  const offered = [[], [{ value: "semql", label: "semql" }]];
+
+  for (const expandsVariables of [true, false]) {
+    for (const offeredSkills of offered) {
+      for (const namespace of [undefined, "", "acme", "GLOBAL"]) {
+        for (const disableGlobalNamespace of [undefined, false]) {
+          const given = {
+            expandsVariables,
+            offeredSkills,
+            ...(namespace === undefined ? {} : { namespace }),
+            ...(disableGlobalNamespace === undefined ? {} : { disableGlobalNamespace }),
+          };
+          const label = JSON.stringify({ expandsVariables, skills: offeredSkills.length, namespace, disableGlobalNamespace });
+
+          const { prompter } = scripted({});
+          assert.deepEqual(await interview(prompter, given), withDefaults(given).answers, label);
+        }
+      }
+    }
+  }
+});
+
+// The list is what tells the user what they did not choose. Each setting the
+// flags left open appears exactly once, and a setting that was passed does not.
+test("withDefaults lists what it filled in and nothing that was passed", () => {
+  const editor = { expandsVariables: true, offeredSkills: [{ value: "semql", label: "semql" }] };
+
+  const bare = withDefaults(editor).defaulted.map((d) => d.setting);
+  assert.deepEqual(bare, ["namespace", "model", "dimensions", "shared namespace", "skills"]);
+
+  const given = withDefaults({ ...editor, namespace: "acme", model: "m", skills: [] }).defaulted.map((d) => d.setting);
+  assert.deepEqual(given, ["dimensions", "shared namespace"]);
+});
+
+// Only the shared namespace carries a warning. Warning about every default
+// buries the one that leaks work across tenants.
+test("only a defaulted shared namespace is warned about", () => {
+  const { defaulted } = withDefaults({ expandsVariables: true, offeredSkills: [] });
+
+  assert.deepEqual(defaulted.filter((d) => d.warning).map((d) => d.setting), ["namespace"]);
+  assert.equal(withDefaults({ expandsVariables: true, offeredSkills: [], namespace: "acme" }).defaulted.some((d) => d.warning), false);
+});
+
+// The key is typed into a terminal that may be screen-shared or recorded. It
+// has to be read without echo, which only the prompt's options can say.
+test("the key prompt hides what is typed", async () => {
+  const seen: { question: string; secret: boolean }[] = [];
+  const { prompter } = scripted({});
+  const recording: Prompter = {
+    ...prompter,
+    async text(question: string, options: TextOptions = {}) {
+      seen.push({ question, secret: options.secret === true });
+      return prompter.text(question, options);
+    },
+  };
+
+  await interview(recording, { ...editor, expandsVariables: false });
+
+  const key = seen.find((s) => s.question.startsWith("API key from"));
+  assert.ok(key, "the key was never asked for");
+  assert.equal(key.secret, true, "the key prompt echoes what is typed");
+});
+
+// Pressing Enter on "write your key into the config?" is "no". Asking for the
+// key anyway invites it into a file the user just declined to put it in.
+test("declining to embed the key does not then ask for it", async () => {
+  const { prompter, asked } = scripted({});
+
+  await interview(prompter, editor);
+
+  assert.equal(asked.some((a) => a.question.startsWith("API key from")), false);
+});
+
+// The server accepts 1 to 65535 and refuses to start outside it. Both ends are
+// real dimensionalities someone could configure, and both neighbours are typos
+// that would otherwise surface as a server that will not start.
+test("dimensions from 1 to 65535 are accepted and nothing outside", async () => {
+  for (const value of ["1", "65535"]) {
+    const { prompter } = scripted({ "Namespace for calls": "acme", Dimensions: value });
+    assert.equal((await interview(prompter, editor)).dimensions, value);
+  }
+  for (const value of ["0", "65536"]) {
+    const { prompter } = scripted({ "Namespace for calls": "acme", Dimensions: value });
+    await assert.rejects(() => interview(prompter, editor), /rejected the scripted answer/, `${value} was accepted`);
+  }
 });

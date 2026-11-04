@@ -8,6 +8,12 @@ export interface InstallRequest {
   readonly workspace: string;
   readonly entryOptions: EntryOptions;
   readonly dryRun: boolean;
+  /**
+   * Set when the caller said nobody will answer a prompt (--no-input), even if
+   * a terminal is attached. An agent running commands in a pseudo-terminal
+   * looks interactive and is not, and an editor CLI that prompts it hangs.
+   */
+  readonly noInput?: boolean;
 }
 
 export interface InstallOutcome {

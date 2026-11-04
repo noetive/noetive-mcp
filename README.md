@@ -8,6 +8,23 @@ Connect your AI editor to [Noetive Semantik](https://noetive.io) over the Model 
 
 ## Install
 
+Paste this into the coding agent you want connected:
+
+```text
+Install the Noetive MCP server into the editor you are running in.
+
+1. From the project folder you have open, run: npx -y @noetive/mcp-server init --no-input --client <id>
+   where <id> is the editor you are running in: cursor, claude-code, codex, copilot, antigravity, kiro or hermes.
+2. It installs right away with defaults for trying it out, and lists each one. Tell me what it chose. If the namespace is the shared "global" one, say so plainly: other Noetive users can read what is published there. Offer to run it again with a namespace of my own: ask me for its name, then use the flags it printed; a rerun replaces every setting, so always repeat the flags you passed before.
+3. Never ask me for my API key in this chat and never print it. If it says the config references NOETIVE_KEY_SECRET, no key flag is needed. If it says no key was written, run the same command with the same flags again, adding --api-key "$NOETIVE_KEY_SECRET", which writes the key into the config file. If that variable is empty, stop and tell me to export it and restart you.
+4. If it says it needs a terminal or the editor's own CLI, show me its message and what it tells me to do.
+5. Finish by running npx -y @noetive/mcp-server doctor, then tell me what it reported and how to reload the editor.
+```
+
+The first install starts on the shared `global` namespace, so the first call works before you have decided anything, and the agent tells you how to move to a namespace of your own. Your key never passes through the chat. Most editors' configs reference `NOETIVE_KEY_SECRET` and read the key from your environment at launch. Kiro and Codex cannot, so there the agent passes the variable to the installer and the key itself is written into the config.
+
+### Or run it yourself
+
 ```bash
 npx @noetive/mcp-server init --client cursor
 npx @noetive/mcp-server init --client claude-code
@@ -18,7 +35,7 @@ npx @noetive/mcp-server init --client kiro
 npx @noetive/mcp-server init --client hermes
 ```
 
-Run it with no `--client` and it configures the editor it finds. Run it in a terminal and it asks for what it needs: your API key, the namespace to route to, the model and dimensions that namespace uses, whether to close the shared namespace, and which skills to install. Every answer has a flag, and anything you pass is not asked about again. `--yes` accepts the defaults and asks nothing.
+Run it with no `--client` and it configures the editor it finds. Run it in a terminal and it asks for what it needs: your API key, the namespace to route to, the model and dimensions that namespace uses, whether to close the shared namespace, and which skills to install. Every answer has a flag, and anything you pass is not asked about again. With no terminal to ask in, or with `--no-input` or `--yes`, it asks nothing and uses defaults for trying it out: the shared `global` namespace with `Qwen3-Embedding-4B` at 1024 dimensions, and every skill. It lists each default it used, with the flag that changes it, and warns that `global` is shared; `--json` carries the same list. A rerun replaces every setting, so repeat the flags you passed before.
 
 Or click:
 [Add to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=noetive&config=eyJhcmdzIjpbIi15IiwiQG5vZXRpdmUvbWNwLXNlcnZlciJdLCJjb21tYW5kIjoibnB4IiwiZW52Ijp7Ik5PRVRJVkVfS0VZX1NFQ1JFVCI6IiR7Tk9FVElWRV9LRVlfU0VDUkVUfSJ9fQ==) ·
@@ -75,7 +92,7 @@ In the editor: Claude Code and Codex answer `/mcp`, Hermes reloads on `/reload-m
 - **Tools appear but every call is refused.** The key did not reach the server. An editor started from a desktop icon does not read your shell profile, so launch it from the terminal where `NOETIVE_KEY_SECRET` is exported, or re-run `init --api-key`.
 - **`init --client codex` refuses.** Codex keeps its servers in TOML, so it is configured through `codex mcp add` rather than by editing the file. Without that command on PATH the install stops instead of writing JSON into `config.toml`.
 - **`init --client hermes` refuses or says it cannot confirm.** Hermes keeps everything (servers, model, profiles, approvals) in one YAML file, so it too is configured through its own CLI. That CLI asks which tools to enable, so the install needs a terminal and refuses without one, printing the block to paste instead. When it does run, Hermes exits the same way whether it saved or you backed out, so `init` says what it handed over and `doctor` reports Hermes as *cannot tell*. Check with `hermes mcp list`.
-- **A call fails naming a namespace.** There is no default, deliberately, for the reason given below. Pass one on the call, or set it once when you run `init`.
+- **A call fails naming a namespace.** The server has no default, deliberately, for the reason given below. Pass one on the call, or set it once when you run `init`.
 
 ## Containers and remote machines
 
@@ -121,7 +138,7 @@ Three places can supply each field, and the most specific wins:
 
 They merge field by field rather than all-or-nothing, so you can pin a namespace once in your config and still let an agent name a different model on a single call.
 
-Configuring these is naming, not defaulting: the values came from you. What the server refuses to do is invent one.
+Configuring these is naming, not defaulting: the values came from you. A bare `init` writes `global` into the config and says so, so even that is a value you can see and change. What the server refuses to do is invent one.
 
 The shared namespace is `global`, provisioned with `Qwen3-Embedding-4B` at 1024 dimensions.
 
@@ -133,7 +150,7 @@ It is also the namespace an agent reaches for when it is unsure, because it is t
 
 `NOETIVE_DISABLE_GLOBAL_NS=1` closes it. A publish, search or subscribe that routes to `global` is then refused before the request is sent, with an error telling the agent to name the namespace its work belongs in. Namespace names are case-insensitive, so `Global` and `GLOBAL` are refused along with it: they are the same namespace, and an agent unsure of the spelling produces all three. The mentions of `global` disappear from the instructions and the tool descriptions at the same time, so the agent is not being offered something it will be refused for taking.
 
-`init` asks, and closing it is the suggested answer. It writes down whichever way you answer, so an exported `NOETIVE_DISABLE_GLOBAL_NS` elsewhere cannot change it behind your back. A server started with nobody to ask, such as by the Add to Kiro deeplink, leaves the shared namespace available.
+`init` closes it by default once you name a namespace of your own, and leaves it open while `global` is the namespace you route to, since closing it then would refuse every call. It writes down whichever way you answer, so an exported `NOETIVE_DISABLE_GLOBAL_NS` elsewhere cannot change it behind your back. A server started with nobody to ask, such as by the Add to Kiro deeplink, leaves the shared namespace available.
 
 This closes one namespace. It is not what stops a call being routed somewhere you did not name; that is the paragraph above, and it has no switch.
 
