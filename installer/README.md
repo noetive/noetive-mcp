@@ -6,6 +6,23 @@ Connect your AI editor to [Noetive Semantik](https://noetive.io) over the Model 
 
 ## Install
 
+Paste this into the coding agent you want connected:
+
+```text
+Install the Noetive MCP server into the editor you are running in.
+
+1. From the project folder you have open, run: npx -y @noetive/mcp-server init --no-input --client <id>
+   where <id> is the editor you are running in: cursor, claude-code, codex, copilot, antigravity, kiro or hermes.
+2. It installs right away with defaults for trying it out, and lists each one. Tell me what it chose. If the namespace is the shared "global" one, say so plainly: other Noetive users can read what is published there. Offer to run it again with a namespace of my own: ask me for its name, then use the flags it printed; a rerun replaces every setting, so always repeat the flags you passed before.
+3. Never ask me for my API key in this chat and never print it. If it says the config references NOETIVE_KEY_SECRET, no key flag is needed. If it says no key was written, run the same command with the same flags again, adding --api-key "$NOETIVE_KEY_SECRET", which writes the key into the config file. If that variable is empty, stop and tell me to export it and restart you.
+4. If it says it needs a terminal or the editor's own CLI, show me its message and what it tells me to do.
+5. Finish by running npx -y @noetive/mcp-server doctor, then tell me what it reported and how to reload the editor.
+```
+
+The first install starts on the shared `global` namespace so the first call works, and the agent tells you how to move to your own. Your key never passes through the chat.
+
+### Or run it yourself
+
 ```bash
 npx @noetive/mcp-server init --client cursor
 npx @noetive/mcp-server init --client claude-code
@@ -16,7 +33,7 @@ npx @noetive/mcp-server init --client kiro
 npx @noetive/mcp-server init --client hermes
 ```
 
-Run it with no `--client` and it configures the editor it finds. Run it in a terminal and it asks for what it needs: your API key, the namespace to route to, its model and dimensions, whether to close the shared namespace, and which skills to install. Every answer has a flag, and anything you pass is not asked about again. `--yes` accepts the defaults and asks nothing, which is what CI and a non-interactive shell get automatically.
+Run it with no `--client` and it configures the editor it finds. Run it in a terminal and it asks for what it needs: your API key, the namespace to route to, its model and dimensions, whether to close the shared namespace, and which skills to install. Every answer has a flag, and anything you pass is not asked about again. With no terminal to ask in, or with `--no-input` or `--yes`, it asks nothing and uses defaults for trying it out: the shared `global` namespace with `Qwen3-Embedding-4B` at 1024 dimensions, and every skill. It lists each default with the flag that changes it, and warns that `global` is shared. A rerun replaces every setting, so repeat the flags you passed before.
 
 One-click buttons for Cursor, VS Code, Kiro and Hermes are on [noetive.io/mcp](https://noetive.io/mcp). The Hermes button needs the Hermes desktop app; the Hermes command needs the `hermes` CLI and a terminal to answer, since Hermes asks which tools to enable.
 
@@ -60,7 +77,7 @@ It reports the binary, the key and each editor's config separately, so an editor
 
 ## Namespaces are named, never guessed
 
-Every publish, search and subscribe names a namespace, an embedding model and its dimensions. There is no default and no fallback to a shared space: an omitted field is refused before the request is sent, because a forgotten namespace would otherwise route private work somewhere it was never meant to go.
+Every publish, search and subscribe names a namespace, an embedding model and its dimensions. The server has no default and no fallback to a shared space: an omitted field is refused before the request is sent, because a forgotten namespace would otherwise route private work somewhere it was never meant to go. A bare `init` writes the shared `global` into the config for trying it out, and says so.
 
 Set them once at install time, or let your agent pass them per call:
 
@@ -73,7 +90,7 @@ npx @noetive/mcp-server init --client cursor \
 
 `global` spans tenants: what an agent publishes there, other Noetive users can find. It is also the example value in the server's own instructions, which makes it what an agent reaches for when it is unsure.
 
-`--disable-global-ns` closes it. A call that routes to `global` is then refused before the request is sent, and the mentions of it disappear from the instructions and tool descriptions so the agent is not offered something it will be refused for taking. `--allow-global-ns` records the opposite decision explicitly. `init` asks when it can, and closing it is the suggested answer.
+`--disable-global-ns` closes it. A call that routes to `global` is then refused before the request is sent, and the mentions of it disappear from the instructions and tool descriptions so the agent is not offered something it will be refused for taking. `--allow-global-ns` records the opposite decision explicitly. `init` closes it by default once you name a namespace of your own, and leaves it open while `global` is the one you route to.
 
 ## Skills
 

@@ -464,6 +464,30 @@ test("no terminal refuses the interactive install and hands back the entry", asy
   });
 });
 
+// A coding agent can run commands inside a pseudo-terminal, which looks
+// interactive. Handing Hermes' tool picker to it hangs the agent on a question
+// it cannot see, so --no-input has to reach this adapter and refuse the same
+// way a missing terminal does, carrying the entry to paste.
+test("--no-input refuses the interactive install even on a terminal", async () => {
+  await withScratchHome(async (home) => {
+    const { run, calls } = recorder();
+
+    await withTerminal(() =>
+      assert.rejects(
+        () => new CliDelegateAdapter(run).install({ ...hermesRequest(home), noInput: true }),
+        (err: Error) => {
+          assert.match(err.message, /--no-input/);
+          assert.match(err.message, /nothing was written/);
+          assert.match(err.message, /mcp_servers:/);
+          return true;
+        },
+      ),
+    );
+
+    assert.deepEqual(calls.filter((c) => c[2] === "add"), [], "the CLI was handed a prompt despite --no-input");
+  });
+});
+
 // --api-key --dry-run is exactly what a careful person runs before committing
 // to anything, and the delegated path put the key straight into their
 // scrollback while the file path had redacted it for releases.
@@ -553,4 +577,42 @@ test("the shared-namespace decision reaches the CLI as an environment pair", asy
       `expected NOETIVE_DISABLE_GLOBAL_NS=${expected}`,
     );
   }
+});
+
+// `changed` decides what init prints: "Configured", "already configured", or a
+// dry-run preview, and whether the key and restart advice follow. A delegate
+// that reported the wrong one tells a user with a fresh install to do nothing,
+// or a user previewing a change that it already happened.
+test("the outcome says whether anything changed, on a real run and a preview", async () => {
+  const workspace = mkdtempSync(join(tmpdir(), "noetive-claude-"));
+  const adapter = new CliDelegateAdapter(recorder().run);
+
+  assert.equal((await adapter.install(request(workspace))).changed, true, "a real install reported no change");
+
+  const preview = await adapter.install(request(workspace, true));
+  assert.equal(preview.changed, false, "a preview reported a change it did not make");
+  assert.ok(preview.diff, "a preview carried no diff to show");
+
+  assert.equal((await adapter.remove(request(workspace, true))).changed, true, "a remove preview reported nothing to remove");
+});
+
+// The interactive path is the one where nothing can be read back. It still
+// handed the install over, so it reports a change, alongside the caveat.
+test("an interactive install reports a change alongside its caveat", async () => {
+  const outcome = await withScratchHome((home) => withTerminal(() => new CliDelegateAdapter(recorder().run).install(hermesRequest(home))));
+
+  assert.equal(outcome.changed, true);
+});
+
+// An editor whose CLI has no remove command has nothing to clear. Reporting
+// a removal there tells the user an entry is gone that the editor still loads.
+test("removing through a CLI with no remove command reports nothing removed", async () => {
+  const { removeArgs: _ignored, ...withoutRemove } = claudeCode.cli!;
+  const spec: ClientSpec = { ...claudeCode, cli: withoutRemove };
+  const { run, calls } = recorder();
+
+  const outcome = await new CliDelegateAdapter(run).remove(request(mkdtempSync(join(tmpdir(), "noetive-claude-")), false, spec));
+
+  assert.equal(outcome.changed, false);
+  assert.deepEqual(calls.filter((c) => c[2] === "remove"), []);
 });

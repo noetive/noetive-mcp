@@ -12,7 +12,7 @@ import {
   PACKAGE_NAME,
   SERVER_NAME,
 } from "./clients";
-import { interview } from "./interview";
+import { Answers, Defaulted, interview, isShared, keyComplaint, SuggestedDimensions, SuggestedModel, withDefaults } from "./interview";
 import { Cancelled, interactive, Prompter, terminalPrompter } from "./prompt";
 import { resolveBinary } from "./resolveBinary";
 import { API_KEY_ENV, describeKeyHandling, EntryOptions } from "./serverEntry";
@@ -44,8 +44,10 @@ Clients:
 ${clientIds().map((id) => `  ${id.padEnd(14)}${clientSpec(id).displayName}`).join("\n")}
 
 Run \`init\` in a terminal and it asks for what it needs. Pass the flags below to
-answer ahead of time; anything you pass is not asked about again, and with
---yes nothing is asked at all.
+answer ahead of time; anything you pass is not asked about again. With no
+terminal, with --no-input or with --yes, nothing is asked: anything not passed
+gets a default for trying it out, starting with the shared "global" namespace,
+and \`init\` lists each default it used. Empty on purpose is --flag=.
 
 Options:
   --client <id>        editor to configure; detected when omitted
@@ -57,7 +59,8 @@ Options:
   --disable-global-ns  refuse calls that route to the shared "global" namespace
   --allow-global-ns    leave the shared namespace available
   --skills <list>      skills to install: all, none, or a comma-separated list
-  --yes                accept the defaults and ask nothing
+  --yes                ask nothing; use the defaults for anything not passed
+  --no-input           never prompt, even in a terminal (for coding agents)
   --dry-run            print what would change and exit
   --json               machine-readable output
   --version            print the version
@@ -130,8 +133,12 @@ async function install(options: Options, out: Writer): Promise<number> {
   // The key is embedded only when the user asks for it by name. Reading it out
   // of the ambient environment and writing it to disk would turn an exported
   // shell variable into a file that gets synced, committed or screen-shared.
+  const apiKey = stringFlag(options, "api-key");
+  const complaint = apiKey ? keyComplaint(apiKey) : undefined;
+  if (complaint) throw new Error(`--api-key: ${complaint}`);
+
   const given = {
-    ...optional("apiKey", stringFlag(options, "api-key")),
+    ...optional("apiKey", apiKey),
     ...optional("namespace", stringFlag(options, "namespace")),
     ...optional("model", stringFlag(options, "model")),
     ...optional("dimensions", stringFlag(options, "dimensions")),
@@ -141,12 +148,18 @@ async function install(options: Options, out: Writer): Promise<number> {
     offeredSkills: installable.map((skill) => ({ value: skill.name, label: skill.name, hint: summarize(skill) })),
   };
 
-  // Everything unanswered defaults to unset, which is what every release before
-  // this one wrote. An install nobody could be asked about must not acquire
-  // settings nobody chose.
-  const answers = asking
-    ? await interview(prompterFor(options), given)
-    : { ...given, skills: given.skills ?? [] };
+  // Nobody to ask: fill in the testing defaults and say which, so a first
+  // install from an agent's shell works on its first call and the user still
+  // learns that it is pointed at the shared namespace.
+  const { answers, defaulted } = asking
+    ? { answers: await interview(prompterFor(options), given), defaulted: [] as Defaulted[] }
+    : withDefaults(given);
+
+  // Checked on what will be written, not on what was typed: a bare
+  // --disable-global-ns defaults the namespace to the one it closes. Either
+  // contradiction produces a server that refuses or fails every call, so it is
+  // refused here rather than found out on the first tool call.
+  assertRoutable(answers);
 
   const entryOptions: EntryOptions = {
     ...optional("apiKey", answers.apiKey),
@@ -159,19 +172,20 @@ async function install(options: Options, out: Writer): Promise<number> {
   };
 
   const dryRun = options.flags.has("dry-run");
-  const outcome = await adapterFor(spec).install({ spec, clientId, scope, workspace, entryOptions, dryRun });
+  const outcome = await adapterFor(spec).install({ spec, clientId, scope, workspace, entryOptions, dryRun, noInput: options.flags.has("no-input") });
 
   const chosen = available.filter((skill) => answers.skills.includes(skill.name));
   const skills = installSkills(spec, scope, workspace, chosen, { dryRun });
 
   if (options.flags.has("json")) {
-    out(JSON.stringify({ client: clientId, scope, ...outcome, skills }, null, 2));
+    out(JSON.stringify({ client: clientId, scope, ...outcome, skills, defaulted }, null, 2));
     return 0;
   }
 
   if (outcome.diff) {
     out(outcome.diff);
     for (const path of skills.written) out(`  would write ${path}`);
+    reportDefaults(defaulted, out);
     out(`\nDry run: nothing was written.`);
     return 0;
   }
@@ -188,6 +202,7 @@ async function install(options: Options, out: Writer): Promise<number> {
   }
 
   reportSkills(skills, out);
+  reportDefaults(defaulted, out);
 
   if (outcome.changed) {
     out(describeKeyHandling(spec, clientId, entryOptions));
@@ -206,8 +221,56 @@ async function install(options: Options, out: Writer): Promise<number> {
  * editor with no way to notice.
  */
 function shouldAsk(options: Options): boolean {
-  if (options.flags.has("yes") || options.flags.has("json") || options.flags.has("dry-run")) return false;
+  const flags = options.flags;
+  if (flags.has("yes") || flags.has("no-input") || flags.has("json") || flags.has("dry-run")) return false;
   return interactive();
+}
+
+/**
+ * assertRoutable refuses settings under which no call could succeed: routing
+ * to the shared namespace while closing it, or routing there with a model or
+ * dimensionality it is not provisioned with.
+ *
+ * The second applies only to the shared namespace, the one whose provisioning
+ * this installer knows. A namespace the user names is theirs to describe.
+ */
+function assertRoutable(answers: Answers): void {
+  if (!isShared(answers.namespace)) return;
+
+  if (answers.disableGlobalNamespace === true) {
+    throw new Error(
+      `--disable-global-ns closes "${answers.namespace}", the namespace this install routes to, so every call would be refused. ` +
+        `Add --namespace <name> to route to your own, or drop --disable-global-ns.`,
+    );
+  }
+  if (answers.model !== SuggestedModel || answers.dimensions !== SuggestedDimensions) {
+    throw new Error(
+      `"${answers.namespace}" is provisioned with ${SuggestedModel} at ${SuggestedDimensions} dimensions, so ` +
+        `--model ${answers.model} --dimensions ${answers.dimensions} would fail every call there. ` +
+        `Add --namespace <name> for a namespace that uses them, or drop --model and --dimensions.`,
+    );
+  }
+}
+
+/**
+ * reportDefaults lists the settings nobody answered and `init` filled in, each
+ * with the flags that change it.
+ *
+ * A warning leads, on its own lines, because the one that matters, a shared
+ * namespace, is the one a user skimming "Configured" would miss.
+ */
+function reportDefaults(defaulted: readonly Defaulted[], out: Writer): void {
+  if (defaulted.length === 0) return;
+
+  for (const item of defaulted.filter((d) => d.warning)) {
+    out(`\nWARNING: ${item.setting} is "${item.value}". ${item.warning}`);
+    out(`  To use your own, run this again with: ${item.change}`);
+  }
+
+  out(`\nNot asked, so set to the defaults:`);
+  for (const item of defaulted) {
+    out(`  ${item.setting.padEnd(17)} ${item.value.padEnd(20)} change with ${item.change}`);
+  }
 }
 
 /** prompterFor exists so tests can drive the interview without a terminal. */
@@ -216,6 +279,19 @@ let prompterFor: (options: Options) => Prompter = () => terminalPrompter();
 /** usePrompter replaces the prompter, for tests. */
 export function usePrompter(build: (options: Options) => Prompter): void {
   prompterFor = build;
+}
+
+/** binaryFor exists so tests decide whether the binary is found, not the build tree. */
+let binaryFor: () => string = () => resolveBinary();
+
+/**
+ * useBinaryResolver replaces the binary lookup, for tests. Without it, doctor
+ * tests pass or fail depending on whether a local build left a binary behind.
+ *
+ *	useBinaryResolver(() => "/usr/local/bin/noetive-mcp")
+ */
+export function useBinaryResolver(resolve: () => string): void {
+  binaryFor = resolve;
 }
 
 /**
@@ -317,7 +393,7 @@ async function uninstall(options: Options, out: Writer): Promise<number> {
   const workspace = process.cwd();
   const dryRun = options.flags.has("dry-run");
 
-  const outcome = await adapterFor(spec).remove({ spec, clientId, scope, workspace, dryRun });
+  const outcome = await adapterFor(spec).remove({ spec, clientId, scope, workspace, dryRun, noInput: options.flags.has("no-input") });
 
   // Skills came in with the entry, so they go out with it. Leaving them behind
   // means an editor that still loads instructions for tools it no longer has.
@@ -389,7 +465,7 @@ async function doctor(options: Options, out: Writer): Promise<number> {
   const checks: Check[] = [];
 
   try {
-    checks.push({ name: "binary", status: "pass", detail: resolveBinary() });
+    checks.push({ name: "binary", status: "pass", detail: binaryFor() });
   } catch (e) {
     checks.push({ name: "binary", status: "fail", detail: firstLine(e as Error) });
   }
@@ -555,11 +631,11 @@ export type Writer = (line: string) => void;
 export function parse(argv: readonly string[]): Options {
   const known = new Set([
     "client", "scope", "api-key", "namespace", "model", "dimensions", "skills",
-    "disable-global-ns", "allow-global-ns", "yes",
+    "disable-global-ns", "allow-global-ns", "yes", "no-input",
     "dry-run", "json", "version", "help",
   ]);
   const boolean = new Set([
-    "disable-global-ns", "allow-global-ns", "yes",
+    "disable-global-ns", "allow-global-ns", "yes", "no-input",
     "dry-run", "json", "version", "help",
   ]);
 
@@ -591,6 +667,18 @@ export function parse(argv: readonly string[]): Options {
 
     const value = inline ?? argv[++i];
     if (value === undefined) throw new Error(`--${name} needs a value`);
+
+    // `--api-key "$NOETIVE_KEY_SECRET"` with the variable unset arrives as an
+    // empty separate argument, and taken at face value it is the deliberate
+    // "write no key" answer: the install succeeds and every call is refused.
+    // Empty on purpose is spelled `--name=`, which cannot come from a
+    // variable expanding to nothing.
+    if (inline === undefined && value === "") {
+      throw new Error(
+        `--${name} was given an empty value. If it came from a variable, that variable is not set in this shell. ` +
+          `To leave it empty on purpose, pass --${name}=`,
+      );
+    }
     flags.set(name, value);
   }
 
