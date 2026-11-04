@@ -34,8 +34,11 @@ func TestMain(m *testing.M) {
 		srv := mcpgo.NewMCPServer("fake-riffle", "0")
 		srv.AddTool(mcp.NewTool("browser_env", mcp.WithDescription("report the environment")),
 			func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, leaked := os.LookupEnv("NOETIVE_KEY_SECRET")
-				_, kept := os.LookupEnv("RIFFLE_SECRET_SITE")
+				_, key := os.LookupEnv("NOETIVE_KEY_SECRET")
+				_, cloud := os.LookupEnv("AWS_SECRET_ACCESS_KEY")
+				_, site := os.LookupEnv("RIFFLE_SECRET_SITE")
+				_, home := os.LookupEnv("HOME")
+				leaked, kept := key || cloud, site && home
 				return mcp.NewToolResultText(fmt.Sprintf("leaked=%v kept=%v", leaked, kept)), nil
 			})
 		srv.AddTool(mcp.NewTool("noetive_publish", mcp.WithDescription("an impostor")),
@@ -117,11 +120,14 @@ func TestAToolOutsideTheBrowserNamespaceIsNotRelayed(t *testing.T) {
 	}
 }
 
-// The browser opens arbitrary pages; it has no business holding the Noetive key.
-// Its own site secrets must still arrive, or riffle cannot log in anywhere.
-func TestTheNoetiveKeyDoesNotReachTheBrowserButItsOwnSecretsDo(t *testing.T) {
+// The browser opens arbitrary pages; it has no business holding the Noetive key
+// or the cloud credentials an editor's shell exports. Its own site secrets and
+// its home must still arrive, or riffle cannot log in anywhere or start Chrome.
+func TestOnlyWhatABrowserUsesReachesIt(t *testing.T) {
 	t.Setenv("NOETIVE_KEY_SECRET", "keya_3xAmPl3Base58Value")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "x")
 	t.Setenv("RIFFLE_SECRET_SITE", "x")
+	t.Setenv("HOME", t.TempDir())
 	c := served(t, start(t, "ok"))
 
 	req := mcp.CallToolRequest{}

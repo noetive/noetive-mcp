@@ -84,10 +84,10 @@ func Locate(getenv func(string) string, lookPath func(string) (string, error)) (
 // Start launches the executable with the `mcp` verb and lists its tools.
 //
 // path must be absolute, so what runs does not depend on the directory the
-// editor happened to be launched from. The process inherits this one's
-// environment, which is how riffle receives its own site secrets, except for
-// every NOETIVE_ variable: a browser that opens arbitrary pages has no use for
-// the Noetive key and must not be able to read it. extraEnv is added after.
+// editor happened to be launched from. The process gets only the variables a
+// browser uses (see browserEnv), which include riffle's own site secrets and
+// exclude the Noetive key and anything else the editor's shell exported.
+// extraEnv is added after.
 //
 // What the process writes to stderr goes to this server's log, never to the
 // agent: it is where riffle names the browser session it opened, so an operator
@@ -132,22 +132,67 @@ func Start(ctx context.Context, path string, extraEnv []string, args ...string) 
 	return &Session{client: c, tools: offered}, nil
 }
 
-// spawn builds the process with the Noetive configuration removed from its
-// environment and its stderr going to this server's log.
+// spawn builds the process with an environment reduced to what a browser needs
+// and its stderr going to this server's log.
 func spawn(ctx context.Context, path string, extraEnv, args []string) (*exec.Cmd, error) {
 	cmd := exec.CommandContext(ctx, path, args...)
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "NOETIVE_") {
-			cmd.Env = append(cmd.Env, kv)
-		}
-	}
-	cmd.Env = append(cmd.Env, extraEnv...)
+	cmd.Env = append(browserEnv(os.Environ()), extraEnv...)
 	// Written straight to the log rather than through the transport, which
 	// drops output it cannot keep up with and discards what is left when it
 	// closes: exactly the lines a riffle that fails at startup says why in.
 	cmd.Stderr = log.Writer()
 	cmd.WaitDelay = stderrGrace
 	return cmd, nil
+}
+
+// browserEnv keeps the variables riffle and the Chrome it starts need, and
+// drops the rest.
+//
+// An editor's environment carries whatever the user's shell exports: cloud
+// credentials, tokens, the Noetive key. A browser that opens pages an agent
+// names has no use for any of them, so it is given a list of what it does use
+// rather than this one's environment minus what we thought to remove. A
+// variable riffle starts reading later has to be added here.
+//
+//	browserEnv([]string{"HOME=/h", "AWS_SECRET_ACCESS_KEY=x"}) // => ["HOME=/h"]
+func browserEnv(environ []string) []string {
+	kept := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		if browserVariable(strings.ToUpper(name)) {
+			kept = append(kept, kv)
+		}
+	}
+	return kept
+}
+
+// browserVariable says whether a variable, named in upper case so Windows'
+// case-insensitive names match, is one a browser uses.
+func browserVariable(name string) bool {
+	for _, prefix := range browserVariablePrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	_, ok := browserVariables[name]
+	return ok
+}
+
+// browserVariablePrefixes are riffle's own settings and site secrets (RIFFLE_),
+// locale (LC_) and the desktop session's directories (XDG_).
+var browserVariablePrefixes = []string{"RIFFLE_", "LC_", "XDG_"}
+
+// browserVariables are where to find programs, the home, temporary and cache
+// directories, the locale, the display, the proxy and the certificates, on
+// Unix and on Windows.
+var browserVariables = map[string]struct{}{
+	"PATH": {}, "HOME": {}, "USER": {}, "LOGNAME": {}, "SHELL": {}, "TMPDIR": {}, "TMP": {}, "TEMP": {},
+	"LANG": {}, "LANGUAGE": {}, "TZ": {}, "DISPLAY": {}, "WAYLAND_DISPLAY": {}, "XAUTHORITY": {}, "DBUS_SESSION_BUS_ADDRESS": {},
+	"FONTCONFIG_PATH": {}, "FONTCONFIG_FILE": {},
+	"HTTP_PROXY": {}, "HTTPS_PROXY": {}, "NO_PROXY": {}, "ALL_PROXY": {}, "SSL_CERT_FILE": {}, "SSL_CERT_DIR": {},
+	"SYSTEMROOT": {}, "WINDIR": {}, "SYSTEMDRIVE": {}, "COMSPEC": {}, "PATHEXT": {}, "USERPROFILE": {}, "USERNAME": {},
+	"HOMEDRIVE": {}, "HOMEPATH": {}, "APPDATA": {}, "LOCALAPPDATA": {}, "PROGRAMDATA": {},
+	"PROGRAMFILES": {}, "PROGRAMFILES(X86)": {}, "PROGRAMW6432": {}, "ALLUSERSPROFILE": {}, "PUBLIC": {}, "LD_LIBRARY_PATH": {}, "NUMBER_OF_PROCESSORS": {}, "PROCESSOR_ARCHITECTURE": {},
 }
 
 // ToolNames lists the tools the process offered.
