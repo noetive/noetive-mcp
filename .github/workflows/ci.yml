@@ -76,7 +76,7 @@ jobs:
       # A short search, bounded by execution count rather than time: see the
       # Makefile for why a timed budget fails runs that found nothing. The target
       # enumerates packages and targets, so a new target is covered without an
-      # edit here. Campaigns run on a schedule.
+      # edit here. Longer campaigns run in the scheduled workflow, by hand.
       - name: Fuzz search
         run: make fuzz-live
 

@@ -11,7 +11,7 @@ name: install-clients
 # availability this repository does not control, and a red build caused by
 # somebody else's npm outage on a change that touched the README teaches people
 # to ignore the colour. It runs where it can actually be about this code,
-# changes to the installer or the manifest, plus weekly and on demand.
+# changes to the installer or the manifest, plus on demand.
 on:
   push:
     branches: [main]
@@ -22,10 +22,9 @@ on:
     paths:
       - "installer/**"
       - ".github/workflows/install-clients.yml"
-  schedule:
-    # Weekly. The editors move without this repository changing, and a vendor
-    # renaming a flag is invisible here until someone tries to install.
-    - cron: "23 5 * * 2"
+  # The editors move without this repository changing, and a vendor renaming a
+  # flag is invisible here until someone tries to install; run this by hand to
+  # check for that drift.
   workflow_dispatch:
 
 permissions:

@@ -1,13 +1,9 @@
 name: scheduled
 
 on:
-  # Daily: the advisory database and the production API both move without this
-  # repository changing, and both failures are invisible until someone looks.
-  schedule:
-    - cron: "17 6 * * *"
-    # Weekly: a real fuzz campaign. Daily would re-search ground the last one
-    # already covered: a twenty-minute search converges long before morning.
-    - cron: "41 4 * * 1"
+  # Manual only. The advisory database and the production API move without
+  # this repository changing, so run this when something looks wrong or before
+  # a release; nothing runs it on a timer.
   workflow_dispatch:
 
 permissions:
@@ -17,12 +13,10 @@ concurrency:
   group: scheduled
   cancel-in-progress: false
 
-# github.event.schedule is empty on workflow_dispatch, so a manual run executes
-# every job, which is what you want when you are here because something looks
-# wrong.
+# A run executes every job: vulnerabilities, the production check and a fuzz
+# campaign.
 jobs:
   vulnerabilities:
-    if: github.event.schedule != '41 4 * * 1'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -53,7 +47,6 @@ jobs:
         working-directory: installer
 
   integration:
-    if: github.event.schedule != '41 4 * * 1'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -116,7 +109,6 @@ jobs:
           exit $status
 
   fuzz:
-    if: github.event.schedule != '17 6 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
