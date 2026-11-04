@@ -56,6 +56,10 @@ type Mailer interface {
 	Send(ctx context.Context, in bud.SendInput) (bud.SendOutput, error)
 }
 
+// EnvNames lists the environment variables the mail tools read beyond the
+// Noetive key, so packaging can check that server.json declares them.
+func EnvNames() []string { return []string{bud.EnvBaseURL} }
+
 // callTimeout bounds every call but bud_wait, whose bound is its window.
 const callTimeout = 30 * time.Second
 

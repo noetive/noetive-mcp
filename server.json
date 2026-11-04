@@ -60,6 +60,11 @@
           "name": "NOETIVE_RIFFLE_BIN",
           "description": "Path to the riffle executable, when it is not on PATH. With riffle installed the server also offers its browser tools. Unset and not found means no browser tools; set and unusable stops the server. Not available in the container image, which has no browser.",
           "isRequired": false
+        },
+        {
+          "name": "NOETIVE_BUD_BASE_URL",
+          "description": "Where the mail tools reach Bud, https://bud.noetive.io by default. Must be https, or http to this machine, because the API key goes with every request; anything else stops the server.",
+          "isRequired": false
         }
       ]
     },
@@ -93,6 +98,13 @@
           "value": "NOETIVE_RIFFLE_BIN",
           "isRepeated": true,
           "description": "Forwards the riffle path, when one is set. The image has no browser, so this only matters for a derived image that adds one."
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "NOETIVE_BUD_BASE_URL",
+          "isRepeated": true,
+          "description": "Forwards where the mail tools reach Bud, when one is set."
         },
         {
           "type": "named",
@@ -178,6 +190,11 @@
         {
           "name": "NOETIVE_RIFFLE_BIN",
           "description": "Path to the riffle executable, when it is not on PATH. With riffle installed the server also offers its browser tools. Unset and not found means no browser tools; set and unusable stops the server. Not available in the container image, which has no browser.",
+          "isRequired": false
+        },
+        {
+          "name": "NOETIVE_BUD_BASE_URL",
+          "description": "Where the mail tools reach Bud, https://bud.noetive.io by default. Must be https, or http to this machine, because the API key goes with every request; anything else stops the server.",
           "isRequired": false
         }
       ]
