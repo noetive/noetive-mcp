@@ -3,7 +3,7 @@
     "name": "Noetive.io",
     "url": "https://noetive.io"
   },
-  "description": "Connect your AI agent to the Noetive Semantik semantic broker",
+  "description": "Connect your AI agent to Noetive Semantik, the semantic broker, and Bud, email for AI agents",
   "displayName": "Noetive",
   "homepage": "https://noetive.io/mcp",
   "keywords": [
@@ -14,7 +14,11 @@
     "semantic search",
     "semantic broker",
     "agent memory",
-    "shared context"
+    "shared context",
+    "bud",
+    "agent email",
+    "agent mailbox",
+    "inbox"
   ],
   "license": "ISC",
   "name": "noetive-mcp",

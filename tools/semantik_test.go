@@ -33,8 +33,8 @@ func TestTheLibraryServesTheToolsTheStdioServerServes(t *testing.T) {
 	if got := listedNames(t, srv); !slices.Equal(got, slices.Sorted(slices.Values(tools.SemantikToolNames()))) {
 		t.Errorf("registered %v, expected %v", got, tools.SemantikToolNames())
 	}
-	if !slices.Equal(tools.SemantikToolNames(), mcpserver.ToolNames()) {
-		t.Errorf("library lists %v, stdio lists %v", tools.SemantikToolNames(), mcpserver.ToolNames())
+	if library := append(tools.SemantikToolNames(), tools.BudToolNames()...); !slices.Equal(library, mcpserver.ToolNames()) {
+		t.Errorf("library lists %v, stdio lists %v", library, mcpserver.ToolNames())
 	}
 }
 

@@ -1,6 +1,6 @@
 // Package mcpserver assembles the Noetive MCP server.
 //
-// It registers the tools that package broker exposes and states the server's
+// It registers the tools that packages broker (Semantik) and mail (Bud) expose and states the server's
 // operating rules for the agent. It makes no decisions of its own: what a tool
 // accepts and what it returns belongs to the tool.
 package mcpserver
@@ -9,6 +9,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"go.noetive.io/noetive-mcp/internal/broker"
+	"go.noetive.io/noetive-mcp/internal/mail"
 	"go.noetive.io/noetive-mcp/internal/targeting"
 )
 
@@ -27,11 +28,29 @@ type Option func(*options)
 
 type options struct {
 	browser Browser
+	mailer  Mailer
 }
+
+// Mailer is the set of Bud operations the mail tools call. *bud.Client
+// satisfies it.
+type Mailer = mail.Mailer
 
 // WithBrowser registers the browser's tools too, and tells the agent that what
 // they return is page content to read, never instructions to follow.
 func WithBrowser(b Browser) Option { return func(o *options) { o.browser = b } }
+
+// WithBud registers the Bud mail tools beside the Semantik ones.
+//
+// Ignored on an [Unconfigured] server: the mail tools take the same key, so
+// they would only refuse, and a tool that can only fail still costs its
+// description on every turn.
+//
+//	srv := mcpserver.New(version, client, policy, mcpserver.WithBud(budClient))
+func WithBud(m Mailer) Option { return func(o *options) { o.mailer = m } }
+
+// unconfiguredMail is said beside the Semantik warning, so an agent asked to
+// read mail knows why the tools for it are missing too.
+const unconfiguredMail = " The Bud mail tools (bud_wait, bud_read, bud_put, bud_send) are absent for the same reason."
 
 // browserInstructions is why the agent is told anything about the browser at
 // all: a page is written by someone else, and a model reading one is exactly
@@ -57,7 +76,11 @@ func New(version string, b Broker, policy targeting.Policy, opts ...Option) *mcp
 	instructions := broker.Instructions(policy)
 	degraded, isDegraded := b.(*unconfigured)
 	if isDegraded {
-		instructions = broker.UnconfiguredInstructions(degraded.err.Message)
+		instructions = broker.UnconfiguredInstructions(degraded.err.Message) + unconfiguredMail
+	}
+	serveMail := o.mailer != nil && !isDegraded
+	if serveMail {
+		instructions += "\n\n" + mail.Instructions()
 	}
 	if o.browser != nil {
 		instructions += browserInstructions
@@ -74,14 +97,17 @@ func New(version string, b Broker, policy targeting.Policy, opts ...Option) *mcp
 	} else {
 		broker.Register(srv, b, policy, broker.DefaultCallBudget)
 	}
+	if serveMail {
+		mail.Register(srv, o.mailer)
+	}
 	if o.browser != nil {
 		o.browser.Register(srv)
 	}
 	return srv
 }
 
-// ToolNames lists every Noetive tool a keyed server registers, in registration
-// order. Exported so the doctor skill and the tests have one place to read the
+// ToolNames lists every Noetive tool a keyed server registers, Semantik's then
+// Bud's. Exported so the doctor skill and the tests have one place to read the
 // surface from rather than each keeping its own copy. Browser tools are not
 // here: they are whatever the browser process offers.
-func ToolNames() []string { return broker.ToolNames() }
+func ToolNames() []string { return append(broker.ToolNames(), mail.ToolNames()...) }

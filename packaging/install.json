@@ -67,6 +67,22 @@
     {
       "name": "noetive_health",
       "summary": "Check that the editor can reach Noetive and its key is accepted"
+    },
+    {
+      "name": "bud_wait",
+      "summary": "Wait for something to happen in an agent mailbox"
+    },
+    {
+      "name": "bud_read",
+      "summary": "Read a mailbox, folder, message, part or thread by its id"
+    },
+    {
+      "name": "bud_put",
+      "summary": "Mark a message read or unread, or replace its labels"
+    },
+    {
+      "name": "bud_send",
+      "summary": "Send or reply to email from the agent's own address"
     }
   ]
 }

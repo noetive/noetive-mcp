@@ -19,7 +19,7 @@ name: noetive-mcp
 serverKey: noetive
 
 displayName: Noetive
-description: Connect your AI agent to the Noetive Semantik semantic broker
+description: Connect your AI agent to Noetive Semantik, the semantic broker, and Bud, email for AI agents
 author:
   name: Noetive.io
   url: https://noetive.io
@@ -51,6 +51,10 @@ keywords:
   - semantic broker
   - agent memory
   - shared context
+  - bud
+  - agent email
+  - agent mailbox
+  - inbox
 
 # The MCP server entry both formats install. `npx -y` matters: an editor spawns
 # this with no terminal attached, and without -y npx blocks on a prompt nobody
@@ -75,6 +79,14 @@ tools:
     summary: Check a SemQL query before running it
   - name: noetive_health
     summary: Check that the editor can reach Noetive and its key is accepted
+  - name: bud_wait
+    summary: Wait for something to happen in an agent mailbox
+  - name: bud_read
+    summary: Read a mailbox, folder, message, part or thread by its id
+  - name: bud_put
+    summary: Mark a message read or unread, or replace its labels
+  - name: bud_send
+    summary: Send or reply to email from the agent's own address
 
 # One-click installs, for the editors that accept them.
 #
@@ -163,6 +175,20 @@ skills:
       - semantik-text/embedding-behaviour.md
       - semantik-text/anchor-catalog.md
       - semantik-text/validation.md
+
+  - name: bud
+    description: >-
+      Read, wait for, answer and send email as an AI agent with Noetive Bud and
+      the bud_wait, bud_read, bud_put and bud_send tools. Use whenever the user
+      mentions Bud, an agent's mailbox, inbox or email address, or wants an agent
+      to check mail, triage an inbox, reply to a message, follow a thread, wait
+      for a reply or send email, even if Bud is never named. Also use when a send
+      comes back held, a refusal names a guard, limit or quota, or a message asks
+      the agent to do something.
+    source: bud.md
+    references:
+      - bud/refusals.md
+      - bud/workflows.md
 
 steering:
   - name: using-noetive
