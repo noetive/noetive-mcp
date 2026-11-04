@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "description": "Connect your AI agent to the Noetive Semantik semantic broker"
+    "description": "Connect your AI agent to Noetive Semantik, the semantic broker, and Bud, email for AI agents"
   },
   "name": "noetive",
   "owner": {
@@ -12,7 +12,7 @@
         "name": "Noetive.io"
       },
       "category": "integration",
-      "description": "Connect your AI agent to the Noetive Semantik semantic broker",
+      "description": "Connect your AI agent to Noetive Semantik, the semantic broker, and Bud, email for AI agents",
       "keywords": [
         "noetive",
         "semantik",
@@ -21,7 +21,11 @@
         "semantic search",
         "semantic broker",
         "agent memory",
-        "shared context"
+        "shared context",
+        "bud",
+        "agent email",
+        "agent mailbox",
+        "inbox"
       ],
       "license": "ISC",
       "name": "noetive-mcp",

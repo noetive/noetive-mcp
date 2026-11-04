@@ -1,5 +1,5 @@
-// Command noetive-mcp serves the Noetive Semantik broker to an AI editor over
-// the Model Context Protocol.
+// Command noetive-mcp serves Noetive Semantik, the semantic broker, and Noetive
+// Bud, email for AI agents, to an AI editor over the Model Context Protocol.
 //
 // Invoked with no arguments it serves stdio, which is how editors launch it and
 // what the "Add to Kiro" deeplink relies on. Configuration of editor config
@@ -17,6 +17,7 @@ import (
 	"os/exec"
 
 	mcpgo "github.com/mark3labs/mcp-go/server"
+	"go.noetive.io/noetive-sdk-go/bud"
 	"go.noetive.io/noetive-sdk-go/semantik"
 
 	"go.noetive.io/noetive-mcp/internal/browser"
@@ -105,6 +106,13 @@ func run(argv []string, stdout io.Writer, serve func(*mcpgo.MCPServer) error) er
 		return err
 	}
 	var opts []mcpserver.Option
+	mailer, err := resolveMailer()
+	if err != nil {
+		return err
+	}
+	if mailer != nil {
+		opts = append(opts, mcpserver.WithBud(mailer))
+	}
 	if session != nil {
 		defer func() {
 			if err := session.Close(); err != nil {
@@ -135,6 +143,25 @@ func resolveEmbedder(flagURL string) (*embedding.Endpoint, error) {
 		url = os.Getenv(embedding.EnvURL)
 	}
 	return embedding.At(url, os.Getenv(embedding.EnvKey))
+}
+
+// resolveMailer builds the Bud client on the same Noetive key, or returns nil
+// when there is no usable key: connect has already put the server in its
+// degraded state for that, and says why on every call.
+//
+// With a key, a client that cannot be built stops the process. The only way
+// that happens is an unusable NOETIVE_BUD_BASE_URL, which is somebody's choice of
+// where mail goes; serving without the mail tools, or against the default
+// service instead, would not honour it.
+func resolveMailer() (*bud.Client, error) {
+	if raw := os.Getenv(mcpserver.APIKeyEnv); raw == "" || mcpserver.PlaceholderKey(raw) {
+		return nil, nil
+	}
+	client, err := bud.NewFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("the Bud client: %w", err)
+	}
+	return client, nil
 }
 
 // withoutServeVerb drops a leading `serve`, which the npm wrapper passes when

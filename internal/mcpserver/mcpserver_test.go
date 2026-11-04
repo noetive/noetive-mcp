@@ -24,7 +24,7 @@ const (
 // nothing else. A tool added to broker but never registered is invisible, and a
 // renamed tool silently breaks every agent that learned the old name.
 func TestEveryToolIsRegisteredUnderItsPublishedName(t *testing.T) {
-	srv := mcpserver.New("test", &stubBroker{}, targeting.Policy{})
+	srv := mcpserver.New("test", &stubBroker{}, targeting.Policy{}, mcpserver.WithBud(stubMailer{}))
 
 	srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 	srv.HandleMessage(context.Background(), json.RawMessage(initialized))
@@ -56,7 +56,7 @@ func TestEveryToolIsRegisteredUnderItsPublishedName(t *testing.T) {
 // A tool description is the only thing that tells a model when to reach for a
 // tool. An empty one makes the tool dead weight in every editor.
 func TestEveryToolDescribesItself(t *testing.T) {
-	srv := mcpserver.New("test", &stubBroker{}, targeting.Policy{})
+	srv := mcpserver.New("test", &stubBroker{}, targeting.Policy{}, mcpserver.WithBud(stubMailer{}))
 
 	srv.HandleMessage(context.Background(), json.RawMessage(initialize))
 	srv.HandleMessage(context.Background(), json.RawMessage(initialized))
