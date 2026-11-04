@@ -14,8 +14,8 @@ Every refusal carries a `code`. Branch on the code, not on the HTTP status: seve
 | `not_found` | No such object, one this key does not reach, or no such operation. | Check the id came from a listing or `me`. Do not guess ids. |
 | `precondition_failed` | Other changes to the same message landed first. | Repeat the `bud_put` exactly as it was; it is safe. |
 | `policy_refused` | A guard declined. `guard` names it. | Change what the guard objects to, or tell the user. Repeating unchanged fails again. |
-| `rate_limited` | A sending or request limit is spent. `counter` names it. | If `retry_after_ms` is set, wait that long and retry. If not, waiting will not help: the request has to change (for example, fewer recipients). |
-| `quota_exceeded` | A usage quota for the period is used up. `counter` names it. | Do not retry in a loop. `retry_after_ms` says when the window refills, which can be hours. Tell the user. |
+| `rate_limited` | A sending or request limit is spent. `counter` names it. | If `retry_after_ms` is set and is a minute or less, wait that long and retry once. If it is longer, or not set, do not wait it out: tell the user which limit it is. Without `retry_after_ms` the request itself has to change (for example, fewer recipients). |
+| `quota_exceeded` | A usage quota for the period is used up. `counter` names it. | Never retry it in this session, whatever `retry_after_ms` says: the quota refills with its period, which can be the rest of the day. Tell the user which quota it is. |
 | `paused` | The mailbox is paused and not sending. | Tell the user. An operator has to release it; it does not clear on its own. |
 | `upstream_unavailable` | Something Bud needed did not answer. Nothing was done. | Retry after a short wait. |
 | `policy_unavailable` | The policy that governs you could not be applied. Nothing was done. | Retry after a short wait. |

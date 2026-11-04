@@ -386,11 +386,12 @@ func TestTheAnnotationsAreFacts(t *testing.T) {
 		if a.DestructiveHint == nil || *a.DestructiveHint {
 			t.Errorf("%s: destructive hint %v, want false", tool.Name, a.DestructiveHint)
 		}
-		// Every verb is safe to repeat as it was: reads change nothing, a put
-		// lands the same state twice, and a send repeats under its required
-		// key without sending again.
-		if a.IdempotentHint == nil || !*a.IdempotentHint {
-			t.Errorf("%s: idempotent hint %v, want true", tool.Name, a.IdempotentHint)
+		// Reads and puts are safe to repeat as they were. A send is not
+		// claimed idempotent even though its key makes a repeat harmless:
+		// every fresh key is a new email, and a client that auto-approves
+		// idempotent calls must not approve this one.
+		if want := !tc.outward; a.IdempotentHint == nil || *a.IdempotentHint != want {
+			t.Errorf("%s: idempotent hint %v, want %v", tool.Name, a.IdempotentHint, want)
 		}
 	}
 }

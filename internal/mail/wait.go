@@ -12,8 +12,11 @@ import (
 )
 
 // handshakeAllowance is how long past its window a wait may run: the stream's
-// opening, which the window does not count.
-const handshakeAllowance = 15 * time.Second
+// opening, which the window does not count. The SDK bounds that opening by its
+// response timeout twice over, once for the headers and once for the opening
+// frame. Anything shorter here lets this deadline fire inside a window the SDK
+// is still honouring, and a normal quiet window comes back as a failure.
+const handshakeAllowance = 2*bud.DefaultResponseTimeout + 5*time.Second
 
 // waited is the structured result of a wait: the events, and the cursor to
 // pass to the next one whether or not anything happened.
@@ -76,9 +79,9 @@ func WaitTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		out, err := m.Wait(ctx, in)
 		switch {
 		case err != nil:
-			return failed("bud_wait", err, "Waiting is safe to repeat: call again with the same cursor."), nil
+			return failed("bud_wait", err, "Waiting is safe to repeat: call again with the same arguments."), nil
 		case out.Error != nil:
-			return refused("bud_wait", out.Error), nil
+			return refusedFrom("bud_wait", out.Error, in.Cursor), nil
 		}
 
 		result := waited{Cursor: out.Cursor, Events: out.Events, Empty: out.Empty()}
@@ -89,6 +92,19 @@ func WaitTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	}
 
 	return tool, handler
+}
+
+// refusedFrom is a refused wait that says where to resume: a refusal is not a
+// reason to lose one's place, and an agent that waits again from now skips what
+// happened in between.
+func refusedFrom(tool string, e *bud.Error, cursor string) *mcp.CallToolResult {
+	result := refused(tool, e)
+	resume := "When the refusal is dealt with, wait again from where you were, with no cursor only if you never had one."
+	if cursor != "" {
+		resume = fmt.Sprintf("When the refusal is dealt with, wait again with cursor %q so nothing in between is skipped.", cursor)
+	}
+	result.Content = append(result.Content, mcp.NewTextContent(" "+resume))
+	return result
 }
 
 // waitText renders a wait. An event's from and subject were chosen by whoever

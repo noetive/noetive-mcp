@@ -21,7 +21,7 @@ import (
 func PutTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	tool := mcp.NewTool("bud_put",
 		mcp.WithDescription("Change a message: mark it read or unread, or replace its labels (the list replaces them all; an empty list removes them). "+
-			"Safe to repeat as it was. precondition_failed means other changes landed first: repeat it unchanged."),
+			"precondition_failed means other changes landed first: repeat it unchanged. Labels replace whole and the last write wins, so read the message again before repeating a label change much later."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("The message_ id to change.")),
 		mcp.WithObject("changes", mcp.Required(),
 			mcp.Description("At least one of read and labels."),
@@ -44,7 +44,7 @@ func PutTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		}
 		id = strings.TrimSpace(id)
 		if !strings.HasPrefix(id, bud.PrefixMessage) {
-			return invalid("bud_put", "cannot change %s: only a %s id can be changed", shown(id), bud.PrefixMessage), nil
+			return invalid("bud_put", "cannot change %s: only a %s id can be changed; list a mailbox with bud_read to find one", shown(id), bud.PrefixMessage), nil
 		}
 
 		changes, ok := request.GetArguments()["changes"].(map[string]any)
@@ -66,7 +66,7 @@ func PutTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		})
 		switch {
 		case err != nil:
-			return failed("bud_put", err, "The change may have landed; repeating it as it was is safe."), nil
+			return failed("bud_put", err, "The change may have landed; repeating it as it was lands the same state, unless someone else changed the labels since."), nil
 		case out.Error != nil:
 			return refused("bud_put", out.Error), nil
 		}

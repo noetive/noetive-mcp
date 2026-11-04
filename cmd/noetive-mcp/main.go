@@ -13,8 +13,11 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 
 	mcpgo "github.com/mark3labs/mcp-go/server"
 	"go.noetive.io/noetive-sdk-go/bud"
@@ -149,19 +152,51 @@ func resolveEmbedder(flagURL string) (*embedding.Endpoint, error) {
 // when there is no usable key: connect has already put the server in its
 // degraded state for that, and says why on every call.
 //
-// With a key, a client that cannot be built stops the process. The only way
-// that happens is an unusable NOETIVE_BUD_BASE_URL, which is somebody's choice of
-// where mail goes; serving without the mail tools, or against the default
-// service instead, would not honour it.
+// With a key, an unusable NOETIVE_BUD_BASE_URL stops the process: see
+// checkMailURL. It is somebody's choice of where mail and the key go, and
+// serving without the mail tools, or against the default service instead,
+// would not honour it.
 func resolveMailer() (*bud.Client, error) {
-	if raw := os.Getenv(mcpserver.APIKeyEnv); raw == "" || mcpserver.PlaceholderKey(raw) {
+	if raw := strings.TrimSpace(os.Getenv(mcpserver.APIKeyEnv)); raw == "" || mcpserver.PlaceholderKey(raw) {
 		return nil, nil
+	}
+	if err := checkMailURL(os.Getenv(bud.EnvBaseURL)); err != nil {
+		return nil, err
 	}
 	client, err := bud.NewFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("the Bud client: %w", err)
 	}
 	return client, nil
+}
+
+// checkMailURL refuses a Bud address the Noetive key should not be sent to.
+//
+// The key reaches every Noetive service, so the address it is sent to is a
+// decision about where the user's credential goes. Plain http is refused except
+// to this machine, where there is no network for it to cross; anything that is
+// not an absolute URL with a host is refused outright. Empty means the default
+// service.
+func checkMailURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil {
+		return fmt.Errorf("%s must be an absolute URL with a host and no credentials, got %q", bud.EnvBaseURL, raw)
+	}
+	switch u.Scheme {
+	case "https":
+		return nil
+	case "http":
+		if host := u.Hostname(); host == "localhost" || net.ParseIP(host).IsLoopback() {
+			return nil
+		}
+		return fmt.Errorf("%s must use https: plain http would send the Noetive key in the clear to %s", bud.EnvBaseURL, u.Host)
+	default:
+		return fmt.Errorf("%s must use https, got scheme %q", bud.EnvBaseURL, u.Scheme)
+	}
 }
 
 // withoutServeVerb drops a leading `serve`, which the npm wrapper passes when
