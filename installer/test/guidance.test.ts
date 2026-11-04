@@ -62,12 +62,25 @@ test("guidance warns that desktop launchers do not see shell exports", () => {
   assert.match(guidance, /desktop/i);
 });
 
+// The pasted README prompt has an agent run init. If the guidance for an editor
+// that reads the key from the environment suggested re-running with --api-key,
+// the agent would put the key on its command line and into the config for
+// nothing.
+test("guidance for an editor that expands variables says no key flag is needed", () => {
+  for (const id of clientIds().filter((id) => clientSpec(id).expandsVariables)) {
+    const guidance = describeKeyHandling(clientSpec(id), id);
+    assert.match(guidance, /No --api-key is needed/, id);
+    assert.match(guidance, /config references \$\{NOETIVE_KEY_SECRET\}/, id);
+  }
+});
+
 // Kiro cannot expand the placeholder at all, so its guidance has to be the
 // command that actually works rather than an export that never takes effect.
 test("guidance for an editor that cannot expand variables gives the working command", () => {
   const guidance = describeKeyHandling(clientSpec("kiro"), "kiro");
 
-  assert.match(guidance, /--api-key/);
+  assert.match(guidance, /--api-key-from-env/);
+  assert.doesNotMatch(guidance, /--api-key keya_/, "the key itself would go on the command line");
   assert.doesNotMatch(guidance, /export NOETIVE_KEY_SECRET=/);
 });
 

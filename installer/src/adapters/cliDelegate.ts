@@ -164,7 +164,7 @@ export class CliDelegateAdapter implements ClientAdapter {
     if (!spec?.interactive) return;
     if (!request.noInput && process.stdin.isTTY && process.stdout.isTTY) return;
 
-    const why = request.noInput ? "--no-input says nobody will answer it" : "this is not one";
+    const why = request.noInput ? "this run was told to ask nothing" : "this is not one";
     const entryOptions = "entryOptions" in request ? request.entryOptions : {};
     throw new Error(
       `${request.spec.displayName} is configured through \`${spec.command} mcp\`, which asks which tools to enable. ` +

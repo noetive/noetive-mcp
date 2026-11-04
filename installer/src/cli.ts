@@ -12,7 +12,7 @@ import {
   PACKAGE_NAME,
   SERVER_NAME,
 } from "./clients";
-import { Answers, Defaulted, interview, isShared, keyComplaint, SuggestedDimensions, SuggestedModel, withDefaults } from "./interview";
+import { Answers, Defaulted, dimensionsComplaint, interview, isShared, keyComplaint, SuggestedDimensions, SuggestedModel, withDefaults } from "./interview";
 import { Cancelled, interactive, Prompter, terminalPrompter } from "./prompt";
 import { resolveBinary } from "./resolveBinary";
 import { API_KEY_ENV, describeKeyHandling, EntryOptions } from "./serverEntry";
@@ -53,6 +53,7 @@ Options:
   --client <id>        editor to configure; detected when omitted
   --scope <name>       where to write; defaults per editor (see list)
   --api-key <key>      write the key into the config instead of referencing ${API_KEY_ENV}
+  --api-key-from-env   the same, reading the key from ${API_KEY_ENV} so it never appears in the command
   --namespace <name>   namespace for tool calls that do not name one
   --model <name>       embedding model that namespace is provisioned with
   --dimensions <n>     dimensions for that model
@@ -131,17 +132,23 @@ async function install(options: Options, out: Writer): Promise<number> {
   const installable = skillTarget(spec, scope, workspace) ? available : [];
 
   // The key is embedded only when the user asks for it by name. Reading it out
-  // of the ambient environment and writing it to disk would turn an exported
-  // shell variable into a file that gets synced, committed or screen-shared.
-  const apiKey = stringFlag(options, "api-key");
+  // of the ambient environment unasked and writing it to disk would turn an
+  // exported shell variable into a file that gets synced, committed or
+  // screen-shared. --api-key-from-env is that ask without the key itself on
+  // the command line, where `ps` and an agent's command log would see it.
+  const apiKey = keyFlag(options);
   const complaint = apiKey ? keyComplaint(apiKey) : undefined;
-  if (complaint) throw new Error(`--api-key: ${complaint}`);
+  if (complaint) throw new Error(`${keySource(options)}: ${complaint}`);
+
+  const dimensions = stringFlag(options, "dimensions");
+  const dimensionsWrong = dimensions ? dimensionsComplaint(dimensions) : undefined;
+  if (dimensionsWrong) throw new Error(`--dimensions: ${dimensionsWrong}`);
 
   const given = {
     ...optional("apiKey", apiKey),
     ...optional("namespace", stringFlag(options, "namespace")),
     ...optional("model", stringFlag(options, "model")),
-    ...optional("dimensions", stringFlag(options, "dimensions")),
+    ...optional("dimensions", dimensions),
     ...optional("disableGlobalNamespace", sharedNamespaceFlag(options)),
     ...optional("skills", chosenSkills(options, installable)),
     expandsVariables: spec.expandsVariables,
@@ -172,7 +179,7 @@ async function install(options: Options, out: Writer): Promise<number> {
   };
 
   const dryRun = options.flags.has("dry-run");
-  const outcome = await adapterFor(spec).install({ spec, clientId, scope, workspace, entryOptions, dryRun, noInput: options.flags.has("no-input") });
+  const outcome = await adapterFor(spec).install({ spec, clientId, scope, workspace, entryOptions, dryRun, noInput: askNothing(options) });
 
   const chosen = available.filter((skill) => answers.skills.includes(skill.name));
   const skills = installSkills(spec, scope, workspace, chosen, { dryRun });
@@ -224,6 +231,15 @@ function shouldAsk(options: Options): boolean {
   const flags = options.flags;
   if (flags.has("yes") || flags.has("no-input") || flags.has("json") || flags.has("dry-run")) return false;
   return interactive();
+}
+
+/**
+ * askNothing is whether the caller promised nobody answers, terminal or not.
+ * It reaches the adapters, so an editor CLI that prompts (Hermes) is refused
+ * rather than handed a pseudo-terminal nobody is watching.
+ */
+function askNothing(options: Options): boolean {
+  return options.flags.has("yes") || options.flags.has("no-input");
 }
 
 /**
@@ -393,7 +409,7 @@ async function uninstall(options: Options, out: Writer): Promise<number> {
   const workspace = process.cwd();
   const dryRun = options.flags.has("dry-run");
 
-  const outcome = await adapterFor(spec).remove({ spec, clientId, scope, workspace, dryRun, noInput: options.flags.has("no-input") });
+  const outcome = await adapterFor(spec).remove({ spec, clientId, scope, workspace, dryRun, noInput: askNothing(options) });
 
   // Skills came in with the entry, so they go out with it. Leaving them behind
   // means an editor that still loads instructions for tools it no longer has.
@@ -631,11 +647,11 @@ export type Writer = (line: string) => void;
 export function parse(argv: readonly string[]): Options {
   const known = new Set([
     "client", "scope", "api-key", "namespace", "model", "dimensions", "skills",
-    "disable-global-ns", "allow-global-ns", "yes", "no-input",
+    "api-key-from-env", "disable-global-ns", "allow-global-ns", "yes", "no-input",
     "dry-run", "json", "version", "help",
   ]);
   const boolean = new Set([
-    "disable-global-ns", "allow-global-ns", "yes", "no-input",
+    "api-key-from-env", "disable-global-ns", "allow-global-ns", "yes", "no-input",
     "dry-run", "json", "version", "help",
   ]);
 
@@ -689,6 +705,33 @@ export function parse(argv: readonly string[]): Options {
 function stringFlag(options: Options, name: string): string | undefined {
   const value = options.flags.get(name);
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * keyFlag is the key the user asked to write, from --api-key or from
+ * --api-key-from-env, or undefined when they asked for neither.
+ *
+ * Asking for the variable while it is unset or empty is refused rather than
+ * taken as "write no key": the install would report success and every call
+ * would come back unauthorized.
+ *
+ *	keyFlag(parse(["init", "--api-key-from-env"])) // => the value of NOETIVE_KEY_SECRET
+ */
+function keyFlag(options: Options): string | undefined {
+  if (!options.flags.has("api-key-from-env")) return stringFlag(options, "api-key");
+  if (options.flags.has("api-key")) {
+    throw new Error(`--api-key and --api-key-from-env both name the key. Pass one.`);
+  }
+  const value = process.env[API_KEY_ENV]?.trim();
+  if (!value) {
+    throw new Error(`--api-key-from-env: ${API_KEY_ENV} is not set in this shell, so nothing was written. Export it, then run this again.`);
+  }
+  return value;
+}
+
+/** keySource names the flag the key came from, for a refusal about it. */
+function keySource(options: Options): string {
+  return options.flags.has("api-key-from-env") ? "--api-key-from-env" : "--api-key";
 }
 
 function requireString(options: Options, name: string): string {

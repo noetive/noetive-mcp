@@ -26,7 +26,7 @@ Only these seven are advertised on noetive.io. Anything else is unsupported unti
 
 **Codex is configured through its CLI with no fallback.** Its config is TOML, not the JSON the merger writes, so falling back would replace a working `config.toml` with a document Codex cannot read, and the merger's own read-back check would pass, because the JSON it wrote is exactly the JSON it looks for. Without `codex` on `PATH` the install refuses and says so. For the same reason `list` and `doctor` ask `codex mcp get` and use only its exit status; there is no file here to parse, and CLI output has no stability promise.
 
-**Codex does not expand `${VAR}` either.** Its `--env` writes literal values, so writing the placeholder would store the string `${NOETIVE_KEY_SECRET}` and the server would receive it verbatim. As with Kiro, the key comes from `--api-key` or from the environment Codex was launched in.
+**Codex does not expand `${VAR}` either.** Its `--env` writes literal values, so writing the placeholder would store the string `${NOETIVE_KEY_SECRET}` and the server would receive it verbatim. As with Kiro, the key comes from `--api-key-from-env` (or `--api-key`) or from the environment Codex was launched in. Either way `init` hands it to `codex mcp add --env`, so it is on that command line, visible to `ps`, for the moment that command runs.
 
 **Hermes raises the stakes of the same mistake.** Its `config.yaml` is not an MCP file: the same document carries the model, the profiles and the approval settings for the whole agent. It is CLI-only with no fallback for that reason.
 
@@ -40,7 +40,7 @@ Only these seven are advertised on noetive.io. Anything else is unsupported unti
 
 **A CLI-configured editor still needs its environment.** The manifest's `args` carry an `${env}` placeholder that splices in the pairs the server needs. Position matters and belongs to the manifest: Claude Code and Codex take their flags before the `--` that introduces the launch command, so an appended flag is handed to `npx` instead of to the editor, and Hermes takes the launch command as flags of its own with nothing after them. Without the placeholder the CLI is invoked with no environment at all, which configures a server that cannot authenticate and reports success.
 
-**Kiro does not expand `${VAR}` in its config.** Cursor, Claude Code, Copilot and Antigravity resolve environment references at launch, which is how the API key normally stays out of the file. For Kiro the key must come from `--api-key` or from the environment Kiro itself was launched in. Kiro also accepts `disabled` and `autoApprove` keys, which the manifest supplies as entry extras.
+**Kiro does not expand `${VAR}` in its config.** Cursor, Claude Code, Copilot and Antigravity resolve environment references at launch, which is how the API key normally stays out of the file. For Kiro the key must come from `--api-key-from-env` (or `--api-key`) or from the environment Kiro itself was launched in. Kiro also accepts `disabled` and `autoApprove` keys, which the manifest supplies as entry extras.
 
 **Antigravity shares one config across its IDE, its CLI and its SDK.** It uses `serverUrl` rather than `url` for remote servers. That is irrelevant to this stdio server, but it is the reason an Antigravity config cannot be copied from a Cursor one. It accepts a `disabled` flag, supplied as an entry extra.
 

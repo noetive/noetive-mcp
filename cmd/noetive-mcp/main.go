@@ -232,7 +232,7 @@ func connect(e *embedding.Endpoint) mcpserver.Broker {
 	// at their account when the fault is an environment their editor could not
 	// read.
 	if raw := os.Getenv(mcpserver.APIKeyEnv); mcpserver.PlaceholderKey(raw) {
-		return unconfigured("Your editor passed the literal text %q as the API key instead of substituting it, which means %s is not set in the environment your editor was launched from. Desktop launchers do not read your shell profile. Either launch the editor from a terminal where %s is exported, or re-run: npx @noetive/mcp-server init --client <editor> --api-key <key>", raw, mcpserver.APIKeyEnv, mcpserver.APIKeyEnv)
+		return unconfigured("Your editor passed the literal text %q as the API key instead of substituting it, which means %s is not set in the environment your editor was launched from. Desktop launchers do not read your shell profile. Either launch the editor from a terminal where %s is exported, or, in a shell where %s is exported, re-run: npx @noetive/mcp-server init --client <editor> --api-key-from-env. Never paste the key into the chat.", raw, mcpserver.APIKeyEnv, mcpserver.APIKeyEnv, mcpserver.APIKeyEnv)
 	}
 
 	client, err := semantik.NewFromEnv()
@@ -243,7 +243,7 @@ func connect(e *embedding.Endpoint) mcpserver.Broker {
 		return embedding.Precomputed(client, e)
 	}
 
-	return unconfigured("%s is not set for this editor. Get an API key from https://noetive.io/dashboard, then either export it in the environment your editor launches from, or re-run: npx @noetive/mcp-server init --client <editor> --api-key <key>", mcpserver.APIKeyEnv)
+	return unconfigured("%s is not set for this editor. Get an API key from https://noetive.io/dashboard, then either export it in the environment your editor launches from, or, with it exported in a shell, re-run: npx @noetive/mcp-server init --client <editor> --api-key-from-env. Never paste the key into the chat.", mcpserver.APIKeyEnv)
 }
 
 // unconfigured logs the reason once to stderr, where an editor collects server

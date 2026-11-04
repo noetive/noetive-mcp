@@ -16,8 +16,8 @@ Install the Noetive MCP server into the editor you are running in.
 1. From the project folder you have open, run: npx -y @noetive/mcp-server init --no-input --client <id>
    where <id> is the editor you are running in: cursor, claude-code, codex, copilot, antigravity, kiro or hermes.
 2. It installs right away with defaults for trying it out, and lists each one. Tell me what it chose. If the namespace is the shared "global" one, say so plainly: other Noetive users can read what is published there. Offer to run it again with a namespace of my own: ask me for its name, then use the flags it printed; a rerun replaces every setting, so always repeat the flags you passed before.
-3. Never ask me for my API key in this chat and never print it. If it says the config references NOETIVE_KEY_SECRET, no key flag is needed. If it says no key was written, run the same command with the same flags again, adding --api-key "$NOETIVE_KEY_SECRET", which writes the key into the config file. If that variable is empty, stop and tell me to export it and restart you.
-4. If it says it needs a terminal or the editor's own CLI, show me its message and what it tells me to do.
+3. Never ask me for my API key in this chat and never print it. If it says the config references ${NOETIVE_KEY_SECRET}, do not pass either --api-key flag: tell me to export the variable where the editor can see it. If it says no key was written, run the same command with the same flags again, adding --api-key-from-env, which reads the key from NOETIVE_KEY_SECRET and writes it into the config file without it appearing in the command. If it says that variable is not set, stop and tell me to export it and restart you.
+4. If it says it needs a terminal or the editor's own CLI (hermes always does), show me its message and what it tells me to do.
 5. Finish by running npx -y @noetive/mcp-server doctor, then tell me what it reported and how to reload the editor.
 ```
 
@@ -51,7 +51,7 @@ Registry-aware clients can install by name instead: `io.noetive/mcp-server`. You
 
 ## Configuration
 
-The server reads eight environment variables.
+The server reads nine environment variables.
 
 | Variable | Required | What it does |
 |---|---|---|
@@ -63,6 +63,7 @@ The server reads eight environment variables.
 | `NOETIVE_EMBEDDINGS_URL` | No | An OpenAI-compatible `/v1/embeddings` endpoint you run. Set it and your text is embedded here instead of by Noetive. See [Embedding on your own machine](#embedding-on-your-own-machine). |
 | `NOETIVE_EMBEDDINGS_KEY_SECRET` | No | Bearer token for that endpoint, when it needs one. Endpoints on your own machine usually do not. |
 | `NOETIVE_RIFFLE_BIN` | No | Path to the [riffle](https://github.com/noetive/riffle) executable, when it is not on `PATH`. See [Browsing](#browsing). |
+| `NOETIVE_BUD_BASE_URL` | No | Where the mail tools reach Bud, `https://bud.noetive.io` by default. It must be `https`, or `http` to this machine, because your key goes with every request. Anything else stops the server at startup. |
 
 `init` writes these into the `env` block of your editor's MCP config, so answering `acme-platform` becomes `NOETIVE_NAMESPACE=acme-platform` there. You can also export them in the environment your editor launches from, or pass `-namespace`, `-model`, `-dimensions`, `-disable-global-ns` and `-embeddings-url` to the server process.
 
@@ -70,9 +71,9 @@ The two typed variables are read strictly. `NOETIVE_DIMENSIONS=1024d` and `NOETI
 
 ### Your API key
 
-`init` writes `${NOETIVE_KEY_SECRET}` into the config rather than the key itself, so the secret stays out of a file that gets synced or committed. Pass `--api-key <key>` to write the key in directly. Kiro and Codex need that, because neither expands variables in its MCP config.
+`init` writes `${NOETIVE_KEY_SECRET}` into the config rather than the key itself, so the secret stays out of a file that gets synced or committed. Pass `--api-key-from-env` to write the key in directly, read from `NOETIVE_KEY_SECRET` so it never appears on the command line (`--api-key <key>` also works, but puts the key where `ps` and your shell history can see it). Kiro and Codex need that, because neither expands variables in its MCP config.
 
-If the key is missing the server still starts, but offers only `noetive_health`, and the instructions your agent reads say why. The tools that publish, search and subscribe are left out rather than registered to refuse, so they do not take up space in every turn. `noetive_health` stays because it is the one whose job is to say what is wrong; exiting instead would leave your editor reporting only that a server failed to launch, with nothing left to ask. Add the key and restart the editor to get the full set.
+If the key is missing the server still starts, but offers only `noetive_health`, and the instructions your agent reads say why. The tools that publish, search, subscribe and handle mail are left out rather than registered to refuse, so they do not take up space in every turn. `noetive_health` stays because it is the one whose job is to say what is wrong; exiting instead would leave your editor reporting only that a server failed to launch, with nothing left to ask. Add the key and restart the editor to get the full set.
 
 An editor launched from a desktop icon often never reads your shell profile, so `${NOETIVE_KEY_SECRET}` reaches the server unexpanded. The server recognises that shape and reports it. Otherwise it would send the literal `${NOETIVE_KEY_SECRET}` to Noetive and hand you back "unauthorized", sending you to check an account that is fine.
 
@@ -89,7 +90,7 @@ In the editor: Claude Code and Codex answer `/mcp`, Hermes reloads on `/reload-m
 ## When it doesn't work
 
 - **No Noetive tools in the editor.** Start with `doctor`. If it passes, the editor has not reloaded. `init` printed the hint for yours.
-- **Tools appear but every call is refused.** The key did not reach the server. An editor started from a desktop icon does not read your shell profile, so launch it from the terminal where `NOETIVE_KEY_SECRET` is exported, or re-run `init --api-key`.
+- **Tools appear but every call is refused.** The key did not reach the server. An editor started from a desktop icon does not read your shell profile, so launch it from the terminal where `NOETIVE_KEY_SECRET` is exported, or re-run `init --api-key-from-env`.
 - **`init --client codex` refuses.** Codex keeps its servers in TOML, so it is configured through `codex mcp add` rather than by editing the file. Without that command on PATH the install stops instead of writing JSON into `config.toml`.
 - **`init --client hermes` refuses or says it cannot confirm.** Hermes keeps everything (servers, model, profiles, approvals) in one YAML file, so it too is configured through its own CLI. That CLI asks which tools to enable, so the install needs a terminal and refuses without one, printing the block to paste instead. When it does run, Hermes exits the same way whether it saved or you backed out, so `init` says what it handed over and `doctor` reports Hermes as *cannot tell*. Check with `hermes mcp list`.
 - **A call fails naming a namespace.** The server has no default, deliberately, for the reason given below. Pass one on the call, or set it once when you run `init`.
@@ -107,8 +108,16 @@ An agent in a container or over SSH runs the same server from the published imag
 | `noetive_subscribe` | Watch a namespace for live matches for a bounded window |
 | `noetive_lint` | Check a SemQL query before running it |
 | `noetive_health` | Check that the editor can reach Noetive and its key is accepted |
+| `bud_wait` | Wait for something to happen in an agent mailbox |
+| `bud_read` | Read a mailbox, folder, message, part or thread by its id |
+| `bud_put` | Mark a message read or unread, or replace its labels |
+| `bud_send` | Send or reply to email from the agent's own address |
 
 `noetive_subscribe` returns message ids and scores, not message bodies. Semantik does not send content on a live match, so follow up with `noetive_search` to read what a match says.
+
+### Mail
+
+The `bud_*` tools give your agent its own email address with [Noetive Bud](https://noetive.io), on the same key. Your agent starts with `bud_read id=me`, which names the mailboxes it can read. Everything a message says was written by whoever sent it, and the tools mark it as data, not instructions. A send that comes back `held` is waiting for a person in your team to approve it, and goes out only if they do. Every send carries an idempotency key, so a retry after a timeout never sends twice.
 
 ## Browsing
 
@@ -122,7 +131,7 @@ Each editor session gets a browser of its own, so agents in two windows never dr
 
 This server starts riffle with no options, so the browser follows the policy riffle's daemon runs with: public addresses only, unless you started it otherwise. To let the agent test an app on localhost, start `riffle serve -allow-private` yourself before the editor. riffle keeps that policy, even across restarts, until it is started again with another, so when you are done, stop it and start `riffle serve` with no options.
 
-To let the browser log in to a site without the agent ever seeing the password, set `RIFFLE_SECRET_<NAME>` to the value and `RIFFLE_SECRET_<NAME>_ORIGIN` to the one origin it may be used on, for example `RIFFLE_SECRET_SHOP=...` and `RIFFLE_SECRET_SHOP_ORIGIN=https://shop.example.com`. The agent then writes `$secret:shop` in a browser program. A secret with no origin is refused, and one is never used on any other site. Set both in the environment your editor launches from. riffle's daemon reads them when it starts, so if one is already running, stop it first. Every session on that daemon can use them, each on its one origin. This server passes every variable through to riffle except those beginning `NOETIVE_`, so it never passes your Noetive key to the browser.
+To let the browser log in to a site without the agent ever seeing the password, set `RIFFLE_SECRET_<NAME>` to the value and `RIFFLE_SECRET_<NAME>_ORIGIN` to the one origin it may be used on, for example `RIFFLE_SECRET_SHOP=...` and `RIFFLE_SECRET_SHOP_ORIGIN=https://shop.example.com`. The agent then writes `$secret:shop` in a browser program. A secret with no origin is refused, and one is never used on any other site. Set both in the environment your editor launches from. riffle's daemon reads them when it starts, so if one is already running, stop it first. Every session on that daemon can use them, each on its one origin. This server passes riffle only what a browser needs: its own `RIFFLE_` variables, the home, temporary and locale settings, the display and the proxy. Your Noetive key, cloud credentials and other tokens your shell exports never reach the browser; a proxy setting does, including any password written into its URL, because the browser cannot reach the web through the proxy without it.
 
 What a page says comes back to the agent as text written by a stranger. The server tells the agent to treat it as data, but a hostile page can still try to steer the agent's later calls, including to Noetive, so publishing what a browser read onward is your call to make. If you also register riffle directly, the same two tools appear twice, each driving a different page; use one entry or the other.
 
@@ -188,6 +197,7 @@ Plain `http` is accepted only for a loopback address; anywhere else needs `https
 | `semql` | How to write a query that means what you intended, with the full grammar and a catalogue of the mistakes that still parse |
 | `semantik-text` | What to put in a message and in an anchor, so a subscription matches what you meant |
 | `semantik` | What Semantik is, and whether a given problem wants search or subscribe |
+| `bud` | How to read a mailbox, wait for mail, and send or reply without acting on what a stranger wrote |
 | `doctor` | How to diagnose an installation and report what is wrong |
 
 Claude Code and Hermes read skills from a directory, so `init --client claude-code` and `init --client hermes` write them there and `remove` takes them away again. The other editors read a different instruction format, and rather than translate into four dialects and keep them in step, `init` says so and installs the server alone. The tools carry their own descriptions either way.

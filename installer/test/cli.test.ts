@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -843,4 +843,95 @@ test("--allow-global-ns keeps the shared namespace open beside a named one", asy
 
     assert.equal(envOf(dir).NOETIVE_DISABLE_GLOBAL_NS, "0");
   });
+});
+
+// --yes promises nobody answers, the same as --no-input. If only --no-input
+// reached the adapters, `init --yes --client hermes` run by an agent in a
+// pseudo-terminal would hand it Hermes' tool picker and hang.
+test("--yes refuses an editor CLI that would prompt, even in a terminal", async () => {
+  const bin = mkdtempSync(join(tmpdir(), "noetive-hermes-"));
+  const calls = join(bin, "calls");
+  writeFileSync(join(bin, "hermes"), `#!/bin/sh\necho "$@" >> "${calls}"\n`, { mode: 0o755 });
+  const tty = { stdin: process.stdin.isTTY, stdout: process.stdout.isTTY };
+  const path = process.env.PATH;
+  process.stdin.isTTY = true;
+  process.stdout.isTTY = true;
+  process.env.PATH = bin;
+  try {
+    const { code, err } = await withHome([".hermes"], () => capture(["init", "--yes", "--client", "hermes"]));
+
+    assert.equal(code, 1);
+    assert.match(err, /told to ask nothing/);
+    const ran = existsSync(calls) ? readFileSync(calls, "utf8") : "";
+    assert.doesNotMatch(ran, /mcp add/, "the prompting CLI was run despite --yes");
+  } finally {
+    process.stdin.isTTY = tty.stdin;
+    process.stdout.isTTY = tty.stdout;
+    process.env.PATH = path;
+  }
+});
+
+// The prompt checks dimensions; a flag skipping that check wrote "abc" into the
+// config and exited 0, and the server then would not start, reported only into
+// the editor's log.
+test("--dimensions that is not a whole number in range is refused before writing", async () => {
+  for (const value of ["abc", "0", "65536", "1.5"]) {
+    await inWorkspace(async (dir) => {
+      const { code, err } = await capture([
+        "init", "--no-input", "--client", "cursor", "--scope", "project", "--namespace", "mine", "--dimensions", value,
+      ]);
+
+      assert.equal(code, 1, value);
+      assert.match(err, /--dimensions: A whole number/, value);
+      assert.equal(existsSync(join(dir, ".cursor")), false, value);
+    });
+  }
+});
+
+// Kiro and Codex need the key written into their config. Passing it as
+// --api-key "$NOETIVE_KEY_SECRET" puts it in the process list and in the
+// command log of the agent that ran it; --api-key-from-env writes the same key
+// with only the flag's name on the command line.
+test("--api-key-from-env writes the exported key without it being on the command line", async () => {
+  await withKey("keya_fromTheEnvironment", () =>
+    inWorkspace(async (dir) => {
+      const argv = ["init", "--no-input", "--client", "cursor", "--scope", "project", "--api-key-from-env"];
+      const { code, out, err } = await capture(argv);
+
+      assert.equal(code, 0, err);
+      assert.equal(envOf(dir).NOETIVE_KEY_SECRET, "keya_fromTheEnvironment");
+      assert.equal(out.includes("keya_fromTheEnvironment"), false, "the key reached the terminal");
+    }),
+  );
+});
+
+// Asking for the variable while it is unset would otherwise install a server
+// that reports success and refuses every call.
+test("--api-key-from-env with the variable unset, empty or unexpanded is refused before writing", async () => {
+  for (const value of [undefined, "", "  ", "$NOETIVE_KEY_SECRET"]) {
+    await withKey(value, () =>
+      inWorkspace(async (dir) => {
+        const { code, err } = await capture(["init", "--no-input", "--client", "cursor", "--scope", "project", "--api-key-from-env"]);
+
+        assert.equal(code, 1, String(value));
+        assert.match(err, /--api-key-from-env/, String(value));
+        assert.equal(existsSync(join(dir, ".cursor")), false, String(value));
+      }),
+    );
+  }
+});
+
+// Two sources for one key is a mistake whichever was meant; picking one
+// silently writes a key the user did not choose.
+test("--api-key with --api-key-from-env is refused", async () => {
+  await withKey("keya_fromTheEnvironment", () =>
+    inWorkspace(async () => {
+      const { code, err } = await capture([
+        "init", "--no-input", "--client", "cursor", "--scope", "project", "--api-key-from-env", "--api-key", "keya_other",
+      ]);
+
+      assert.equal(code, 1);
+      assert.match(err, /Pass one/);
+    }),
+  );
 });

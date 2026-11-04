@@ -40,7 +40,7 @@ The `noetive-mcp` binary has no filesystem access beyond what Go's runtime needs
 
 `NOETIVE_KEY_SECRET` is a long-lived bearer credential for one account. It is read once at startup by the SDK and never logged, never included in a tool result, and never sent anywhere but the Noetive API.
 
-`init` writes a reference to the variable rather than its value, so the secret stays out of a config file that gets synced to another machine, committed by accident, or shown in a screen share. `--api-key` overrides that for editors that cannot expand variables; the file is written with owner-only permissions, and it is then a secret at rest that belongs in whatever the user uses to keep secrets out of version control.
+`init` writes a reference to the variable rather than its value, so the secret stays out of a config file that gets synced to another machine, committed by accident, or shown in a screen share. `--api-key-from-env` (or `--api-key`, which puts the key on the command line) overrides that for editors that cannot expand variables; the file is written with owner-only permissions, and it is then a secret at rest that belongs in whatever the user uses to keep secrets out of version control.
 
 Keys are issued from the dashboard and belong to an agent, which is what decides the namespaces a key reaches, so the same key can work in one namespace and be refused in another. Nothing here parses a key: not its prefix, not its body. The server is the only authority on whether a key is real and on what it may reach. That is deliberate rather than incidental, a client that recognised today's key families would refuse a new one the day it was issued, having never been told.
 

@@ -9,7 +9,7 @@ export interface InstallRequest {
   readonly entryOptions: EntryOptions;
   readonly dryRun: boolean;
   /**
-   * Set when the caller said nobody will answer a prompt (--no-input), even if
+   * Set when the caller said nobody will answer a prompt (--no-input, --yes), even if
    * a terminal is attached. An agent running commands in a pseudo-terminal
    * looks interactive and is not, and an editor CLI that prompts it hangs.
    */

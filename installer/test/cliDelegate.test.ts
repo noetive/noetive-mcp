@@ -476,7 +476,7 @@ test("--no-input refuses the interactive install even on a terminal", async () =
       assert.rejects(
         () => new CliDelegateAdapter(run).install({ ...hermesRequest(home), noInput: true }),
         (err: Error) => {
-          assert.match(err.message, /--no-input/);
+          assert.match(err.message, /told to ask nothing/);
           assert.match(err.message, /nothing was written/);
           assert.match(err.message, /mcp_servers:/);
           return true;

@@ -164,14 +164,14 @@ export function describeKeyHandling(spec: ClientSpec, clientId: string, options:
       `    export ${API_KEY_ENV}=keya_...`,
       ``,
       `Launching ${spec.displayName} from a desktop icon will not pick that up, because desktop launchers do not read your shell profile.`,
-      `Start it from that same terminal, or re-run this command with --api-key to write the key into the config instead.`,
+      `Start it from that same terminal. No --api-key is needed; if you still want the key stored in the config, re-run this command yourself with it, not through an agent.`,
     ].join("\n");
   }
 
   return [
     getKey,
-    `${spec.displayName} does not expand \${${API_KEY_ENV}} in its config, so no key was written. Re-run with the key to finish:`,
+    `${spec.displayName} does not expand \${${API_KEY_ENV}} in its config, so no key was written. With ${API_KEY_ENV} exported, re-run with the flags you passed plus --api-key-from-env, which reads the key from it:`,
     ``,
-    `    npx ${PACKAGE_NAME} init --client ${clientId} --api-key keya_...`,
+    `    npx ${PACKAGE_NAME} init --client ${clientId} --api-key-from-env`,
   ].join("\n");
 }

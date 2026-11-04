@@ -14,8 +14,8 @@ Install the Noetive MCP server into the editor you are running in.
 1. From the project folder you have open, run: npx -y @noetive/mcp-server init --no-input --client <id>
    where <id> is the editor you are running in: cursor, claude-code, codex, copilot, antigravity, kiro or hermes.
 2. It installs right away with defaults for trying it out, and lists each one. Tell me what it chose. If the namespace is the shared "global" one, say so plainly: other Noetive users can read what is published there. Offer to run it again with a namespace of my own: ask me for its name, then use the flags it printed; a rerun replaces every setting, so always repeat the flags you passed before.
-3. Never ask me for my API key in this chat and never print it. If it says the config references NOETIVE_KEY_SECRET, no key flag is needed. If it says no key was written, run the same command with the same flags again, adding --api-key "$NOETIVE_KEY_SECRET", which writes the key into the config file. If that variable is empty, stop and tell me to export it and restart you.
-4. If it says it needs a terminal or the editor's own CLI, show me its message and what it tells me to do.
+3. Never ask me for my API key in this chat and never print it. If it says the config references ${NOETIVE_KEY_SECRET}, do not pass either --api-key flag: tell me to export the variable where the editor can see it. If it says no key was written, run the same command with the same flags again, adding --api-key-from-env, which reads the key from NOETIVE_KEY_SECRET and writes it into the config file without it appearing in the command. If it says that variable is not set, stop and tell me to export it and restart you.
+4. If it says it needs a terminal or the editor's own CLI (hermes always does), show me its message and what it tells me to do.
 5. Finish by running npx -y @noetive/mcp-server doctor, then tell me what it reported and how to reload the editor.
 ```
 
@@ -51,10 +51,10 @@ By default `init` writes a reference to that variable rather than the key itself
 export NOETIVE_KEY_SECRET=keya_...
 ```
 
-Kiro and Codex do not expand variables in their configs, so pass the key directly there:
+Kiro and Codex do not expand variables in their configs, so write the key in there, read from that variable so it never appears in the command:
 
 ```bash
-npx @noetive/mcp-server init --client kiro --api-key keya_...
+npx @noetive/mcp-server init --client kiro --api-key-from-env
 ```
 
 ## Check it worked

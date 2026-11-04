@@ -252,18 +252,29 @@ function askForModel(prompter: Prompter): Promise<string> {
 function askForDimensions(prompter: Prompter): Promise<string> {
   return prompter.text(`${DimensionsQuestion} (${TARGETING_ENV.dimensions})`, {
     default: SuggestedDimensions,
-    // Checked here rather than left to the server. A typo in a config file
-    // surfaces as a server that will not start, reported into a log the editor
-    // collects and nobody reads.
-    validate: (value) => {
-      if (!value) return undefined;
-      const parsed = Number(value);
-      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-        return "A whole number between 1 and 65535, matching the model.";
-      }
-      return undefined;
-    },
+    validate: dimensionsComplaint,
   });
+}
+
+/**
+ * dimensionsComplaint says what is wrong with a value offered as the
+ * dimensionality, or nothing when it could be one. Empty is not a complaint; it
+ * means "write none".
+ *
+ * Checked by the installer rather than left to the server, for the prompt and
+ * the flag alike. A typo in a config file surfaces as a server that will not
+ * start, reported into a log the editor collects and nobody reads.
+ *
+ *	dimensionsComplaint("1024") // => undefined
+ *	dimensionsComplaint("abc")  // => "A whole number between 1 and 65535, ..."
+ */
+export function dimensionsComplaint(value: string): string | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    return "A whole number between 1 and 65535, matching the model.";
+  }
+  return undefined;
 }
 
 /**
