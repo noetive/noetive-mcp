@@ -15,7 +15,7 @@ import (
 // it reaches an operation only for an id whose prefix names that operation's
 // kind. Anything else is refused before a request is sent.
 func FuzzReadRoutesOnlyByAPrefixItNames(f *testing.F) {
-	for _, seed := range []string{"me", "catalog", "ag_01x", "message_01x", "thread_01x", "", "ag", "journal_01x", "Me", " me ", "\x00", strings.Repeat("ag_", 100)} {
+	for _, seed := range []string{"me", "catalog", "addressbook", "ag_01x", "message_01x", "thread_01x", "", "ag", "journal_01x", "Me", " me ", "\x00", strings.Repeat("ag_", 100)} {
 		f.Add(seed, "")
 		f.Add(seed, "2")
 	}
@@ -40,6 +40,8 @@ func FuzzReadRoutesOnlyByAPrefixItNames(f *testing.F) {
 			want = "DescribeMe"
 		case trimmed == "catalog":
 			want = "DescribeCatalog"
+		case trimmed == "addressbook":
+			want = "DescribeAddressbook"
 		case strings.HasPrefix(trimmed, bud.PrefixAgent):
 			want = "DescribeMailbox"
 		case strings.HasPrefix(trimmed, bud.PrefixMessage) && hasPart:

@@ -109,7 +109,7 @@ An agent in a container or over SSH runs the same server from the published imag
 | `noetive_lint` | Check a SemQL query before running it |
 | `noetive_health` | Check that the editor can reach Noetive and its key is accepted |
 | `bud_wait` | Wait for something to happen in an agent mailbox |
-| `bud_read` | Read a mailbox, folder, message, part or thread by its id |
+| `bud_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
 | `bud_put` | Mark a message read or unread, or replace its labels |
 | `bud_send` | Send or reply to email from the agent's own address |
 

@@ -82,7 +82,7 @@ tools:
   - name: bud_wait
     summary: Wait for something to happen in an agent mailbox
   - name: bud_read
-    summary: Read a mailbox, folder, message, part or thread by its id
+    summary: Read a mailbox, folder, message, part, thread or the workspace addressbook by its id
   - name: bud_put
     summary: Mark a message read or unread, or replace its labels
   - name: bud_send

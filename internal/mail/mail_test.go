@@ -26,6 +26,7 @@ type recorder struct {
 	due      time.Time
 	byID     bud.ByID
 	in       bud.In
+	book     bud.AddressbookQuery
 	wait     bud.WaitInput
 	change   bud.Change
 	send     bud.SendInput
@@ -70,6 +71,12 @@ func (r *recorder) ListFolder(ctx context.Context, in bud.In) (bud.ReadOutput, e
 func (r *recorder) ListCorrespondents(ctx context.Context, in bud.In) (bud.ReadOutput, error) {
 	r.due, r.deadline = ctx.Deadline()
 	r.called, r.in = "ListCorrespondents", in
+	return r.read, nil
+}
+
+func (r *recorder) DescribeAddressbook(ctx context.Context, in bud.AddressbookQuery) (bud.ReadOutput, error) {
+	r.due, r.deadline = ctx.Deadline()
+	r.called, r.book = "DescribeAddressbook", in
 	return r.read, nil
 }
 
@@ -141,6 +148,8 @@ func TestReadRoutesByTheIdentifiersPrefix(t *testing.T) {
 	}{
 		{`{"id":"me"}`, "DescribeMe"},
 		{`{"id":"catalog"}`, "DescribeCatalog"},
+		{`{"id":"addressbook"}`, "DescribeAddressbook"},
+		{`{"id":"addressbook","q":"ada"}`, "DescribeAddressbook"},
 		{`{"id":"ag_01x"}`, "DescribeMailbox"},
 		{`{"id":"ag_01x","folder":"sent"}`, "ListFolder"},
 		{`{"id":"ag_01x","unread":true}`, "ListFolder"},
@@ -172,6 +181,12 @@ func TestReadPassesWhatSelectsTheObject(t *testing.T) {
 	if r.in.In != "ag_01x" || r.in.Folder != "inbox" || !r.in.Unread || r.in.From != "ada@example.com" ||
 		r.in.Since != "2026-01-01T00:00:00Z" || r.in.Limit != 10 || r.in.Cursor != "c1" {
 		t.Errorf("ListFolder got %+v", r.in)
+	}
+
+	r = &recorder{}
+	call(t, mail.ReadTool, r, `{"id":"addressbook","q":"ada","limit":20,"cursor":"ag_01x"}`)
+	if r.book != (bud.AddressbookQuery{Q: "ada", Limit: 20, Cursor: "ag_01x"}) {
+		t.Errorf("DescribeAddressbook got %+v", r.book)
 	}
 
 	r = &recorder{}

@@ -74,7 +74,7 @@
     },
     {
       "name": "bud_read",
-      "summary": "Read a mailbox, folder, message, part or thread by its id"
+      "summary": "Read a mailbox, folder, message, part, thread or the workspace addressbook by its id"
     },
     {
       "name": "bud_put",

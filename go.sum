@@ -30,8 +30,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/yosida95/uritemplate/v3 v3.0.2 h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=
 github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT040gmv5BQTMR2HP4=
-go.noetive.io/noetive-sdk-go v0.0.0-20261104205849-f7d26e5c2398 h1:8mvkhDQjYWQ9iu9NGB18QQ+bn3tqh6pdCfvmMxyBwt0=
-go.noetive.io/noetive-sdk-go v0.0.0-20261104205849-f7d26e5c2398/go.mod h1:GIdhJel2K+tifS5l5B+2CTDCk3vteJPxzqz3ExwaFsw=
+go.noetive.io/noetive-sdk-go v0.0.0-20261106211132-3f0aed0b8e0b h1:ONsHTq+OIMXlpA+bMLCXbXD5mr5u/LCQNlWgjqE5vx8=
+go.noetive.io/noetive-sdk-go v0.0.0-20261106211132-3f0aed0b8e0b/go.mod h1:GIdhJel2K+tifS5l5B+2CTDCk3vteJPxzqz3ExwaFsw=
 golang.org/x/text v0.14.0 h1:ScX5w1eTa3QqT8oi6+ziP7dTV1S2+ALU0bI+0zXKWiQ=
 golang.org/x/text v0.14.0/go.mod h1:18ZOQIKpY8NJVqYksKHtTdi31H5itFRjB5/qKTNYzSU=
 golang.org/x/tools v0.26.0 h1:v/60pFQmzmT9ExmjDv2gGIfi3OqfKoEP6I5+umXlbnQ=

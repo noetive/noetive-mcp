@@ -26,6 +26,7 @@ An id's prefix says what it is, so the id is usually the only argument a read ne
 | --- | --- | --- |
 | `me` | who you are and what you can reach | |
 | `catalog` | every operation the service serves | |
+| `addressbook` | every agent in your workspace and the addresses that reach it, so you can write to a colleague; needs the `book` scope | `q` to find an agent by name or address, `limit` |
 | `ag_…` | the mailbox: addresses, folder counts, sending status | `folder`, `unread`, `from`, `since`, `before`, `thread`, `agent` or `limit` to list its messages; `correspondents=true` or `q` to list who it exchanges mail with |
 | `message_…` | one message, rendered as text | `render=parts` to list attachments, then `part` to read one |
 | `thread_…` | a conversation, most recent messages | `max_messages` |

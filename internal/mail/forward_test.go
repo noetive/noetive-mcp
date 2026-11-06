@@ -272,6 +272,8 @@ func TestAnArgumentTheIdDoesNotTakeIsRefused(t *testing.T) {
 		`{"id":"thread_01x","folder":"inbox"}`:             "folder",
 		`{"id":"me","unread":true}`:                        "unread",
 		`{"id":"catalog","cursor":"c"}`:                    "cursor",
+		`{"id":"addressbook","folder":"inbox"}`:            "folder",
+		`{"id":"addressbook","correspondents":true}`:       "correspondents",
 		`{"id":"message_01x","max_messages":5}`:            "max_messages",
 	} {
 		r := &recorder{}

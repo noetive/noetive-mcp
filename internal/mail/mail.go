@@ -48,6 +48,7 @@ type Mailer interface {
 	DescribeMailbox(ctx context.Context, in bud.ByID) (bud.ReadOutput, error)
 	ListFolder(ctx context.Context, in bud.In) (bud.ReadOutput, error)
 	ListCorrespondents(ctx context.Context, in bud.In) (bud.ReadOutput, error)
+	DescribeAddressbook(ctx context.Context, in bud.AddressbookQuery) (bud.ReadOutput, error)
 	DescribeMessage(ctx context.Context, in bud.ByID) (bud.ReadOutput, error)
 	DescribePart(ctx context.Context, in bud.ByID) (bud.ReadOutput, error)
 	DescribeThread(ctx context.Context, in bud.ByID) (bud.ReadOutput, error)
