@@ -19,7 +19,8 @@ import (
 // works, on a machine where nothing is wrong, so the target asserts in that
 // direction: anything that is not literally a variable reference must pass.
 //
-// Nothing here parses the key itself. A prefix this repository has never seen is
+// Nothing here parses the key itself (only [mcpserver.UserKey] looks at a
+// prefix, and only at keyu_). A prefix this repository has never seen is
 // a key like any other; the server is the only authority on validity.
 func FuzzPlaceholderKeyNeverRefusesARealKey(f *testing.F) {
 	f.Add("keya_3xAmPl3Base58Value")
@@ -50,6 +51,29 @@ func FuzzPlaceholderKeyNeverRefusesARealKey(f *testing.F) {
 		case strings.HasPrefix(trimmed, "%") && strings.HasSuffix(trimmed, "%") && len(trimmed) > 1:
 		default:
 			t.Fatalf("a key that is not a variable reference was refused as a placeholder: %q", key)
+		}
+	})
+}
+
+// FuzzUserKeyRefusesOnlyUserKeys keeps the user-key check a blocklist.
+//
+// [mcpserver.UserKey] refuses keyu_ because every service the tools reach does,
+// and saying so at startup beats a "healthy" server whose every call fails. The
+// cost of over-reaching is a working credential refused on a machine where
+// nothing is wrong, so anything not starting keyu_ must pass.
+func FuzzUserKeyRefusesOnlyUserKeys(f *testing.F) {
+	f.Add("keya_3xAmPl3Base58Value")
+	f.Add("keyu_3xAmPl3Base58Value")
+	f.Add("  keyu_padded  ")
+	f.Add("eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJhZ18xIn0.c2ln")
+	f.Add("keyu")
+	f.Add("xkeyu_")
+	f.Add("")
+
+	f.Fuzz(func(t *testing.T, key string) {
+		want := strings.HasPrefix(strings.TrimSpace(key), "keyu_")
+		if got := mcpserver.UserKey(key); got != want {
+			t.Fatalf("UserKey(%q) = %v, want %v", key, got, want)
 		}
 	})
 }

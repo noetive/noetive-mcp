@@ -66,7 +66,7 @@
     },
     {
       "name": "noetive_health",
-      "summary": "Check that the editor can reach Noetive and its key is accepted"
+      "summary": "Check that the editor can reach Noetive"
     },
     {
       "name": "bud_wait",

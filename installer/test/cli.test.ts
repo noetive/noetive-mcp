@@ -227,6 +227,22 @@ test("doctor exits zero when every check passes", async () => {
   })));
 });
 
+// A user key passes every check that looks only at presence, and the server's
+// health probe answers without one, so this is the only place doctor can catch
+// it before every real call is refused. It must fail and name the agent-key
+// page, and must not print the key, which ends up in pasted bug reports.
+test("doctor fails a user key without printing it", async () => {
+  await withHome([".cursor"], () => withoutEditorCLIs(() => inWorkspace(async () => {
+    await capture(["init", "--yes", "--client", "cursor"]);
+    const { code, out } = await withBinary("/bin/noetive-mcp", () => withKey("keyu_secretValue", () => capture(["doctor"])));
+
+    assert.equal(code, 1, out);
+    assert.match(out, /FAIL\s+api key/);
+    assert.match(out, /agents#keys/);
+    assert.doesNotMatch(out, /secretValue/);
+  })));
+});
+
 /**
  * withBinary runs body with doctor's binary lookup answering path, or failing
  * for undefined, so the result does not depend on what a local build left in

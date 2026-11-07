@@ -4,7 +4,7 @@ import { ClientSpec, PACKAGE_NAME, SERVER_NAME } from "./clients";
 export const API_KEY_ENV = "NOETIVE_KEY_SECRET";
 
 /** Where a user obtains the key. Named in output, never assumed known. */
-export const DASHBOARD_URL = "https://noetive.io/dashboard";
+export const AGENT_KEYS_URL = "https://noetive.io/dashboard/agents#keys";
 
 /** Routing variables the server reads when a tool call does not name them. */
 export const TARGETING_ENV = {
@@ -154,7 +154,7 @@ export function describeKeyHandling(spec: ClientSpec, clientId: string, options:
   // Naming the dashboard matters: nothing else in the install flow tells a
   // first-time user that a key exists or where to get one, and an editor with
   // no key connects successfully and then refuses every call.
-  const getKey = `Get an API key from ${DASHBOARD_URL}.`;
+  const getKey = `Create an agent key at ${AGENT_KEYS_URL}.`;
 
   if (spec.expandsVariables) {
     return [

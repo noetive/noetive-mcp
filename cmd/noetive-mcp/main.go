@@ -157,7 +157,7 @@ func resolveEmbedder(flagURL string) (*embedding.Endpoint, error) {
 // serving without the mail tools, or against the default service instead,
 // would not honour it.
 func resolveMailer() (*bud.Client, error) {
-	if raw := strings.TrimSpace(os.Getenv(mcpserver.APIKeyEnv)); raw == "" || mcpserver.PlaceholderKey(raw) {
+	if raw := strings.TrimSpace(os.Getenv(mcpserver.APIKeyEnv)); raw == "" || mcpserver.PlaceholderKey(raw) || mcpserver.UserKey(raw) {
 		return nil, nil
 	}
 	if err := checkMailURL(os.Getenv(bud.EnvBaseURL)); err != nil {
@@ -235,6 +235,14 @@ func connect(e *embedding.Endpoint) mcpserver.Broker {
 		return unconfigured("Your editor passed the literal text %q as the API key instead of substituting it, which means %s is not set in the environment your editor was launched from. Desktop launchers do not read your shell profile. Either launch the editor from a terminal where %s is exported, or, in a shell where %s is exported, re-run: npx @noetive/mcp-server init --client <editor> --api-key-from-env. Never paste the key into the chat.", raw, mcpserver.APIKeyEnv, mcpserver.APIKeyEnv, mcpserver.APIKeyEnv)
 	}
 
+	// A user key is refused by every service the tools reach, but only once a
+	// call is made, and /v1/health answers without one. Saying so here is the
+	// only place it surfaces before the user starts debugging their config. The
+	// key itself is never echoed: unlike a placeholder, it is a real secret.
+	if raw := os.Getenv(mcpserver.APIKeyEnv); mcpserver.UserKey(raw) {
+		return unconfigured("%s holds a user key (keyu_), which the Noetive tools do not accept. Create an agent key at %s, put it in %s, and restart the editor. Never paste the key into the chat.", mcpserver.APIKeyEnv, mcpserver.AgentKeysURL, mcpserver.APIKeyEnv)
+	}
+
 	client, err := semantik.NewFromEnv()
 	if err == nil {
 		if e == nil {
@@ -243,7 +251,7 @@ func connect(e *embedding.Endpoint) mcpserver.Broker {
 		return embedding.Precomputed(client, e)
 	}
 
-	return unconfigured("%s is not set for this editor. Get an API key from https://noetive.io/dashboard, then either export it in the environment your editor launches from, or, with it exported in a shell, re-run: npx @noetive/mcp-server init --client <editor> --api-key-from-env. Never paste the key into the chat.", mcpserver.APIKeyEnv)
+	return unconfigured("%s is not set for this editor. Create an agent key at %s, then either export it in the environment your editor launches from, or, with it exported in a shell, re-run: npx @noetive/mcp-server init --client <editor> --api-key-from-env. Never paste the key into the chat.", mcpserver.APIKeyEnv, mcpserver.AgentKeysURL)
 }
 
 // unconfigured logs the reason once to stderr, where an editor collects server

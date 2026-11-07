@@ -78,7 +78,7 @@ tools:
   - name: noetive_lint
     summary: Check a SemQL query before running it
   - name: noetive_health
-    summary: Check that the editor can reach Noetive and its key is accepted
+    summary: Check that the editor can reach Noetive
   - name: bud_wait
     summary: Wait for something to happen in an agent mailbox
   - name: bud_read

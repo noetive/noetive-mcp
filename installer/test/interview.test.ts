@@ -248,10 +248,14 @@ test("the interview asks for the key before anything else", async () => {
 });
 
 // Pasting the key is fine; pasting the name of the variable that should have
-// held it is the mistake, in either shell syntax.
-test("a variable reference is not a key, and a key or an empty value is not a complaint", () => {
+// held it is the mistake, in either shell syntax. A user key is the other: every
+// Noetive service refuses it, so init must not write one.
+test("a variable reference or a user key is not a key, and an agent key or an empty value is not a complaint", () => {
   assert.ok(keyComplaint("${NOETIVE_KEY_SECRET}"));
   assert.ok(keyComplaint("%NOETIVE_KEY_SECRET%"));
+  assert.match(keyComplaint("keyu_abc") ?? "", /agents#keys/);
+  assert.ok(keyComplaint(" keyu_abc"));
+  assert.equal(keyComplaint("keyu"), undefined);
   assert.equal(keyComplaint("keya_abc"), undefined);
   assert.equal(keyComplaint(""), undefined);
 });

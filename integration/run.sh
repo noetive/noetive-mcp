@@ -29,7 +29,7 @@ set -eu
 
 if [ -z "${NOETIVE_KEY_SECRET:-}" ]; then
   echo "NOETIVE_KEY_SECRET is not set; every Semantik test will skip." >&2
-  echo "Get a key from https://noetive.io/dashboard to run it for real." >&2
+  echo "Create an agent key at https://noetive.io/dashboard/agents#keys to run it for real." >&2
 fi
 
 cd "$(dirname "$0")/.."

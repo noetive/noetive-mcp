@@ -9,11 +9,11 @@ Five independent things can be wrong, and they need different fixes. Check them 
 
 ## Checks
 
-1. **Wrapper and binary.** Run `npx -y @noetive/mcp-server doctor --json`. It reports where the platform binary resolved from and whether `NOETIVE_KEY_SECRET` is set in this shell. A missing binary means the install did not complete; a missing key means the editor will connect but offer only `noetive_health` and any browser tools.
+1. **Wrapper and binary.** Run `npx -y @noetive/mcp-server doctor --json`. It reports where the platform binary resolved from and whether `NOETIVE_KEY_SECRET` is set in this shell. A missing binary means the install did not complete. A missing key, or a user key (`keyu_…`), means the editor will connect but offer only `noetive_health` and any browser tools; the fix for a user key is an agent key from https://noetive.io/dashboard/agents#keys.
 
 2. **Editor configuration.** The same command lists every detected editor and every scope where it has a `noetive` entry. An editor the user installed but chose not to configure is reported informationally, not as a failure; do not tell them to fix it unless they ask. Only "no editor is configured at all" is a fault.
 
-3. **Server reachable.** Call the `noetive_health` tool. Success means this editor reached Noetive Semantik and its key was accepted. A failure here carries the server's own error code and a `request_id`; quote that id when asking for help.
+3. **Server reachable.** Call the `noetive_health` tool. Success means this editor reached Noetive Semantik; it does not prove the key works, because the probe answers without one. A failure here carries the server's own error code and a `request_id`; quote that id when asking for help.
 
 4. **Tools registered.** With a key set, confirm all five Noetive tools are visible: `noetive_publish`, `noetive_search`, `noetive_subscribe`, `noetive_lint`, `noetive_health`. Fewer than five with a key set means the editor is running an older build than the one configured. With no key, `noetive_health` alone is correct, and the server instructions say why; the fix is the key, then a restart.
 
@@ -24,11 +24,13 @@ Five independent things can be wrong, and they need different fixes. Check them 
 | Check | Status | Detail |
 |-------|--------|--------|
 | Wrapper and binary | PASS/FAIL | resolved path or the error |
-| API key | PASS/FAIL | set, or where to set it |
+| API key | PASS/FAIL | set, or where to set it, or that it is a user key |
 | Editor configuration | PASS/FAIL/INFO | scope and config path per detected editor |
 | Server reachable | PASS/FAIL | response, or code and request_id |
 | Tools registered | PASS/FAIL | the tool names seen |
 | Browser | PASS/INFO | whether riffle was found |
+
+If the API key check says the key is a user key (`keyu_…`), create an agent key at https://noetive.io/dashboard/agents#keys, export it as `NOETIVE_KEY_SECRET`, re-run `init --api-key-from-env`, and restart the editor; `init` refuses a user key too.
 
 If the API key check reports the literal text `${NOETIVE_KEY_SECRET}` rather than a key, the editor did not substitute the variable, usually because it was started from a desktop launcher, which does not read the user's shell profile. The fix is to launch it from a terminal where the variable is exported, or to re-run `init` with `--api-key-from-env`.
 

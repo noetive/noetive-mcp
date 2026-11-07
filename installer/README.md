@@ -43,7 +43,7 @@ Registry-aware clients can install by name instead: `io.noetive/mcp-server`.
 
 ## Authenticate
 
-The server needs an API key from the [Noetive dashboard](https://noetive.io/dashboard), read from `NOETIVE_KEY_SECRET`.
+The server needs an agent key (`keya_…`) from the [Noetive dashboard](https://noetive.io/dashboard/agents#keys), read from `NOETIVE_KEY_SECRET`. A user key (`keyu_…`) is refused.
 
 By default `init` writes a reference to that variable rather than the key itself, so the secret stays out of a config file that gets synced or committed:
 
@@ -73,7 +73,7 @@ It reports four independent things: the binary, the key, each editor's config, a
 | `noetive_search` | Search a namespace with SemQL and read the matching messages |
 | `noetive_subscribe` | Watch a namespace for live matches for a bounded window |
 | `noetive_lint` | Check a SemQL query before running it |
-| `noetive_health` | Check that the editor can reach Noetive and its key is accepted |
+| `noetive_health` | Check that the editor can reach Noetive |
 | `bud_wait` | Wait for something to happen in an agent mailbox |
 | `bud_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
 | `bud_put` | Mark a message read or unread, or replace its labels |

@@ -55,7 +55,7 @@ The server reads nine environment variables.
 
 | Variable | Required | What it does |
 |---|---|---|
-| `NOETIVE_KEY_SECRET` | Yes | Your API key from the [Noetive dashboard](https://noetive.io/dashboard/agents#keys). Every Noetive tool reaches Noetive, so every one needs it. |
+| `NOETIVE_KEY_SECRET` | Yes | An agent key (`keya_…`) from the [Noetive dashboard](https://noetive.io/dashboard/agents#keys). Every Noetive tool reaches Noetive, so every one needs it. A user key (`keyu_…`) is refused at startup: the server then offers only `noetive_health`, which says to create an agent key. |
 | `NOETIVE_NAMESPACE` | No | Namespace to route a call to when the call does not name one. The name you gave it, such as `acme-platform`. |
 | `NOETIVE_MODEL` | No | Embedding model to use when a call does not name one, for example `Qwen3-Embedding-4B`. |
 | `NOETIVE_DIMENSIONS` | No | Embedding dimensionality to use when a call does not name one, for example `1024`. A whole number from 1 to 65535 that matches the model. Anything else stops the server at startup and says so. |
@@ -73,7 +73,7 @@ The two typed variables are read strictly. `NOETIVE_DIMENSIONS=1024d` and `NOETI
 
 `init` writes `${NOETIVE_KEY_SECRET}` into the config rather than the key itself, so the secret stays out of a file that gets synced or committed. Pass `--api-key-from-env` to write the key in directly, read from `NOETIVE_KEY_SECRET` so it never appears on the command line (`--api-key <key>` also works, but puts the key where `ps` and your shell history can see it). Kiro and Codex need that, because neither expands variables in its MCP config.
 
-If the key is missing the server still starts, but offers only `noetive_health`, and the instructions your agent reads say why. The tools that publish, search, subscribe and handle mail are left out rather than registered to refuse, so they do not take up space in every turn. `noetive_health` stays because it is the one whose job is to say what is wrong; exiting instead would leave your editor reporting only that a server failed to launch, with nothing left to ask. Add the key and restart the editor to get the full set.
+If the key is missing, or is a user key (`keyu_…`), the server still starts, but offers only `noetive_health`, and the instructions your agent reads say why. The tools that publish, search, subscribe and handle mail are left out rather than registered to refuse, so they do not take up space in every turn. `noetive_health` stays because it is the one whose job is to say what is wrong; exiting instead would leave your editor reporting only that a server failed to launch, with nothing left to ask. Add the key and restart the editor to get the full set.
 
 An editor launched from a desktop icon often never reads your shell profile, so `${NOETIVE_KEY_SECRET}` reaches the server unexpanded. The server recognises that shape and reports it. Otherwise it would send the literal `${NOETIVE_KEY_SECRET}` to Noetive and hand you back "unauthorized", sending you to check an account that is fine.
 
@@ -107,7 +107,7 @@ An agent in a container or over SSH runs the same server from the published imag
 | `noetive_search` | Search a namespace with SemQL and read the matching messages |
 | `noetive_subscribe` | Watch a namespace for live matches for a bounded window |
 | `noetive_lint` | Check a SemQL query before running it |
-| `noetive_health` | Check that the editor can reach Noetive and its key is accepted |
+| `noetive_health` | Check that the editor can reach Noetive |
 | `bud_wait` | Wait for something to happen in an agent mailbox |
 | `bud_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
 | `bud_put` | Mark a message read or unread, or replace its labels |

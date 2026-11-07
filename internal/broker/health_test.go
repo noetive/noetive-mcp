@@ -24,6 +24,21 @@ func TestHealthReportsAReachableBroker(t *testing.T) {
 	}
 }
 
+// Semantik answers the health probe without looking at the key, so a success
+// that claimed the key was accepted sent the doctor, and the user, past a key
+// every real call refused. The verdict must say the key was not checked.
+func TestHealthDoesNotClaimTheKeyWasAccepted(t *testing.T) {
+	_, handler := broker.HealthTool(&stubBroker{})
+
+	got := text(t, call(t, handler, map[string]any{}))
+	if strings.Contains(got, "accepted") {
+		t.Errorf("health claimed the key was accepted: %s", got)
+	}
+	if !strings.Contains(got, "does not verify the API key") {
+		t.Errorf("expected health to say the key was not checked, got: %s", got)
+	}
+}
+
 // A rejected key is the single most common setup failure. The code has to
 // survive so the remediation ("your key is wrong") is distinguishable from an
 // outage ("try again later").
@@ -49,7 +64,7 @@ func TestUnreachableBrokerIsNeverReportedAsReachable(t *testing.T) {
 
 	message := requireError(t, call(t, handler, map[string]any{}))
 
-	if strings.Contains(message, "reachable and the API key was accepted") {
+	if strings.Contains(message, "is reachable") {
 		t.Fatalf("a failed probe claimed success: %s", message)
 	}
 }

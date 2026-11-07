@@ -1,5 +1,5 @@
 import type { Choice, Prompter } from "./prompt";
-import { API_KEY_ENV, DASHBOARD_URL, POLICY_ENV, TARGETING_ENV } from "./serverEntry";
+import { API_KEY_ENV, AGENT_KEYS_URL, POLICY_ENV, TARGETING_ENV } from "./serverEntry";
 
 /**
  * The testing defaults: what the shared namespace is provisioned with, so an
@@ -201,7 +201,7 @@ async function askForKey(prompter: Prompter, expandsVariables: boolean): Promise
     ? ""
     : ` (this editor does not expand ${API_KEY_ENV}, so leaving it empty means exporting it before launch)`;
 
-  const key = await prompter.text(`API key from ${DASHBOARD_URL}${why}`, {
+  const key = await prompter.text(`API key from ${AGENT_KEYS_URL}${why}`, {
     secret: true,
     validate: (value) => keyComplaint(value),
   });
@@ -215,15 +215,21 @@ async function askForKey(prompter: Prompter, expandsVariables: boolean): Promise
  *
  * A variable reference is the common mistake: `'$NOETIVE_KEY_SECRET'` quoted so
  * the shell never expanded it, written into a config that will send that text
- * to Noetive and get "unauthorized" back. Empty is not a complaint; it means
- * "write no key".
+ * to Noetive and get "unauthorized" back. A user key (keyu_) is the other: it is
+ * for the dashboard, every Noetive service refuses it, and the server starts
+ * with only noetive_health when given one. Empty is not a complaint; it means
+ * "write no key". Every other shape is left to the service to judge.
  *
  *	keyComplaint("${NOETIVE_KEY_SECRET}") // => "That is a variable reference, ..."
+ *	keyComplaint("keyu_...")              // => "That is a user key, ..."
  *	keyComplaint("keya_...")              // => undefined
  */
 export function keyComplaint(value: string): string | undefined {
   if (value.startsWith("$") || value.startsWith("%")) {
     return `That is a variable reference, not a key. Pass the key itself, or leave it empty and export ${API_KEY_ENV} instead.`;
+  }
+  if (value.trim().startsWith("keyu_")) {
+    return `That is a user key (keyu_), which the Noetive tools do not accept. Create an agent key at ${AGENT_KEYS_URL} and use that.`;
   }
   return undefined;
 }

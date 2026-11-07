@@ -617,9 +617,16 @@ function keyCheck(shellKey: string, anyEditorConfigured: boolean): Check {
     };
   }
   // A shell that exports the placeholder rather than a key is a real fault, and
-  // one that otherwise only shows up as an "unauthorized" from the server.
+  // one that otherwise only shows up as an "unauthorized" from the server. The
+  // literal is echoed because it is not a secret and is the clue to the fix.
   if (shellKey.startsWith("$") || shellKey.startsWith("%")) {
     return { name: "api key", status: "fail", detail: `${API_KEY_ENV} contains the literal text ${shellKey}, not a key.` };
+  }
+  // A user key is refused by every Noetive call, and noetive_health cannot tell:
+  // it answers without a key. Init applies the same rule, so the two agree.
+  const complaint = keyComplaint(shellKey);
+  if (complaint) {
+    return { name: "api key", status: "fail", detail: `${API_KEY_ENV}: ${complaint}` };
   }
   return { name: "api key", status: "pass", detail: `${API_KEY_ENV} is set in this shell` };
 }

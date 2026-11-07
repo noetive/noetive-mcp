@@ -47,6 +47,26 @@ func PlaceholderKey(value string) bool {
 	return false
 }
 
+// AgentKeysURL is where a user creates the agent key the server needs.
+const AgentKeysURL = "https://noetive.io/dashboard/agents#keys"
+
+// UserKey reports whether value is a Noetive user key (keyu_) rather than an
+// agent key.
+//
+// A user key belongs to the dashboard, and every service these tools reach
+// refuses it. It still looks like a credential: it is non-empty and well formed,
+// and /v1/health answers without a key at all, so nothing short of the first
+// real call would say anything was wrong. Catching it by prefix lets the server
+// say so at startup and name the key to create instead.
+//
+// Only keyu_ is refused. Every other shape still reaches the services, which
+// stay the authority on what they accept.
+//
+//	if mcpserver.UserKey(os.Getenv("NOETIVE_KEY_SECRET")) { ... }
+func UserKey(value string) bool {
+	return strings.HasPrefix(strings.TrimSpace(value), "keyu_")
+}
+
 // Unconfigured is a Broker that refuses every call with the same explanation.
 //
 // It exists so a server with no usable credential still starts. Exiting instead

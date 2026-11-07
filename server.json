@@ -21,7 +21,7 @@
       "environmentVariables": [
         {
           "name": "NOETIVE_KEY_SECRET",
-          "description": "API key from the Noetive dashboard. Every Noetive tool reaches Noetive, so every one needs it. Without it the server still starts, offers only noetive_health (plus any browser tools), and the agent is told what is missing.",
+          "description": "An agent key (keya_…) from https://noetive.io/dashboard/agents#keys; a user key (keyu_…) is refused. Every Noetive tool reaches Noetive, so every one needs it. Without it the server still starts, offers only noetive_health (plus any browser tools), and the agent is told what is missing.",
           "isRequired": true,
           "isSecret": true
         },
@@ -152,7 +152,7 @@
       "environmentVariables": [
         {
           "name": "NOETIVE_KEY_SECRET",
-          "description": "API key from the Noetive dashboard. Every Noetive tool reaches Noetive, so every one needs it. Without it the server still starts, offers only noetive_health (plus any browser tools), and the agent is told what is missing.",
+          "description": "An agent key (keya_…) from https://noetive.io/dashboard/agents#keys; a user key (keyu_…) is refused. Every Noetive tool reaches Noetive, so every one needs it. Without it the server still starts, offers only noetive_health (plus any browser tools), and the agent is told what is missing.",
           "isRequired": true,
           "isSecret": true
         },

@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { MergeAdapter } from "../src/adapters/generic";
 import { configuredScopes } from "../src/cli";
 import { assertUsableWorkspace, clientIds, clientSpec, configPath, defaultScope, isInstalled } from "../src/clients";
-import { API_KEY_ENV, DASHBOARD_URL, describeKeyHandling } from "../src/serverEntry";
+import { API_KEY_ENV, AGENT_KEYS_URL, describeKeyHandling } from "../src/serverEntry";
 
 // The published instruction is "run this in your terminal", which for most
 // people means their home directory. Copilot's only scope writes into the
@@ -48,7 +48,7 @@ test("a home-scoped install from the home directory is allowed", () => {
 // successfully and then refuses every call.
 test("install guidance names where to get a key", () => {
   for (const id of clientIds()) {
-    assert.match(describeKeyHandling(clientSpec(id), id), new RegExp(DASHBOARD_URL.replace(/\//g, "\\/")));
+    assert.match(describeKeyHandling(clientSpec(id), id), new RegExp(AGENT_KEYS_URL.replace(/\//g, "\\/")));
   }
 });
 

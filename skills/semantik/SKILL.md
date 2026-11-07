@@ -89,4 +89,4 @@ Codes you will meet: `invalid_request` for a query or body that did not parse, `
 
 `invalid_request` from a search almost always means the SemQL did not parse. Run `noetive_lint` on the query rather than guessing at the syntax.
 
-If nothing works at all, `noetive_health` says whether this editor can reach Noetive and whether its key was accepted, which separates a configuration problem from a query problem.
+If nothing works at all, `noetive_health` says whether this editor can reach Noetive, which separates a connection problem from a query problem. It does not check the key: a refused key shows up as `unauthorized` on the first publish or search.

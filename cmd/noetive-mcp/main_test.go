@@ -57,6 +57,47 @@ func TestConnectRefusesAnUnexpandedPlaceholderBeforeBuildingAClient(t *testing.T
 	}
 }
 
+// A user key is refused by every service, but only once a call is made, and
+// health answers without a key, so without this the server looks healthy while
+// nothing works. The refusal must name where to create an agent key and must
+// not repeat the key, which is a real secret that ends up in editor logs.
+func TestConnectRefusesAUserKeyWithoutEchoingIt(t *testing.T) {
+	const key = "keyu_rq6oSecretBase58Value"
+	t.Setenv(mcpserver.APIKeyEnv, key)
+
+	broker := connect(nil)
+
+	if _, ok := broker.(*semantik.Client); ok {
+		t.Fatal("a user key was accepted as a working credential")
+	}
+	err := broker.Health(context.Background())
+	if err == nil {
+		t.Fatal("expected every call to be refused")
+	}
+	// Spelled out rather than compared to the constants, so an emptied constant
+	// or swapped format arguments cannot pass.
+	if !strings.Contains(err.Error(), "NOETIVE_KEY_SECRET holds a user key") {
+		t.Errorf("expected the refusal to name the variable first, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Create an agent key at https://noetive.io/dashboard/agents#keys, put it in NOETIVE_KEY_SECRET") {
+		t.Errorf("expected the refusal to say where to create an agent key, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "rq6oSecret") {
+		t.Errorf("the refusal echoed the key: %v", err)
+	}
+}
+
+// The mail tools share the key, so a user key must not register them: they
+// would be listed to the agent and then fail on every call.
+func TestResolveMailerSkipsAUserKey(t *testing.T) {
+	t.Setenv(mcpserver.APIKeyEnv, "keyu_3xAmPl3Base58Value")
+
+	client, err := resolveMailer()
+	if err != nil || client != nil {
+		t.Fatalf("expected no mailer and no error for a user key, got %v, %v", client, err)
+	}
+}
+
 // With no key at all the server must still start and still answer, so the
 // editor shows tools and the agent can read out what is wrong. Exiting instead
 // leaves only "server failed to launch".
@@ -67,7 +108,7 @@ func TestConnectDegradesRatherThanFailingWhenNoKeyIsSet(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected calls to be refused with no credential")
 	}
-	if !strings.Contains(err.Error(), "noetive.io/dashboard") {
+	if !strings.Contains(err.Error(), "Create an agent key at https://noetive.io/dashboard/agents#keys, then") {
 		t.Errorf("expected the refusal to say where to get a key, got: %v", err)
 	}
 }
