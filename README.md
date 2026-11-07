@@ -242,11 +242,11 @@ Never hand-edit `packaging/claude-plugin`, `packaging/kiro-power`, `packaging/in
 The tag is the only version input. Everything a release publishes is stamped from it or checked against it.
 
 ```sh
-node scripts/stamp-version.js 0.1.3   # every file that carries a version
+node scripts/stamp-version.js 1.4.0   # every file that carries a version
 make emit                             # regenerate what the manifests feed
-git add -A && git commit -m "chore: release 0.1.3"
+git add -A && git commit -m "chore: release 1.4.0"
 git push origin main                  # then wait for CI
-git tag v0.1.3 && git push origin v0.1.3
+git tag v1.4.0 && git push origin v1.4.0
 ```
 
 Five things about releasing are load-bearing.

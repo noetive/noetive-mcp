@@ -63,7 +63,7 @@ npx @noetive/mcp-server init --client kiro --api-key-from-env
 npx @noetive/mcp-server doctor
 ```
 
-It reports the binary, the key and each editor's config separately, so an editor showing no Noetive tools points at one of them rather than at all three. To check Semantik itself, ask your agent to call `noetive_health`.
+It reports four independent things: the binary, the key, each editor's config, and which scope each was found in. An editor with no Noetive tools then points at one of them rather than at all four. To check Semantik itself, ask your agent to call `noetive_health`.
 
 ## Tools
 
@@ -74,6 +74,12 @@ It reports the binary, the key and each editor's config separately, so an editor
 | `noetive_subscribe` | Watch a namespace for live matches for a bounded window |
 | `noetive_lint` | Check a SemQL query before running it |
 | `noetive_health` | Check that the editor can reach Noetive and its key is accepted |
+| `bud_wait` | Wait for something to happen in an agent mailbox |
+| `bud_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
+| `bud_put` | Mark a message read or unread, or replace its labels |
+| `bud_send` | Send or reply to email from the agent's own address |
+
+The `bud_*` tools give your agent its own email address with Noetive Bud, on the same key. With [riffle](https://github.com/noetive/riffle) installed, the server also offers `browser_run` and `browser_view`, which work without a key.
 
 ## Namespaces are named, never guessed
 
@@ -94,7 +100,7 @@ npx @noetive/mcp-server init --client cursor \
 
 ## Skills
 
-`init` installs skills that teach your agent how to write a SemQL query, when to search rather than subscribe, and how to diagnose the install. Claude Code and Hermes read skills from a directory, so they are written there and `remove` takes them away again; the other editors read a different instruction format and are told so rather than given files they would ignore.
+`init` installs skills that teach your agent how to write a SemQL query, when to search rather than subscribe, how to read and send mail with Bud, and how to diagnose the install. Claude Code and Hermes read skills from a directory, so they are written there and `remove` takes them away again; the other editors read a different instruction format and are told so rather than given files they would ignore.
 
 `--skills none` skips them, `--skills all` takes everything, and a comma-separated list picks some.
 
