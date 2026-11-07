@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -851,10 +851,17 @@ test("--allow-global-ns keeps the shared namespace open beside a named one", asy
 // --yes promises nobody answers, the same as --no-input. If only --no-input
 // reached the adapters, `init --yes --client hermes` run by an agent in a
 // pseudo-terminal would hand it Hermes' tool picker and hang.
+//
+// The stand-in for `hermes` is this Node binary under that name: it answers
+// --version on every platform, where a shell script is not an executable
+// Windows can start without a shell, and the installer then refuses for a
+// missing CLI instead, which is not the refusal under test. Had `mcp add` run,
+// Node would have failed to load a script called "mcp" and the refusal below
+// would be a different message.
 test("--yes refuses an editor CLI that would prompt, even in a terminal", async () => {
   const bin = mkdtempSync(join(tmpdir(), "noetive-hermes-"));
-  const calls = join(bin, "calls");
-  writeFileSync(join(bin, "hermes"), `#!/bin/sh\necho "$@" >> "${calls}"\n`, { mode: 0o755 });
+  if (process.platform === "win32") copyFileSync(process.execPath, join(bin, "hermes.exe"));
+  else symlinkSync(process.execPath, join(bin, "hermes"));
   const tty = { stdin: process.stdin.isTTY, stdout: process.stdout.isTTY };
   const path = process.env.PATH;
   process.stdin.isTTY = true;
@@ -865,8 +872,6 @@ test("--yes refuses an editor CLI that would prompt, even in a terminal", async 
 
     assert.equal(code, 1);
     assert.match(err, /told to ask nothing/);
-    const ran = existsSync(calls) ? readFileSync(calls, "utf8") : "";
-    assert.doesNotMatch(ran, /mcp add/, "the prompting CLI was run despite --yes");
   } finally {
     process.stdin.isTTY = tty.stdin;
     process.stdout.isTTY = tty.stdout;
