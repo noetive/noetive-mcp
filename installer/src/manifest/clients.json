@@ -33,7 +33,7 @@
       "install": "cli-delegate",
       "expandsVariables": true,
       "detect": [
-        "~/.claude"
+        "${CLAUDE_CONFIG_DIR:-~/.claude}"
       ],
       "cli": {
         "command": "claude",
@@ -63,26 +63,31 @@
       },
       "scopes": {
         "local": {
-          "path": "~/.claude.json",
+          "path": "${CLAUDE_CONFIG_DIR:-~}/.claude.json",
+          "under": [
+            "projects",
+            "${workspace}"
+          ],
           "default": true
         },
         "project": {
           "path": "${workspace}/.mcp.json"
         },
         "user": {
-          "path": "~/.claude.json"
+          "path": "${CLAUDE_CONFIG_DIR:-~}/.claude.json"
         }
       },
       "skills": {
-        "local": "~/.claude/skills",
-        "user": "~/.claude/skills",
+        "local": "${CLAUDE_CONFIG_DIR:-~/.claude}/skills",
+        "user": "${CLAUDE_CONFIG_DIR:-~/.claude}/skills",
         "project": "${workspace}/.claude/skills"
       },
       "restartHint": "Start a new Claude Code session.",
       "quirks": [
         "--env is variadic (`--env <env...>`), so it keeps consuming arguments until the next flag. Spliced in ahead of the server name it swallows the name itself and the CLI refuses with \"Invalid environment variable format\". It goes after the name and before the -- that terminates it, which is the order the CLI's own help gives.",
         "Project-scope servers require approval on first use.",
-        "User-scope entries are keyed per project inside ~/.claude.json, which is why the CLI is preferred over editing the file."
+        "Local-scope entries are keyed per project under `projects.<directory>` inside .claude.json, beside the user-scope ones at the root, which is why the CLI is preferred over editing the file.",
+        "CLAUDE_CONFIG_DIR moves .claude.json and the skills directory out of the home directory. Every path here follows it, so a session started with it set sees what this installer wrote."
       ]
     },
     "codex": {

@@ -9,6 +9,14 @@ export type InstallStrategy = "file-merge" | "cli-delegate";
 export interface ScopeSpec {
   readonly path: string;
   readonly default?: boolean;
+  /**
+   * Keys between the root of the file and `topLevelKey`, for an editor that
+   * nests servers inside something else. Claude Code keeps local-scope servers
+   * under `projects.<directory>` in the same file as its user-scope ones, so
+   * reading `topLevelKey` at the root finds the wrong scope's entries.
+   * `${workspace}` expands to the directory the command was run from.
+   */
+  readonly under?: readonly string[];
 }
 
 export interface CliSpec {
@@ -130,6 +138,23 @@ export function configPath(spec: ClientSpec, scope: string, workspace: string): 
 }
 
 /**
+ * entryKeyPath is the chain of keys from the root of a scope's config file to
+ * this installer's server entry, the one place every read and write of that
+ * entry is addressed from.
+ *
+ *	configFile.setEntry(text, entryKeyPath(spec, "local", process.cwd()), entry)
+ */
+export function entryKeyPath(spec: ClientSpec, scope: string, workspace: string): string[] {
+  const declared = spec.scopes[scope];
+  if (!declared) {
+    throw new Error(`client ${spec.displayName} has no scope ${JSON.stringify(scope)}; supported: ${Object.keys(spec.scopes).join(", ")}`);
+  }
+
+  const under = (declared.under ?? []).map((key) => key.replace("${workspace}", workspace));
+  return [...under, spec.topLevelKey, SERVER_NAME];
+}
+
+/**
  * expandPath turns a manifest path template into a real path for this machine.
  *
  * The manifest spells paths with forward slashes because that is what every
@@ -139,9 +164,15 @@ export function configPath(spec: ClientSpec, scope: string, workspace: string): 
  * with `join`, so `list` and `doctor` report an editor as unconfigured while
  * looking straight at its config. Normalising once, here, is what stops that
  * difference from leaking into everything downstream.
+ *
+ * `${NAME:-fallback}` takes an environment variable the editor itself honours,
+ * with the shell's meaning: unset or empty gives the fallback. Claude Code moves
+ * its whole config with CLAUDE_CONFIG_DIR, and a path that ignores it reads and
+ * writes a file that session never opens.
  */
 function expandPath(template: string, workspace: string): string {
-  let path = template;
+  let path = template.replace(/\$\{([A-Z_][A-Z0-9_]*):-([^}]*)\}/g, (_, name: string, fallback: string) => process.env[name] || fallback);
+  if (path === "~") path = homedir();
   if (path.startsWith("~/")) path = join(homedir(), path.slice(2));
   path = path.replace("${workspace}", workspace);
 

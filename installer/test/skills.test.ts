@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { clientSpec } from "../src/clients";
+import { clientSpec, skillsPath } from "../src/clients";
 import { backupPath } from "../src/configFile";
 import { bundledSkills, installSkills, removeSkills, skillTarget } from "../src/skills";
 
@@ -206,4 +206,25 @@ test("the packed skills directory carries the emitted skills", () => {
     semql.files.some((f) => f.relative.startsWith("references/")),
     "expected semql to carry its references",
   );
+});
+
+// Claude Code reads skills from its config directory, which CLAUDE_CONFIG_DIR
+// moves. Skills written to ~/.claude/skills under a relocated config are files
+// the session never loads. Unset or empty keeps the documented default.
+test("Claude Code skills follow CLAUDE_CONFIG_DIR", () => {
+  const previous = process.env.CLAUDE_CONFIG_DIR;
+  const spec = clientSpec("claude-code");
+  try {
+    process.env.CLAUDE_CONFIG_DIR = join(tmpdir(), "relocated-claude");
+    assert.equal(skillsPath(spec, "user", tmpdir()), join(tmpdir(), "relocated-claude", "skills"));
+
+    for (const unset of [undefined, ""]) {
+      if (unset === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = unset;
+      assert.equal(skillsPath(spec, "user", tmpdir()), join(homedir(), ".claude", "skills"));
+    }
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previous;
+  }
 });

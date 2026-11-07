@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 
-import { configPath, isInstalled, SERVER_NAME } from "../clients";
+import { configPath, entryKeyPath, isInstalled, SERVER_NAME } from "../clients";
 import * as configFile from "../configFile";
 import { buildEntry } from "../serverEntry";
 import { ClientAdapter, InstallOutcome, InstallRequest, StatusReport } from "./adapter";
@@ -24,7 +24,7 @@ export class MergeAdapter implements ClientAdapter {
     configFile.parseObject(before, target);
 
     const entry = buildEntry(request.spec, request.entryOptions);
-    const after = configFile.setEntry(before, [request.spec.topLevelKey, SERVER_NAME], entry);
+    const after = configFile.setEntry(before, entryKeyPath(request.spec, request.scope, request.workspace), entry);
 
     if (after === before) {
       return { target, changed: false };
@@ -56,7 +56,7 @@ export class MergeAdapter implements ClientAdapter {
     const before = configFile.read(target);
     configFile.parseObject(before, target);
 
-    const after = configFile.removeEntry(before, [request.spec.topLevelKey, SERVER_NAME]);
+    const after = configFile.removeEntry(before, entryKeyPath(request.spec, request.scope, request.workspace));
     if (after === before) {
       return { target, changed: false };
     }
@@ -77,7 +77,7 @@ export class MergeAdapter implements ClientAdapter {
     }
 
     try {
-      const entry = this.entryAt(target, request.spec.topLevelKey);
+      const entry = this.entryAt(target, entryKeyPath(request.spec, request.scope, request.workspace));
       if (!entry) return { target, installed, configured: "no" };
 
       const detail = typeof entry.command === "string" ? `${entry.command} ${(entry.args as string[] | undefined)?.join(" ") ?? ""}`.trim() : undefined;
@@ -91,24 +91,26 @@ export class MergeAdapter implements ClientAdapter {
   private verify(target: string, request: InstallRequest): string | undefined {
     let entry: Record<string, unknown> | undefined;
     try {
-      entry = this.entryAt(target, request.spec.topLevelKey);
+      entry = this.entryAt(target, entryKeyPath(request.spec, request.scope, request.workspace));
     } catch (err) {
       return (err as Error).message;
     }
 
-    if (!entry) return `no ${SERVER_NAME} key under ${request.spec.topLevelKey}`;
+    if (!entry) return `no entry at ${entryKeyPath(request.spec, request.scope, request.workspace).join(".")}`;
     if (typeof entry.command !== "string" || entry.command === "") return "the entry has no command";
     if (!Array.isArray(entry.args)) return "the entry has no args";
     return undefined;
   }
 
-  private entryAt(target: string, topLevelKey: string): Record<string, unknown> | undefined {
-    const parsed = configFile.parseObject(configFile.read(target), target);
-    const servers = parsed[topLevelKey];
-    if (!servers || typeof servers !== "object" || Array.isArray(servers)) return undefined;
+  /** entryAt walks keyPath from the root of target, or returns undefined where it breaks off. */
+  private entryAt(target: string, keyPath: readonly string[]): Record<string, unknown> | undefined {
+    let node: unknown = configFile.parseObject(configFile.read(target), target);
+    for (const key of keyPath) {
+      if (!node || typeof node !== "object" || Array.isArray(node)) return undefined;
+      node = (node as Record<string, unknown>)[key];
+    }
 
-    const entry = (servers as Record<string, unknown>)[SERVER_NAME];
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return undefined;
-    return entry as Record<string, unknown>;
+    if (!node || typeof node !== "object" || Array.isArray(node)) return undefined;
+    return node as Record<string, unknown>;
   }
 }

@@ -616,3 +616,92 @@ test("removing through a CLI with no remove command reports nothing removed", as
   assert.equal(outcome.changed, false);
   assert.deepEqual(calls.filter((c) => c[2] === "remove"), []);
 });
+
+/**
+ * withClaudeConfigDir points CLAUDE_CONFIG_DIR at a scratch directory for the
+ * duration of body, the way a user's shell or direnv does, and restores it.
+ */
+async function withClaudeConfigDir<T>(value: string, body: () => Promise<T>): Promise<T> {
+  const previous = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = value;
+  try {
+    return await body();
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previous;
+  }
+}
+
+function shippedRequest(scope: string, workspace: string) {
+  return { spec: clientSpec("claude-code"), clientId: "claude-code", scope, workspace, entryOptions: {}, dryRun: false };
+}
+
+const entry = { command: "npx", args: ["-y", "@noetive/mcp-server"] };
+
+// `claude mcp add` defaults to local scope, which it stores under the project's
+// directory inside .claude.json, not at the root. Reading the root is what made
+// doctor report "not configured" straight after an install that worked, and
+// reporting it under user scope would send someone to fix the wrong thing.
+test("a local-scope entry is found under its project and only in local scope", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "noetive-claude-cfg-"));
+  const workspace = mkdtempSync(join(tmpdir(), "noetive-claude-ws-"));
+  writeFileSync(
+    join(dir, ".claude.json"),
+    JSON.stringify({ projects: { [workspace]: { mcpServers: { [SERVER_NAME]: entry } }, "/elsewhere": { mcpServers: {} } } }),
+  );
+
+  await withClaudeConfigDir(dir, async () => {
+    const { run } = recorder();
+    const adapter = new CliDelegateAdapter(run);
+    assert.equal((await adapter.status(shippedRequest("local", workspace))).configured, "yes");
+    assert.equal((await adapter.status(shippedRequest("user", workspace))).configured, "no");
+  });
+});
+
+// The local entry belongs to one directory. Run from another, Claude Code does
+// not load it, so status must not claim it there either.
+test("a local-scope entry for another directory is not reported here", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "noetive-claude-cfg-"));
+  const workspace = mkdtempSync(join(tmpdir(), "noetive-claude-ws-"));
+  writeFileSync(join(dir, ".claude.json"), JSON.stringify({ projects: { "/some/other/project": { mcpServers: { [SERVER_NAME]: entry } } } }));
+
+  await withClaudeConfigDir(dir, async () => {
+    const { run } = recorder();
+    assert.equal((await new CliDelegateAdapter(run).status(shippedRequest("local", workspace))).configured, "no");
+  });
+});
+
+// User scope is the root of the same file; finding it there must not depend on
+// the project the command runs in.
+test("a user-scope entry is found at the root of the config", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "noetive-claude-cfg-"));
+  const workspace = mkdtempSync(join(tmpdir(), "noetive-claude-ws-"));
+  writeFileSync(join(dir, ".claude.json"), JSON.stringify({ mcpServers: { [SERVER_NAME]: entry } }));
+
+  await withClaudeConfigDir(dir, async () => {
+    const { run } = recorder();
+    const adapter = new CliDelegateAdapter(run);
+    assert.equal((await adapter.status(shippedRequest("user", workspace))).configured, "yes");
+    assert.equal((await adapter.status(shippedRequest("local", workspace))).configured, "no");
+  });
+});
+
+// With no `claude` on PATH the file is edited directly. A local install written
+// at the root would silently become a user-scope one, visible in every project,
+// and the siblings Claude Code keeps in the same file must survive the edit.
+test("the file fallback writes a local install under its project and keeps the rest", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "noetive-claude-cfg-"));
+  const workspace = mkdtempSync(join(tmpdir(), "noetive-claude-ws-"));
+  writeFileSync(join(dir, ".claude.json"), JSON.stringify({ numStartups: 3, mcpServers: { other: entry } }));
+
+  await withClaudeConfigDir(dir, async () => {
+    const { run } = recorder({ version: { status: 127, stdout: "", stderr: "command not found" } });
+    await new CliDelegateAdapter(run).install(shippedRequest("local", workspace));
+  });
+
+  const written = JSON.parse(readFileSync(join(dir, ".claude.json"), "utf8"));
+  assert.equal(written.projects[workspace].mcpServers[SERVER_NAME].command, "npx");
+  assert.equal(written.mcpServers[SERVER_NAME], undefined, "a local install leaked into user scope");
+  assert.equal(written.numStartups, 3);
+  assert.deepEqual(written.mcpServers.other, entry);
+});

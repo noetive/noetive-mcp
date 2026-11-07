@@ -11,8 +11,8 @@ import { MergeAdapter } from "./generic";
  * CliDelegateAdapter configures an editor by running the editor's own CLI.
  *
  * That is preferred wherever the editor owns a config layout the file path does
- * not describe. Claude Code keys user-scope entries per project inside
- * ~/.claude.json, a layout that has already changed once between releases,
+ * not describe. Claude Code keys local-scope entries per project inside
+ * .claude.json, a layout that has already changed once between releases,
  * and Codex keeps its servers in TOML rather than the JSON this installer
  * merges. In both cases the CLI knows the layout authoritatively.
  *

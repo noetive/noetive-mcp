@@ -36,9 +36,12 @@ async function withHome<T>(markers: string[], body: () => Promise<T>): Promise<T
   const home = mkdtempSync(join(tmpdir(), "noetive-home-"));
   for (const marker of markers) mkdirSync(join(home, marker), { recursive: true });
 
-  const previous = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  // CLAUDE_CONFIG_DIR relocates Claude Code's config out of the home directory,
+  // so a developer shell that sets it would detect against their real config.
+  const previous = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR };
   process.env.HOME = home;
   process.env.USERPROFILE = home;
+  delete process.env.CLAUDE_CONFIG_DIR;
 
   // Asserted rather than assumed: if a future platform reads a third variable,
   // every detection test below starts answering from the real machine and fails
