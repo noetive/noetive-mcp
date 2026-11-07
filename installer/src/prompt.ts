@@ -153,6 +153,7 @@ async function secret(input: NodeJS.ReadStream, output: NodeJS.WriteStream, prom
     const done = (finish: () => void) => {
       input.off("keypress", onKey);
       if (raw) input.setRawMode(false);
+      input.pause();
       output.write("\n");
       finish();
     };
@@ -168,6 +169,7 @@ async function secret(input: NodeJS.ReadStream, output: NodeJS.WriteStream, prom
     };
 
     input.on("keypress", onKey);
+    listen(input);
   });
 }
 
@@ -216,6 +218,7 @@ async function pick(
     const done = (finish: () => void) => {
       input.off("keypress", onKey);
       if (raw) input.setRawMode(false);
+      input.pause();
       finish();
     };
 
@@ -244,5 +247,23 @@ async function pick(
     };
 
     input.on("keypress", onKey);
+    listen(input);
   });
+}
+
+/**
+ * listen starts input flowing for a prompt that reads keypresses directly.
+ *
+ * Closing a readline interface pauses its input, so a keypress prompt that
+ * follows a y/n question attaches its listener to a stream that is not
+ * reading. Nothing else holds Node's event loop open at that point, so the
+ * process exits zero mid-question, before anything is written. Each prompt
+ * pauses the stream again when it finishes, so a finished interview still
+ * lets the process exit.
+ *
+ *	input.on("keypress", onKey);
+ *	listen(input);
+ */
+function listen(input: NodeJS.ReadStream): void {
+  input.resume();
 }

@@ -224,3 +224,46 @@ test("nothing is interactive without a terminal on both ends", () => {
     else process.env.CI = previousCI;
   }
 });
+
+// The interview asks y/n before it asks for the key and before it offers
+// skills. Closing the y/n question pauses the input, and a keypress prompt
+// that does not start it again waits on a stream that never delivers. On a
+// real terminal Node then has nothing left to wait for and exits zero
+// mid-interview, so `init` ends silently having written nothing.
+test("a secret prompt after a yes or no question still reads keys", { timeout: 2000 }, async () => {
+  const t = terminal();
+  const prompter = terminalPrompter(t.input, t.output);
+
+  t.type("y\n");
+  assert.equal(await prompter.confirm("Write the key?", { default: false }), true);
+
+  t.type("keyu_abc\r");
+  assert.equal(await prompter.text("API key", { secret: true }), "keyu_abc");
+});
+
+// Same failure through the list picker, which is how skills are chosen.
+test("a list after a yes or no question still reads keys", { timeout: 2000 }, async () => {
+  const t = terminal();
+  const prompter = terminalPrompter(t.input, t.output);
+
+  t.type("n\n");
+  assert.equal(await prompter.confirm("Share the namespace?", { default: true }), false);
+
+  t.type("\x1b[B\r");
+  const choices = [
+    { value: "a", label: "A" },
+    { value: "b", label: "B" },
+  ];
+  assert.equal(await prompter.select("Pick one", choices), "b");
+});
+
+// The other half of the same contract: a finished prompt must stop reading,
+// or a terminal stdin left flowing keeps the process alive after `init` is done.
+test("a keypress prompt stops reading once it is answered", async () => {
+  const t = terminal();
+  const prompter = terminalPrompter(t.input, t.output);
+
+  t.type("keyu_abc\r");
+  await prompter.text("API key", { secret: true });
+  assert.equal(t.input.isPaused(), true);
+});

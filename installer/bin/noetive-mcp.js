@@ -31,6 +31,16 @@ function main() {
 
 function runCli(argv) {
   const { run } = require("../dist/src/cli.js");
+
+  // Every settled run ends in process.exit, which skips beforeExit, so this
+  // only fires when the event loop drains with the command still pending: a
+  // prompt waiting on a stream nothing reads. Node would exit zero there and
+  // the run would look finished, so it is reported and failed instead.
+  process.once("beforeExit", () => {
+    console.error(`noetive-mcp: ${argv[0]} stopped before it finished; nothing it would have written can be assumed written.`);
+    process.exit(1);
+  });
+
   run(argv).then(
     (code) => process.exit(code),
     (err) => {
