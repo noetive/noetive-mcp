@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	json "github.com/goccy/go-json"
 	"go.noetive.io/noetive-sdk-go/semantik"
 
 	"go.noetive.io/noetive-mcp/internal/broker"
@@ -274,5 +275,49 @@ func TestASetupThatNeverFinishesIsReportedAsSetupRunningOut(t *testing.T) {
 	}
 	if took > 25*time.Second {
 		t.Errorf("setup was allowed %s, beyond its 20s budget", took)
+	}
+}
+
+// A role's watch has to reach the service in the group it named, or every role
+// receives every message and the split the agent asked for silently never
+// happens.
+func TestSubscribeForwardsTheGroup(t *testing.T) {
+	stub := &stubBroker{stream: &fakeStream{id: "sub_01hz"}}
+	_, handler := broker.SubscribeTool(stub, configured)
+
+	requireSuccess(t, call(t, handler, map[string]any{"query": "MATCH", "wait_seconds": float64(1), "group": "pandemic-roles"}))
+
+	if stub.subReq.Group != "pandemic-roles" {
+		t.Errorf("group sent = %q, want %q", stub.subReq.Group, "pandemic-roles")
+	}
+}
+
+// A grouped match reports its lead, and an uncontested one reports none: an
+// agent deciding whether a message is really its own reads a tie (0) and "no
+// competitor" (absent) as opposite answers.
+func TestGroupedMatchesKeepTheirLead(t *testing.T) {
+	tie := float32(0)
+	stream := &fakeStream{id: "sub_01hz", events: []semantik.MatchEvent{
+		{MessageID: "msg_tie", Score: 0.7, Lead: &tie},
+		{MessageID: "msg_alone", Score: 0.6},
+	}}
+	_, handler := broker.SubscribeTool(&stubBroker{stream: stream}, configured)
+
+	result := call(t, handler, map[string]any{"query": "MATCH", "max_matches": float64(2), "wait_seconds": float64(60), "group": "roles"})
+	raw, err := json.Marshal(requireSuccess(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Matches []struct {
+			Lead      *float32 `json:"lead"`
+			MessageID string   `json:"message_id"`
+		} `json:"matches"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Matches) != 2 || got.Matches[0].Lead == nil || *got.Matches[0].Lead != 0 || got.Matches[1].Lead != nil {
+		t.Errorf("leads not carried through: %s", raw)
 	}
 }

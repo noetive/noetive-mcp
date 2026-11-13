@@ -97,13 +97,19 @@ type collected struct {
 	Interrupted     bool          `json:"interrupted"`
 }
 
-// streamMatch is one live match. It carries an identifier and a score and no
-// content, because that is all the server sends on a match frame.
+// streamMatch is one live match. It carries an identifier, a score and, for a
+// grouped watch that another member also matched, the lead; it carries no
+// content, because the server sends none on a match frame.
 //
-// Field ordering: string (16 B) > float32 (4 B).
+// Lead stays a pointer so an uncontested match (absent) reads differently from
+// a tie (zero).
+//
+// Field ordering: pointer and string first, so the GC scans 16 pointer
+// bytes rather than 24, then float32 (4 B).
 type streamMatch struct {
-	MessageID string  `json:"message_id"`
-	Score     float32 `json:"score"`
+	Lead      *float32 `json:"lead,omitempty"`
+	MessageID string   `json:"message_id"`
+	Score     float32  `json:"score"`
 }
 
 // SubscribeTool builds the noetive_subscribe tool and its handler.
@@ -158,6 +164,12 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 			mcp.Min(1),
 			mcp.Max(maxWait.Seconds()),
 		),
+		mcp.WithString("group",
+			mcp.Description("Share one stream between roles: watches on your account in this namespace that name the same group compete, and each message goes only to the member it scores highest against, with lead set to its margin. Members compete only while their calls are open, so a role whose watch is closed misses what it would have won. Every member must use the same clause kinds."),
+			mcp.MinLength(1),
+			mcp.MaxLength(semantik.MaxGroupLen),
+			mcp.Pattern("^[A-Za-z0-9_-]+$"),
+		),
 		mcp.WithReadOnlyHintAnnotation(true),
 	}
 	options = append(options, targetingOptions(policy)...)
@@ -179,6 +191,9 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 			return mcp.NewToolResultErrorFromErr("noetive_subscribe", err), nil
 		}
 
+		// The SDK checks the name before any request is sent, so a bad one comes
+		// back as a setup failure carrying the rule it broke.
+		group := request.GetString("group", "")
 		limit := bound(request.GetInt("max_matches", defaultMax), 1, maxMatchCap)
 		wait := time.Duration(bound(request.GetInt("wait_seconds", int(defaultWait.Seconds())), 1, int(maxWait.Seconds()))) * time.Second
 
@@ -204,6 +219,7 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 			Namespace:  target.Namespace,
 			Model:      target.Model,
 			Dimensions: target.Dimensions,
+			Group:      group,
 		})
 		// Stop reports false when the timer already fired: setup outlived its
 		// budget, and whatever Subscribe returned was cut short by us, not by
@@ -288,7 +304,7 @@ func collect(ctx context.Context, sub Stream, limit int, window time.Duration, c
 			return result
 		}
 
-		result.Matches = append(result.Matches, streamMatch{MessageID: event.MessageID, Score: event.Score})
+		result.Matches = append(result.Matches, streamMatch{MessageID: event.MessageID, Lead: event.Lead, Score: event.Score})
 	}
 
 	result.ReachedLimit = true
