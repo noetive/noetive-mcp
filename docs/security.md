@@ -81,4 +81,4 @@ Releases are built by a GitHub Actions workflow from a tagged commit, with `-tri
 
 ## Reporting
 
-Email security@noetive.io. Please do not open a public issue for a vulnerability.
+Email security@noetive.eu. Please do not open a public issue for a vulnerability.
