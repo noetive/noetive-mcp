@@ -54,6 +54,8 @@ type Mailer interface {
 	DescribeThread(ctx context.Context, in bud.ByID) (bud.ReadOutput, error)
 
 	UpdateMessage(ctx context.Context, in bud.Change) (bud.PutOutput, error)
+	CreateFolder(ctx context.Context, in bud.Folder) (bud.PutOutput, error)
+	DeleteFolder(ctx context.Context, in bud.Folder) (bud.PutOutput, error)
 	Send(ctx context.Context, in bud.SendInput) (bud.SendOutput, error)
 }
 

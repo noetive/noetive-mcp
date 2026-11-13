@@ -84,7 +84,7 @@ tools:
   - name: bud_read
     summary: Read a mailbox, folder, message, part, thread or the workspace addressbook by its id
   - name: bud_put
-    summary: Mark a message read or unread, or replace its labels
+    summary: Mark a message read or unread, replace its labels, move it between folders, or make or remove a folder
   - name: bud_send
     summary: Send or reply to email from the agent's own address
 

@@ -29,6 +29,7 @@ type recorder struct {
 	book     bud.AddressbookQuery
 	wait     bud.WaitInput
 	change   bud.Change
+	folder   bud.Folder
 	send     bud.SendInput
 
 	read    bud.ReadOutput
@@ -101,6 +102,18 @@ func (r *recorder) DescribeThread(ctx context.Context, in bud.ByID) (bud.ReadOut
 func (r *recorder) UpdateMessage(ctx context.Context, in bud.Change) (bud.PutOutput, error) {
 	r.due, r.deadline = ctx.Deadline()
 	r.called, r.change = "UpdateMessage", in
+	return r.put, nil
+}
+
+func (r *recorder) CreateFolder(ctx context.Context, in bud.Folder) (bud.PutOutput, error) {
+	r.due, r.deadline = ctx.Deadline()
+	r.called, r.folder = "CreateFolder", in
+	return r.put, nil
+}
+
+func (r *recorder) DeleteFolder(ctx context.Context, in bud.Folder) (bud.PutOutput, error) {
+	r.due, r.deadline = ctx.Deadline()
+	r.called, r.folder = "DeleteFolder", in
 	return r.put, nil
 }
 
@@ -374,6 +387,68 @@ func TestOnlyAMessageCanBeChanged(t *testing.T) {
 	r = &recorder{}
 	if result := call(t, mail.PutTool, r, `{"id":"message_01x","changes":{}}`); !result.IsError || r.called != "" {
 		t.Errorf("an empty change was sent: %s", text(result))
+	}
+}
+
+// TestAMoveIsAMessageChange: a move is a folder among a message's changes, sent
+// as the agent wrote it, so the service alone decides which folders it accepts.
+func TestAMoveIsAMessageChange(t *testing.T) {
+	r := &recorder{}
+	result := call(t, mail.PutTool, r, `{"id":"message_01x","changes":{"folder":"receipts"}}`)
+	if result.IsError || r.called != "UpdateMessage" {
+		t.Fatalf("a move was not sent as a message change: %s", text(result))
+	}
+	var changes map[string]any
+	if err := json.Unmarshal(r.change.Changes, &changes); err != nil || changes["folder"] != "receipts" || len(changes) != 1 {
+		t.Errorf("the move reached the service as %s", r.change.Changes)
+	}
+}
+
+// TestAFolderIsMadeOrRemovedByItsId: ag_…/<name> with exists is the one way to
+// reach folder.create and folder.delete. A wrong way round removes a folder the
+// agent meant to make.
+func TestAFolderIsMadeOrRemovedByItsId(t *testing.T) {
+	for _, tc := range []struct {
+		exists string
+		op     string
+	}{{"true", "CreateFolder"}, {"false", "DeleteFolder"}} {
+		r := &recorder{}
+		result := call(t, mail.PutTool, r, `{"id":"ag_01x/receipts","changes":{"exists":`+tc.exists+`},"idempotency_key":"f1"}`)
+		if result.IsError || r.called != tc.op {
+			t.Fatalf("exists=%s called %q: %s", tc.exists, r.called, text(result))
+		}
+		if want := (bud.Folder{In: "ag_01x", Folder: "receipts", IdempotencyKey: "f1"}); r.folder != want {
+			t.Errorf("exists=%s sent %+v, want %+v", tc.exists, r.folder, want)
+		}
+	}
+}
+
+// TestAFolderTakesOnlyExists: anything beside exists, or a folder with no name,
+// is refused before sending rather than silently dropped, and the refusal says
+// what a folder takes.
+func TestAFolderTakesOnlyExists(t *testing.T) {
+	for _, args := range []string{
+		`{"id":"ag_01x/receipts","changes":{"read":true}}`,
+		`{"id":"ag_01x/receipts","changes":{"exists":true,"labels":[]}}`,
+		`{"id":"ag_01x/receipts","changes":{"exists":"yes"}}`,
+		`{"id":"ag_01x/","changes":{"exists":true}}`,
+		`{"id":"ag_01x","changes":{"exists":true}}`,
+	} {
+		r := &recorder{}
+		result := call(t, mail.PutTool, r, args)
+		if !result.IsError || r.called != "" || !strings.Contains(text(result), "exists") && !strings.Contains(text(result), bud.PrefixMessage) {
+			t.Errorf("%s was sent or unexplained: called %q, %s", args, r.called, text(result))
+		}
+	}
+}
+
+// TestAFolderTheMailboxMadeCanBeListed: bud_read once took only the three
+// system folders, so an agent could make a folder and never read it.
+func TestAFolderTheMailboxMadeCanBeListed(t *testing.T) {
+	r := &recorder{}
+	result := call(t, mail.ReadTool, r, `{"id":"ag_01x","folder":"receipts"}`)
+	if result.IsError || r.called != "ListFolder" || r.in.Folder != "receipts" {
+		t.Errorf("listing a made folder called %q with %+v: %s", r.called, r.in, text(result))
 	}
 }
 

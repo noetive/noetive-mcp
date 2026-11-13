@@ -78,7 +78,7 @@
     },
     {
       "name": "bud_put",
-      "summary": "Mark a message read or unread, or replace its labels"
+      "summary": "Mark a message read or unread, replace its labels, move it between folders, or make or remove a folder"
     },
     {
       "name": "bud_send",
