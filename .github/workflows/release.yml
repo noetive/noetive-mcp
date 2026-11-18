@@ -118,7 +118,8 @@ jobs:
   npm:
     needs: release
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Two registry waits of up to twelve minutes each, on top of the build.
+    timeout-minutes: 45
     # Each package's trusted publisher on npmjs.com names this environment, and
     # npm refuses the OIDC token of a job outside it ("package not found"). It
     # is also where protection rules for publishing belong.
@@ -221,22 +222,25 @@ jobs:
       # wrapper is what a user installs; if any platform package is missing when
       # it goes out, that version is broken on that platform for good.
       #
-      # Retried because the registry is read-your-writes only eventually: a
-      # package published seconds ago can still 404 from another edge.
+      # Retried because npm accepts a publish before it serves it. For 0.3.1
+      # every platform package was acknowledged within 40 seconds, yet the last
+      # of them was served six minutes later, absent even from its packument.
+      # Twelve minutes covers that with room; the clock is shared, so packages
+      # behind the first one mostly arrive while it is waited on.
       - name: Every platform package resolves
         run: |
           for dir in dist/npm/*/; do
             name=$(node -p "require('./$dir/package.json').name")
             found=''
-            for _ in $(seq 1 10); do
+            for _ in $(seq 1 48); do
               if npm view "$name@$VERSION" version --prefer-online >/dev/null 2>&1; then
                 found=1
                 break
               fi
-              sleep 10
+              sleep 15
             done
             if [ -z "$found" ]; then
-              echo "::error title=Platform package missing::$name@$VERSION is not on the registry. Refusing to publish the wrapper, which would install cleanly and then find no binary on that platform."
+              echo "::error title=Platform package missing::$name@$VERSION was not served within twelve minutes of publish. Refusing to publish the wrapper, which would install cleanly and then find no binary on that platform. Re-run this job once the package resolves; already-published versions are skipped."
               exit 1
             fi
             echo "$name@$VERSION resolves."
@@ -262,20 +266,20 @@ jobs:
       # after the fact, since versions are immutable, so the next release is
       # fixed before it ships the same way.
       #
-      # Five minutes per package, as in smoke: the wrapper is read seconds after
-      # its publish, and 0.3.1-rc.3 saw a registry edge still not serve it 100
-      # seconds later. "Not served yet" is reported apart from "wrong
-      # publisher" so a slow edge never reads as a token publish.
+      # Twelve minutes per package, as at the gate above: the wrapper is read
+      # seconds after its publish, and npm has taken six minutes to serve a
+      # version it already acknowledged. "Not served yet" is reported apart from
+      # "wrong publisher" so a slow registry never reads as a token publish.
       - name: Every package was published by trusted publishing
         run: |
           for name in $(for d in dist/npm/*/ installer/; do node -p "require('./${d}package.json').name"; done); do
             publisher=''
-            for _ in $(seq 1 20); do
+            for _ in $(seq 1 48); do
               publisher=$(npm view "$name@$VERSION" _npmUser.email --prefer-online 2>/dev/null) && [ -n "$publisher" ] && break
               sleep 15
             done
             if [ -z "$publisher" ]; then
-              echo "::error title=Package not served::$name@$VERSION was not served by the registry within five minutes of publish, so its publisher could not be checked. Re-run this job; already-published versions are skipped."
+              echo "::error title=Package not served::$name@$VERSION was not served by the registry within twelve minutes of publish, so its publisher could not be checked. Re-run this job; already-published versions are skipped."
               exit 1
             fi
             if [ "$publisher" != "npm-oidc-no-reply@github.com" ]; then
