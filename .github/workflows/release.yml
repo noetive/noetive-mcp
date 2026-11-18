@@ -119,6 +119,10 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Each package's trusted publisher on npmjs.com names this environment, and
+    # npm refuses the OIDC token of a job outside it ("package not found"). It
+    # is also where protection rules for publishing belong.
+    environment: release
     permissions:
       contents: read
       id-token: write
@@ -144,7 +148,7 @@ jobs:
       # workflow exchanges its OIDC token for a short-lived publish credential,
       # so there is no npm secret to leak, expire or rotate. Each
       # @noetive/mcp-server* package names this repository and release.yml as
-      # its trusted publisher on npmjs.com.
+      # its trusted publisher on npmjs.com, scoped to the release environment.
       #
       # Checked before anything is built. Without it the job installs, builds,
       # stamps and packs five 8 MB binaries before npm reports ENEEDAUTH, by
