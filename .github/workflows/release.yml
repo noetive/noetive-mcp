@@ -140,37 +140,23 @@ jobs:
       # release of this.
       - run: npm install -g npm@11.6.2
 
-      # Before anything is built. Without it the job installs, builds, stamps
-      # and packs five 8 MB binaries before npm reports ENEEDAUTH, by which
-      # point the GitHub Release already exists, so a missing repository secret
-      # reads as a release that half-worked.
+      # Trusted publishing is the only way this job authenticates to npm: the
+      # workflow exchanges its OIDC token for a short-lived publish credential,
+      # so there is no npm secret to leak, expire or rotate. Each
+      # @noetive/mcp-server* package names this repository and release.yml as
+      # its trusted publisher on npmjs.com.
       #
-      # whoami rather than a non-empty check: an expired or revoked token is
-      # also a string, and it fails at exactly the same late point.
-      # Two ways to authenticate, and npm prefers the first: it detects an OIDC
-      # environment and only falls back to a token. This checks that at least
-      # one of them is available, because the alternative is discovering it
-      # after the GitHub Release already exists.
-      #
-      # It cannot confirm that a trusted publisher is actually configured for
-      # each package, npm exposes no way to ask, so OIDC being available is as
-      # far as this goes.
-      - name: Check the publish credential
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Checked before anything is built. Without it the job installs, builds,
+      # stamps and packs five 8 MB binaries before npm reports ENEEDAUTH, by
+      # which point the GitHub Release already exists. It cannot confirm the
+      # trusted publisher is configured for each package, npm exposes no way to
+      # ask, so the publisher assertion after the wrapper is what catches that.
+      - name: Check the OIDC token is available
         run: |
-          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
-            echo "OIDC is available; npm will attempt trusted publishing."
-            exit 0
-          fi
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::error title=No way to authenticate to npm::Configure a trusted publisher for each @noetive/mcp-server* package on npmjs.com, or add an npm token with publish rights on the @noetive scope as the NPM_TOKEN repository secret."
+          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+            echo "::error title=No OIDC token for npm::This job needs 'id-token: write' to publish through npm trusted publishing. Restore that permission on the npm job."
             exit 1
           fi
-          npm whoami || {
-            echo "::error title=NPM_TOKEN is not valid::npm rejected the token. It is set but expired, revoked, or lacks publish rights on the @noetive scope."
-            exit 1
-          }
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -196,9 +182,8 @@ jobs:
       - name: Build platform packages
         run: node scripts/build-platform-packages.js "${{ needs.release.outputs.version }}"
 
-      # --provenance is redundant under trusted publishing, which generates it
-      # anyway, and load-bearing on the token fallback, which does not. Kept so
-      # the two paths produce the same artefact.
+      # No --provenance: trusted publishing attaches the provenance attestation
+      # itself.
       #
       # Platform packages first: the wrapper declares them as optionalDependencies,
       # and npm skips an optional dependency it cannot resolve without erroring.
@@ -216,7 +201,7 @@ jobs:
             if npm view "$name@$VERSION" version --prefer-online >/dev/null 2>&1; then
               echo "$name@$VERSION is already published; skipping."
             else
-              npm publish --provenance --access public --tag "$NPM_TAG" "$dir"
+              npm publish --access public --tag "$NPM_TAG" "$dir"
             fi
             handled=$((handled + 1))
           done
@@ -227,7 +212,6 @@ jobs:
         env:
           VERSION: ${{ needs.release.outputs.version }}
           NPM_TAG: ${{ needs.release.outputs.npm_tag }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # The gate before the one irreversible step in this job. Publishing the
       # wrapper is what a user installs; if any platform package is missing when
@@ -262,12 +246,33 @@ jobs:
             echo "@noetive/mcp-server@$VERSION is already published; skipping."
             exit 0
           fi
-          npm publish --provenance --access public --tag "$NPM_TAG"
+          npm publish --access public --tag "$NPM_TAG"
         working-directory: installer
         env:
           VERSION: ${{ needs.release.outputs.version }}
           NPM_TAG: ${{ needs.release.outputs.npm_tag }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # npm records who published each version. A trusted publish is recorded as
+      # GitHub Actions; anything else means a token published it, which is the
+      # silent fallback this workflow no longer has and must not regain. Fails
+      # after the fact, since versions are immutable, so the next release is
+      # fixed before it ships the same way. Retried for registry propagation.
+      - name: Every package was published by trusted publishing
+        run: |
+          for name in $(for d in dist/npm/*/ installer/; do node -p "require('./${d}package.json').name"; done); do
+            publisher=''
+            for _ in $(seq 1 10); do
+              publisher=$(npm view "$name@$VERSION" _npmUser.email --prefer-online 2>/dev/null) && [ -n "$publisher" ] && break
+              sleep 10
+            done
+            if [ "$publisher" != "npm-oidc-no-reply@github.com" ]; then
+              echo "::error title=Not a trusted publish::$name@$VERSION was published by '${publisher:-unknown}', not by GitHub Actions trusted publishing. Check that no npm token is configured for this job and that the package's trusted publisher names noetive/noetive-mcp and release.yml."
+              exit 1
+            fi
+            echo "$name@$VERSION was published by trusted publishing."
+          done
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
 
   # The second distribution channel: a hosted agent runtime runs the server in a
   # container beside the agent rather than beside a person's editor. Built from
