@@ -260,17 +260,26 @@ jobs:
       # GitHub Actions; anything else means a token published it, which is the
       # silent fallback this workflow no longer has and must not regain. Fails
       # after the fact, since versions are immutable, so the next release is
-      # fixed before it ships the same way. Retried for registry propagation.
+      # fixed before it ships the same way.
+      #
+      # Five minutes per package, as in smoke: the wrapper is read seconds after
+      # its publish, and 0.3.1-rc.3 saw a registry edge still not serve it 100
+      # seconds later. "Not served yet" is reported apart from "wrong
+      # publisher" so a slow edge never reads as a token publish.
       - name: Every package was published by trusted publishing
         run: |
           for name in $(for d in dist/npm/*/ installer/; do node -p "require('./${d}package.json').name"; done); do
             publisher=''
-            for _ in $(seq 1 10); do
+            for _ in $(seq 1 20); do
               publisher=$(npm view "$name@$VERSION" _npmUser.email --prefer-online 2>/dev/null) && [ -n "$publisher" ] && break
-              sleep 10
+              sleep 15
             done
+            if [ -z "$publisher" ]; then
+              echo "::error title=Package not served::$name@$VERSION was not served by the registry within five minutes of publish, so its publisher could not be checked. Re-run this job; already-published versions are skipped."
+              exit 1
+            fi
             if [ "$publisher" != "npm-oidc-no-reply@github.com" ]; then
-              echo "::error title=Not a trusted publish::$name@$VERSION was published by '${publisher:-unknown}', not by GitHub Actions trusted publishing. Check that no npm token is configured for this job and that the package's trusted publisher names noetive/noetive-mcp and release.yml."
+              echo "::error title=Not a trusted publish::$name@$VERSION was published by '${publisher}', not by GitHub Actions trusted publishing. Check that no npm token is configured for this job and that the package's trusted publisher names noetive/noetive-mcp, release.yml and the release environment."
               exit 1
             fi
             echo "$name@$VERSION was published by trusted publishing."
