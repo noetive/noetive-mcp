@@ -225,15 +225,17 @@ jobs:
           # The gate before the wrapper, the step a user installs. npm accepted
           # every 0.3.1 platform package within 40 seconds and served the last
           # six minutes later, absent even from its packument. Twelve minutes,
-          # on a clock the packages share.
+          # on one deadline the packages share.
+          deadline=$((SECONDS + 720))
           for dir in "${platforms[@]}"; do
             name=$(node -p "require('./${dir}package.json').name")
             found=''
-            for _ in $(seq 1 48); do
+            while :; do
               if npm view "$name@$VERSION" version --prefer-online >/dev/null 2>&1; then
                 found=1
                 break
               fi
+              [ "$SECONDS" -lt "$deadline" ] || break
               sleep 15
             done
             if [ -z "$found" ]; then
@@ -338,7 +340,9 @@ jobs:
   smoke:
     needs: [release, npm]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    # Up to twelve minutes for the wrapper to be served, then up to twenty
+    # install attempts, which take most of a minute each on macOS and Windows.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -416,6 +420,9 @@ jobs:
     # io.noetive/mcp-server advertising an RC as what it is. A prerelease still
     # exercises every stage before this one, which is where the failures are.
     if: ${{ !contains(needs.release.outputs.version, '-') }}
+    # MCP_REGISTRY_PRIVATE_KEY belongs to this environment, not to the
+    # repository, so only a v* tag run can read it.
+    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
