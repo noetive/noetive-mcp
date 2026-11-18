@@ -274,6 +274,14 @@ jobs:
         env:
           VERSION: ${{ needs.release.outputs.version }}
 
+      # When npm cannot exchange the OIDC token it says why only at verbose
+      # level, then publishes unauthenticated and reports a bare E404. Its debug
+      # log keeps every level, so surface those lines rather than leaving the
+      # cause on a runner that is about to be discarded.
+      - name: Show why trusted publishing was refused
+        if: failure()
+        run: grep -h -i "oidc\|provenance\|E40[134]" ~/.npm/_logs/*.log || echo "npm logged nothing about OIDC; the token exchange was never attempted."
+
   # The second distribution channel: a hosted agent runtime runs the server in a
   # container beside the agent rather than beside a person's editor. Built from
   # source rather than from the release archives: the Dockerfile cross-compiles,
