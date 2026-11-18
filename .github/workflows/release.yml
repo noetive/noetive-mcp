@@ -42,9 +42,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # cache: false for the reason given at setup-node in the npm job.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
@@ -118,11 +120,14 @@ jobs:
   npm:
     needs: release
     runs-on: ubuntu-latest
-    # Two registry waits of up to twelve minutes each, on top of the build.
-    timeout-minutes: 45
-    # Each package's trusted publisher on npmjs.com names this environment, and
-    # npm refuses the OIDC token of a job outside it ("package not found"). It
-    # is also where protection rules for publishing belong.
+    # A registry wait of up to twelve minutes, on top of the build.
+    timeout-minutes: 30
+    # Trusted publishing is the only way this job authenticates to npm: it
+    # trades its OIDC token for a short-lived publish credential, and every
+    # @noetive/mcp-server* package refuses tokens outright. Each package's
+    # trusted publisher names this repository, release.yml and this
+    # environment; npm refuses the OIDC token of a job outside it ("package not
+    # found"). The environment admits v* tags only.
     environment: release
     permissions:
       contents: read
@@ -130,38 +135,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # No dependency cache anywhere in this workflow. Caches are shared with
+      # every run on the default branch, so restoring one would let any of them
+      # put bytes into what this workflow signs and publishes.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          cache: npm
-          cache-dependency-path: installer/package-lock.json
 
       # Trusted publishing needs npm 11.5.1 or later and Node 22.14 or later.
       # Node 22 satisfies the runtime but still bundles npm 10, which does not
-      # know how to exchange an OIDC token at all: it would fall silently
-      # through to token auth and the publish would look like it simply needed a
-      # secret. Pinned rather than @latest so a bad npm release cannot break a
-      # release of this.
+      # know how to exchange an OIDC token at all. Pinned rather than @latest so
+      # a bad npm release cannot break a release of this.
       - run: npm install -g npm@11.6.2
-
-      # Trusted publishing is the only way this job authenticates to npm: the
-      # workflow exchanges its OIDC token for a short-lived publish credential,
-      # so there is no npm secret to leak, expire or rotate. Each
-      # @noetive/mcp-server* package names this repository and release.yml as
-      # its trusted publisher on npmjs.com, scoped to the release environment.
-      #
-      # Checked before anything is built. Without it the job installs, builds,
-      # stamps and packs five 8 MB binaries before npm reports ENEEDAUTH, by
-      # which point the GitHub Release already exists. It cannot confirm the
-      # trusted publisher is configured for each package, npm exposes no way to
-      # ask, so the publisher assertion after the wrapper is what catches that.
-      - name: Check the OIDC token is available
-        run: |
-          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
-            echo "::error title=No OIDC token for npm::This job needs 'id-token: write' to publish through npm trusted publishing. Restore that permission on the npm job."
-            exit 1
-          fi
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -187,50 +173,61 @@ jobs:
       - name: Build platform packages
         run: node scripts/build-platform-packages.js "${{ needs.release.outputs.version }}"
 
-      # No --provenance: trusted publishing attaches the provenance attestation
-      # itself.
-      #
       # Platform packages first: the wrapper declares them as optionalDependencies,
       # and npm skips an optional dependency it cannot resolve without erroring.
       # A wrapper published ahead of them therefore installs cleanly and finds no
       # binary, and npm will not let that version be replaced.
       #
-      # Already-published versions are skipped rather than retried: npm versions
-      # are immutable, so a re-run after a partial publish has no other way
-      # forward, and without this the whole job is unrepeatable.
-      - name: Publish platform packages
-        run: |
-          handled=0
-          for dir in dist/npm/*/; do
-            name=$(node -p "require('./$dir/package.json').name")
-            if npm view "$name@$VERSION" version --prefer-online >/dev/null 2>&1; then
-              echo "$name@$VERSION is already published; skipping."
-            else
-              npm publish --access public --tag "$NPM_TAG" "$dir"
-            fi
-            handled=$((handled + 1))
-          done
-          if [ "$handled" -ne 5 ]; then
-            echo "::error title=Wrong number of platform packages::Expected 5, found $handled in dist/npm/. The wrapper pins all five, so publishing it now would ship one that cannot resolve on some platform."
-            exit 1
-          fi
+      # Each publish is retried, and a version npm already holds counts as
+      # published. Both come from 0.3.1. Sigstore recorded the wrapper's
+      # provenance, the reply was lost, and npm's own retry was refused as a
+      # duplicate (409); a fresh attempt signs anew and succeeds. And npm can
+      # take minutes to serve what it has accepted, so asking it "is this
+      # version out yet?" before a re-run publish is not reliable, while its
+      # refusal to publish over an existing version is.
+      #
+      # No --provenance: trusted publishing attaches it.
+      - name: Publish to npm
         env:
           VERSION: ${{ needs.release.outputs.version }}
           NPM_TAG: ${{ needs.release.outputs.npm_tag }}
-
-      # The gate before the one irreversible step in this job. Publishing the
-      # wrapper is what a user installs; if any platform package is missing when
-      # it goes out, that version is broken on that platform for good.
-      #
-      # Retried because npm accepts a publish before it serves it. For 0.3.1
-      # every platform package was acknowledged within 40 seconds, yet the last
-      # of them was served six minutes later, absent even from its packument.
-      # Twelve minutes covers that with room; the clock is shared, so packages
-      # behind the first one mostly arrive while it is waited on.
-      - name: Every platform package resolves
         run: |
-          for dir in dist/npm/*/; do
-            name=$(node -p "require('./$dir/package.json').name")
+          set -o pipefail
+          log=$(mktemp)
+
+          publish_dir() {
+            for attempt in 1 2 3; do
+              if (cd "$1" && npm publish --access public --tag "$NPM_TAG") 2>&1 | tee "$log"; then
+                return 0
+              fi
+              if grep -qi "previously published" "$log"; then
+                echo "$1 is already published at $VERSION; continuing."
+                return 0
+              fi
+              echo "Publishing $1 failed on attempt $attempt." >&2
+              [ "$attempt" -lt 3 ] && sleep 30
+            done
+            return 1
+          }
+
+          # Counted before anything is published: the wrapper pins all five, so
+          # a missing one must stop the release while it is still clean.
+          platforms=(dist/npm/*/)
+          if [ "${#platforms[@]}" -ne 5 ]; then
+            echo "::error title=Wrong number of platform packages::Expected 5 in dist/npm/, found ${#platforms[@]}. The wrapper pins all five and would not resolve on the missing platform."
+            exit 1
+          fi
+
+          for dir in "${platforms[@]}"; do
+            publish_dir "$dir"
+          done
+
+          # The gate before the wrapper, the step a user installs. npm accepted
+          # every 0.3.1 platform package within 40 seconds and served the last
+          # six minutes later, absent even from its packument. Twelve minutes,
+          # on a clock the packages share.
+          for dir in "${platforms[@]}"; do
+            name=$(node -p "require('./${dir}package.json').name")
             found=''
             for _ in $(seq 1 48); do
               if npm view "$name@$VERSION" version --prefer-online >/dev/null 2>&1; then
@@ -240,56 +237,13 @@ jobs:
               sleep 15
             done
             if [ -z "$found" ]; then
-              echo "::error title=Platform package missing::$name@$VERSION was not served within twelve minutes of publish. Refusing to publish the wrapper, which would install cleanly and then find no binary on that platform. Re-run this job once the package resolves; already-published versions are skipped."
+              echo "::error title=Platform package missing::$name@$VERSION was not served within twelve minutes of publish. Refusing to publish the wrapper, which would install cleanly and then find no binary on that platform. Re-run this job; published versions are kept."
               exit 1
             fi
             echo "$name@$VERSION resolves."
           done
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
 
-      - name: Publish wrapper
-        run: |
-          if npm view "@noetive/mcp-server@$VERSION" version --prefer-online >/dev/null 2>&1; then
-            echo "@noetive/mcp-server@$VERSION is already published; skipping."
-            exit 0
-          fi
-          npm publish --access public --tag "$NPM_TAG"
-        working-directory: installer
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
-          NPM_TAG: ${{ needs.release.outputs.npm_tag }}
-
-      # npm records who published each version. A trusted publish is recorded as
-      # GitHub Actions; anything else means a token published it, which is the
-      # silent fallback this workflow no longer has and must not regain. Fails
-      # after the fact, since versions are immutable, so the next release is
-      # fixed before it ships the same way.
-      #
-      # Twelve minutes per package, as at the gate above: the wrapper is read
-      # seconds after its publish, and npm has taken six minutes to serve a
-      # version it already acknowledged. "Not served yet" is reported apart from
-      # "wrong publisher" so a slow registry never reads as a token publish.
-      - name: Every package was published by trusted publishing
-        run: |
-          for name in $(for d in dist/npm/*/ installer/; do node -p "require('./${d}package.json').name"; done); do
-            publisher=''
-            for _ in $(seq 1 48); do
-              publisher=$(npm view "$name@$VERSION" _npmUser.email --prefer-online 2>/dev/null) && [ -n "$publisher" ] && break
-              sleep 15
-            done
-            if [ -z "$publisher" ]; then
-              echo "::error title=Package not served::$name@$VERSION was not served by the registry within twelve minutes of publish, so its publisher could not be checked. Re-run this job; already-published versions are skipped."
-              exit 1
-            fi
-            if [ "$publisher" != "npm-oidc-no-reply@github.com" ]; then
-              echo "::error title=Not a trusted publish::$name@$VERSION was published by '${publisher}', not by GitHub Actions trusted publishing. Check that no npm token is configured for this job and that the package's trusted publisher names noetive/noetive-mcp, release.yml and the release environment."
-              exit 1
-            fi
-            echo "$name@$VERSION was published by trusted publishing."
-          done
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
+          publish_dir installer
 
       # When npm cannot exchange the OIDC token it says why only at verbose
       # level, then publishes unauthenticated and reports a bare E404. Its debug
@@ -384,7 +338,7 @@ jobs:
   smoke:
     needs: [release, npm]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -417,8 +371,9 @@ jobs:
         run: |
           # First: does this host's edge serve the wrapper at all? Asked
           # separately so "not propagated yet" is never reported as a broken
-          # binary, which is what the old single loop did.
-          for _ in $(seq 1 20); do
+          # binary, which is what the old single loop did. Twelve minutes, as
+          # at the npm job's gate: npm has taken six to serve a new version.
+          for _ in $(seq 1 48); do
             if npm view "@noetive/mcp-server@${VERSION}" version --prefer-online >/dev/null 2>&1; then
               served=1
               break
@@ -427,7 +382,7 @@ jobs:
             sleep 15
           done
           if [ -z "${served:-}" ]; then
-            echo "::error title=Wrapper never propagated::@noetive/mcp-server@${VERSION} did not resolve on this host within five minutes of publish, with cache revalidation forced." >&2
+            echo "::error title=Wrapper never propagated::@noetive/mcp-server@${VERSION} did not resolve on this host within twelve minutes of publish, with cache revalidation forced." >&2
             exit 1
           fi
 

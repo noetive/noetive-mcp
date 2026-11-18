@@ -25,7 +25,7 @@
   "mcpName": "io.noetive/mcp-server",
   "type": "commonjs",
   "bin": {
-    "noetive-mcp": "./bin/noetive-mcp.js"
+    "noetive-mcp": "bin/noetive-mcp.js"
   },
   "files": [
     "bin/",
