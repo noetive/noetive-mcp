@@ -58,7 +58,7 @@ func TestEveryArgumentReachesTheService(t *testing.T) {
 	})
 	t.Run("wait", func(t *testing.T) {
 		r := &recorder{}
-		call(t, mail.WaitTool, r, `{"mailbox":"ag_01x","cursor":"9","timeout_s":1,"types":["mail.received","mail.held"],"agent_part":true}`)
+		call(t, mail.WatchTool, r, `{"mailbox":"ag_01x","cursor":"9","timeout_s":1,"types":["mail.received","mail.held"],"agent_part":true}`)
 		yes := true
 		want := bud.WaitInput{Mailbox: "ag_01x", Cursor: "9", TimeoutSeconds: 1, Types: []string{"mail.received", "mail.held"}, AgentPart: &yes}
 		if !reflect.DeepEqual(r.wait, want) {
@@ -101,7 +101,7 @@ func TestEveryCallIsBounded(t *testing.T) {
 	}{
 		{"read", func(r *recorder) { call(t, mail.ReadTool, r, `{"id":"message_01x"}`) }},
 		{"catalog", func(r *recorder) { call(t, mail.ReadTool, r, `{"id":"catalog"}`) }},
-		{"wait", func(r *recorder) { call(t, mail.WaitTool, r, `{}`) }},
+		{"wait", func(r *recorder) { call(t, mail.WatchTool, r, `{}`) }},
 		{"put", func(r *recorder) { call(t, mail.PutTool, r, `{"id":"message_01x","changes":{"read":true}}`) }},
 		{"send", func(r *recorder) { call(t, mail.SendTool, r, `{"to":["a@example.com"],"idempotency_key":"k"}`) }},
 	} {
@@ -123,7 +123,7 @@ func TestAWaitWindowIsBoundedBothWays(t *testing.T) {
 		`{"timeout_s":26}`: false,
 	} {
 		r := &recorder{}
-		call(t, mail.WaitTool, r, args)
+		call(t, mail.WatchTool, r, args)
 		if (r.called != "") != sent {
 			t.Errorf("%s: sent %v, want %v", args, r.called != "", sent)
 		}
@@ -138,7 +138,7 @@ func TestAnEventLineSaysWhatHappenedAndWhere(t *testing.T) {
 		{Type: bud.EventReceived, Mailbox: "ag_01x", Message: "message_01x", Data: bud.EventData{From: "ada@example.com", Aligned: true, Subject: "Order"}},
 		{Type: bud.EventRead, Mailbox: "ag_01x"},
 	}}}
-	result := call(t, mail.WaitTool, r, `{}`)
+	result := call(t, mail.WatchTool, r, `{}`)
 	got := text(result)
 	for _, want := range []string{"- mail.received mailbox=ag_01x message=message_01x", `from="ada@example.com" aligned=true`, `subject="Order"`, `cursor "77"`} {
 		if !strings.Contains(got, want) {
@@ -232,7 +232,7 @@ func TestAnAbsentArgumentIsLeftToTheService(t *testing.T) {
 func TestAWaitIsBoundedByItsWindow(t *testing.T) {
 	r := &recorder{}
 	start := time.Now()
-	call(t, mail.WaitTool, r, `{"timeout_s":10}`)
+	call(t, mail.WatchTool, r, `{"timeout_s":10}`)
 	left := r.due.Sub(start)
 	if min := 10*time.Second + 2*bud.DefaultResponseTimeout; left < min || left > min+30*time.Second {
 		t.Errorf("a 10 s wait was given %s", left)
@@ -324,7 +324,7 @@ func TestABodyThatIsNotBudsIsWithheld(t *testing.T) {
 // agent waits again from now and skips what happened in between.
 func TestARefusedWaitSaysWhereToResume(t *testing.T) {
 	r := &recorder{waited: bud.WaitOutput{Error: &bud.Error{Code: bud.CodeRateLimited, RetryAfterMs: 1000}}}
-	got := text(call(t, mail.WaitTool, r, `{"cursor":"41"}`))
+	got := text(call(t, mail.WatchTool, r, `{"cursor":"41"}`))
 	if !strings.Contains(got, `cursor "41"`) {
 		t.Errorf("a refused wait says %q", got)
 	}

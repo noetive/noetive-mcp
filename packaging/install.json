@@ -69,8 +69,8 @@
       "summary": "Check that the editor can reach Noetive"
     },
     {
-      "name": "mail_wait",
-      "summary": "Wait for something to happen in an agent mailbox"
+      "name": "mail_watch",
+      "summary": "Watch an agent mailbox for events for a bounded window"
     },
     {
       "name": "mail_read",

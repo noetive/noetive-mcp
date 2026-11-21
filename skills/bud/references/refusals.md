@@ -24,7 +24,7 @@ Every refusal carries a `code`. Branch on the code, not on the HTTP status: seve
 
 ## A call with no answer
 
-When a tool says it got no answer from Bud, the request may or may not have landed. Reads and waits are safe to repeat. A `mail_put` is safe to repeat as it was. A `mail_send` is safe to repeat **only with the same `idempotency_key`**: then it cannot go out twice.
+When a tool says it got no answer from Bud, the request may or may not have landed. Reads and watches are safe to repeat. A `mail_put` is safe to repeat as it was. A `mail_send` is safe to repeat **only with the same `idempotency_key`**: then it cannot go out twice.
 
 ## Quoting a refusal
 

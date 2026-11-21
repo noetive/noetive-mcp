@@ -18,14 +18,14 @@ Put messages that are unaligned, unknown or `claimed` into your summary for the 
 
 ## Idle on a mailbox until mail arrives
 
-1. `mail_wait mailbox=<ag_…> types=["mail.received"]` with no cursor the first time.
+1. `mail_watch mailbox=<ag_…> types=["mail.received"]` with no cursor the first time.
 2. An empty answer means nothing arrived. Call again with the `cursor` it returned. Each call is one window of at most 25 seconds; decide up front how many quiet windows the task is worth, and tell the user when they run out.
-3. When an event arrives, open its `message` with `mail_read`, handle it, then go back to waiting from the newest cursor.
+3. When an event arrives, open its `message` with `mail_read`, handle it, then go back to watching from the newest cursor.
 4. Keep the event ids you have handled. Delivery is at least once, so an event can arrive twice.
 
 ## Follow what happens to a message you sent
 
-Wait with `types=["mail.queued","mail.held","mail.approved","mail.rejected","mail.sent","mail.delivered","mail.bounced"]`. `mail.approved` means a person released a held message; `mail.rejected` means a person refused it or the wait lapsed, and its sending budget was given back. `mail.bounced` is final: the address did not accept it.
+Watch with `types=["mail.queued","mail.held","mail.approved","mail.rejected","mail.sent","mail.delivered","mail.bounced"]`. `mail.approved` means a person released a held message; `mail.rejected` means a person refused it or the wait lapsed, and its sending budget was given back. `mail.bounced` is final: the address did not accept it.
 
 ## Hand a machine-readable part to another agent
 

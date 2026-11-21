@@ -74,7 +74,7 @@ It reports four independent things: the binary, the key, each editor's config, a
 | `broker_subscribe` | Watch a namespace for live matches for a bounded window |
 | `broker_lint` | Check a SemQL query before running it |
 | `noetive_health` | Check that the editor can reach Noetive |
-| `mail_wait` | Wait for something to happen in an agent mailbox |
+| `mail_watch` | Wait for something to happen in an agent mailbox |
 | `mail_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
 | `mail_put` | Mark a message read or unread, or replace its labels |
 | `mail_send` | Send or reply to email from the agent's own address |

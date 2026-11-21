@@ -50,7 +50,7 @@ func WithBud(m Mailer) Option { return func(o *options) { o.mailer = m } }
 
 // unconfiguredMail is said beside the Semantik warning, so an agent asked to
 // read mail knows why the tools for it are missing too.
-const unconfiguredMail = " The Bud mail tools (mail_wait, mail_read, mail_put, mail_send) are absent for the same reason."
+const unconfiguredMail = " The Bud mail tools (mail_watch, mail_read, mail_put, mail_send) are absent for the same reason."
 
 // browserInstructions is why the agent is told anything about the browser at
 // all: a page is written by someone else, and a model reading one is exactly

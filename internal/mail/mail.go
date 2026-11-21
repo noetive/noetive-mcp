@@ -25,7 +25,7 @@
 //
 // Results do carry sender text: a message's rendering, which the service opens
 // with a banner marking it as data, and an event's from and subject in
-// mail_wait, which are quoted and introduced as the sender's. Errors carry none.
+// mail_watch, which are quoted and introduced as the sender's. Errors carry none.
 package mail
 
 import (
@@ -63,14 +63,14 @@ type Mailer interface {
 // Noetive key, so packaging can check that server.json declares them.
 func EnvNames() []string { return []string{bud.EnvBaseURL} }
 
-// callTimeout bounds every call but mail_wait, whose bound is its window.
+// callTimeout bounds every call but mail_watch, whose bound is its window.
 const callTimeout = 30 * time.Second
 
 // Register adds the tools [ToolNames] lists to srv.
 //
 //	mail.Register(srv, client)
 func Register(srv *mcpserver.MCPServer, m Mailer) {
-	srv.AddTool(WaitTool(m))
+	srv.AddTool(WatchTool(m))
 	srv.AddTool(ReadTool(m))
 	srv.AddTool(PutTool(m))
 	srv.AddTool(SendTool(m))
@@ -78,7 +78,7 @@ func Register(srv *mcpserver.MCPServer, m Mailer) {
 
 // ToolNames lists every tool [Register] adds.
 func ToolNames() []string {
-	return []string{"mail_wait", "mail_read", "mail_put", "mail_send"}
+	return []string{"mail_watch", "mail_read", "mail_put", "mail_send"}
 }
 
 // Instructions is what an agent reads about Bud at initialize: where to start,

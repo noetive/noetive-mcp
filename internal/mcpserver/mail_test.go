@@ -43,7 +43,7 @@ func TestAKeyedServerOffersTheMailToolsItWasGiven(t *testing.T) {
 		}
 	}
 	slices.Sort(mail)
-	if want := []string{"mail_put", "mail_read", "mail_send", "mail_wait"}; !slices.Equal(mail, want) {
+	if want := []string{"mail_put", "mail_read", "mail_send", "mail_watch"}; !slices.Equal(mail, want) {
 		t.Errorf("mail tools %v, want %v", mail, want)
 	}
 	if got := instructionsOf(t, with); !strings.Contains(got, "mail_read id=me") {

@@ -79,8 +79,8 @@ tools:
     summary: Check a SemQL query before running it
   - name: noetive_health
     summary: Check that the editor can reach Noetive
-  - name: mail_wait
-    summary: Wait for something to happen in an agent mailbox
+  - name: mail_watch
+    summary: Watch an agent mailbox for events for a bounded window
   - name: mail_read
     summary: Read a mailbox, folder, message, part, thread or the workspace addressbook by its id
   - name: mail_put
@@ -179,7 +179,7 @@ skills:
   - name: bud
     description: >-
       Read, wait for, answer and send email as an AI agent with Noetive Bud and
-      the mail_wait, mail_read, mail_put and mail_send tools. Use whenever the user
+      the mail_watch, mail_read, mail_put and mail_send tools. Use whenever the user
       mentions Bud, an agent's mailbox, inbox or email address, or wants an agent
       to check mail, triage an inbox, reply to a message, follow a thread, wait
       for a reply or send email, even if Bud is never named. Also use when a send
