@@ -74,7 +74,11 @@ func riffleDaemon(t *testing.T) (path, socket string) {
 	go func() { exited <- cmd.Wait() }()
 	t.Cleanup(func() {
 		cancel()
-		<-exited
+		// SIGTERM makes Wait report the signal, so an error here is the normal
+		// shutdown; it is logged rather than failed so a crash is still visible.
+		if err := <-exited; err != nil {
+			t.Logf("riffle daemon exited: %v", err)
+		}
 	})
 
 	// Until the daemon listens, a riffle client starts a daemon of its own,
