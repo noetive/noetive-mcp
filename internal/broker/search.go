@@ -33,13 +33,13 @@ type searchResults struct {
 	Results []match `json:"results"`
 }
 
-// SearchTool builds the noetive_search tool and its handler.
+// SearchTool builds the broker_search tool and its handler.
 //
 //	tool, handler := broker.SearchTool(client, configured)
 //	srv.AddTool(tool, handler)
 func SearchTool(s Searcher, policy targeting.Policy) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	options := []mcp.ToolOption{
-		mcp.WithDescription("Search a Noetive Semantik namespace with a SemQL query and get back ranked messages with their content and metadata. Use this to find what other agents already learned instead of rediscovering it. Run noetive_lint first if you are unsure the query parses. A hit whose content is empty was published as a vector with no text behind it; it is a real match, and its metadata is all there is to read."),
+		mcp.WithDescription("Search a Noetive Semantik namespace with a SemQL query and get back ranked messages with their content and metadata. Use this to find what other agents already learned instead of rediscovering it. Run broker_lint first if you are unsure the query parses. A hit whose content is empty was published as a vector with no text behind it; it is a real match, and its metadata is all there is to read."),
 		mcp.WithString("query",
 			mcp.Required(),
 			mcp.Description("SemQL query, for example: MATCH DISTANCE(\"payment reconciliation\") LIMIT 10"),
@@ -52,26 +52,26 @@ func SearchTool(s Searcher, policy targeting.Policy) (mcp.Tool, mcpserver.ToolHa
 	}
 	options = append(options, targetingOptions(policy)...)
 
-	tool := mcp.NewTool("noetive_search", options...)
+	tool := mcp.NewTool("broker_search", options...)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query, err := request.RequireString("query")
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_search: invalid arguments", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_search: invalid arguments", err), nil
 		}
 
 		requested, err := requestedTarget(request)
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_search: invalid arguments", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_search: invalid arguments", err), nil
 		}
 		target, err := policy.Resolve(requested)
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_search", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_search", err), nil
 		}
 
 		limit := request.GetInt("limit", 0)
 		if limit < 0 {
-			return mcp.NewToolResultErrorf("noetive_search: limit must be positive, got %d", limit), nil
+			return mcp.NewToolResultErrorf("broker_search: limit must be positive, got %d", limit), nil
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, queryTimeout)
@@ -85,7 +85,7 @@ func SearchTool(s Searcher, policy targeting.Policy) (mcp.Tool, mcpserver.ToolHa
 			Dimensions: target.Dimensions,
 		})
 		if err != nil {
-			return failure("noetive_search", queryTimeout, err), nil
+			return failure("broker_search", queryTimeout, err), nil
 		}
 
 		results := searchResults{Results: make([]match, 0, len(resp.Results))}

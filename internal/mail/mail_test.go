@@ -151,7 +151,7 @@ func text(result *mcp.CallToolResult) string {
 	return b.String()
 }
 
-// TestReadRoutesByTheIdentifiersPrefix covers the one decision bud_read makes:
+// TestReadRoutesByTheIdentifiersPrefix covers the one decision mail_read makes:
 // which operation an id and its arguments name. A wrong route reads the wrong
 // object, or lists a folder when the agent asked who it talks to.
 func TestReadRoutesByTheIdentifiersPrefix(t *testing.T) {
@@ -266,7 +266,7 @@ func TestAReadShowsTheBannerAndHowToGoOn(t *testing.T) {
 	}
 }
 
-// TestAnEmptyWaitIsAnAnswer covers the mistake bud_wait provokes: reading a
+// TestAnEmptyWaitIsAnAnswer covers the mistake mail_wait provokes: reading a
 // quiet window as a failure. It must succeed, say so, and carry the cursor.
 func TestAnEmptyWaitIsAnAnswer(t *testing.T) {
 	r := &recorder{waited: bud.WaitOutput{Cursor: "42"}}
@@ -442,7 +442,7 @@ func TestAFolderTakesOnlyExists(t *testing.T) {
 	}
 }
 
-// TestAFolderTheMailboxMadeCanBeListed: bud_read once took only the three
+// TestAFolderTheMailboxMadeCanBeListed: mail_read once took only the three
 // system folders, so an agent could make a folder and never read it.
 func TestAFolderTheMailboxMadeCanBeListed(t *testing.T) {
 	r := &recorder{}

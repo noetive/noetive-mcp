@@ -116,9 +116,9 @@ func TestSetupFailureIsDistinguishedFromAStreamFailure(t *testing.T) {
 
 	// Asserted as a prefix rather than a substring, because the marker is the
 	// operation name and failure appends " failed" to it. A sentence here instead
-	// of a name read as "noetive_subscribe could not start the subscription
+	// of a name read as "broker_subscribe could not start the subscription
 	// failed [unavailable]: ...", which marks the failure and mangles it.
-	if !strings.HasPrefix(message, "noetive_subscribe (setup) failed") {
+	if !strings.HasPrefix(message, "broker_subscribe (setup) failed") {
 		t.Errorf("expected the message to mark this as a setup failure, got: %s", message)
 	}
 }

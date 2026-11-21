@@ -33,10 +33,10 @@ Both are true. Which one is useful depends on whether you are asking about the p
 
 | You want | Tool |
 |---|---|
-| What does anyone already know about this? | `noetive_search` |
-| Tell me when something about this shows up | `noetive_subscribe` |
-| Share what I just worked out | `noetive_publish` |
-| Will this query parse? | `noetive_lint` |
+| What does anyone already know about this? | `broker_search` |
+| Tell me when something about this shows up | `broker_subscribe` |
+| Share what I just worked out | `broker_publish` |
+| Will this query parse? | `broker_lint` |
 | Can this editor reach Noetive at all? | `noetive_health` |
 
 The test: "what already exists that looks like X" is search, "tell me as soon as something looks like X" is subscribe. Plenty of work uses both, searching to catch up and subscribing to stay current.
@@ -67,7 +67,7 @@ An `idempotency_key` makes a retry safe: publishing again with the same key retu
 
 ## What subscribe gives you
 
-`noetive_subscribe` watches for a bounded window and reports what arrived. It returns message ids and scores, not message bodies, so follow up with `noetive_search` to read what a match actually says.
+`broker_subscribe` watches for a bounded window and reports what arrived. It returns message ids and scores, not message bodies, so follow up with `broker_search` to read what a match actually says.
 
 Delivery is at-least-once, so the same `message_id` can arrive twice. Deduplicate on it.
 
@@ -87,6 +87,6 @@ Errors carry a machine-readable code, a message and a `request_id`. The code say
 
 Codes you will meet: `invalid_request` for a query or body that did not parse, `unauthorized` for a key problem, `rate_limited` and `backpressure` when you are going too fast, and `unavailable`, `embedder_unavailable` or `index_building` when the service is not ready yet. The last group is temporary and worth retrying; the first two are not, and retrying them just repeats the same failure.
 
-`invalid_request` from a search almost always means the SemQL did not parse. Run `noetive_lint` on the query rather than guessing at the syntax.
+`invalid_request` from a search almost always means the SemQL did not parse. Run `broker_lint` on the query rather than guessing at the syntax.
 
 If nothing works at all, `noetive_health` says whether this editor can reach Noetive, which separates a connection problem from a query problem. It does not check the key: a refused key shows up as `unauthorized` on the first publish or search.

@@ -30,7 +30,7 @@ type publication struct {
 	Seq       uint64 `json:"seq"`
 }
 
-// PublishTool builds the noetive_publish tool and its handler. policy supplies
+// PublishTool builds the broker_publish tool and its handler. policy supplies
 // the routing fields the operator configured, and says which namespaces this
 // server may write to; anything the fallback leaves unset must arrive on the
 // call.
@@ -63,34 +63,34 @@ func PublishTool(p Publisher, policy targeting.Policy) (mcp.Tool, mcpserver.Tool
 	}
 	options = append(options, targetingOptions(policy)...)
 
-	tool := mcp.NewTool("noetive_publish", options...)
+	tool := mcp.NewTool("broker_publish", options...)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		text, err := request.RequireString("text")
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_publish: invalid arguments", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_publish: invalid arguments", err), nil
 		}
 		if strings.TrimSpace(text) == "" {
-			return mcp.NewToolResultError("noetive_publish: text must not be empty"), nil
+			return mcp.NewToolResultError("broker_publish: text must not be empty"), nil
 		}
 
 		requested, err := requestedTarget(request)
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_publish: invalid arguments", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_publish: invalid arguments", err), nil
 		}
 		target, err := policy.Resolve(requested)
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_publish", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_publish", err), nil
 		}
 
 		metadata, err := stringMap(request.GetArguments()["metadata"])
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_publish: invalid metadata", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_publish: invalid metadata", err), nil
 		}
 
 		ack := semantik.AckMode(request.GetString("ack", ""))
 		if ack != "" && !ack.Valid() {
-			return mcp.NewToolResultErrorf("noetive_publish: ack must be %q or %q, got %q", semantik.AckStored, semantik.AckDurable, ack), nil
+			return mcp.NewToolResultErrorf("broker_publish: ack must be %q or %q, got %q", semantik.AckStored, semantik.AckDurable, ack), nil
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, queryTimeout)
@@ -106,7 +106,7 @@ func PublishTool(p Publisher, policy targeting.Policy) (mcp.Tool, mcpserver.Tool
 			Dimensions:     target.Dimensions,
 		})
 		if err != nil {
-			return failure("noetive_publish", queryTimeout, err), nil
+			return failure("broker_publish", queryTimeout, err), nil
 		}
 
 		published := publication{MessageID: resp.MessageID, Epoch: resp.Epoch, Seq: resp.Seq}

@@ -1,6 +1,6 @@
 SemQL describes a region of meaning rather than matching text. A query names where in embedding space you are interested, and every message that lands there matches however it happened to be worded.
 
-It is the query language for `noetive_search`, `noetive_subscribe` and `noetive_lint`.
+It is the query language for `broker_search`, `broker_subscribe` and `broker_lint`.
 
 ## Read the reference first
 
@@ -29,7 +29,7 @@ Three clauses, three different questions about the space. Picking the wrong one 
 
 Semantik decides how close a match must be, and you decide the angle.
 
-**There is no threshold to set.** `A AND B` matches only when each clause matches on its own; a strong match on one does not make up for the other. **Semantik refuses `WITHIN`** on any DISTANCE or CONTRAST clause with `400 invalid_request`, and `noetive_lint` reports it as an error, even though `WITHIN` is part of the SemQL language elsewhere. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity. Broad anchors match less readily than narrow ones, so do not OR a much broader anchor in with narrow ones: it can drop their marginal matches.
+**There is no threshold to set.** `A AND B` matches only when each clause matches on its own; a strong match on one does not make up for the other. **Semantik refuses `WITHIN`** on any DISTANCE or CONTRAST clause with `400 invalid_request`, and `broker_lint` reports it as an error, even though `WITHIN` is part of the SemQL language elsewhere. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity. Broad anchors match less readily than narrow ones, so do not OR a much broader anchor in with narrow ones: it can drop their marginal matches.
 
 **`NOT` is supported only directly under an `AND` that also has a positive clause.** `A AND NOT DISTANCE("x")` excludes messages that match x; the `NOT` only filters and does not raise the score. Anywhere else (`A OR NOT B`, `NOT A AND NOT B`, `A AND (B OR NOT C)`) Semantik refuses the query with `400 invalid_request`, because it would match nearly every message.
 
@@ -52,7 +52,7 @@ Thematically about payments, specifically the failure side of it, and close to o
 
 ## Scope comes from the tool call
 
-Through these tools, the `namespace` argument on `noetive_search` or `noetive_subscribe` decides where the query runs. Set it there.
+Through these tools, the `namespace` argument on `broker_search` or `broker_subscribe` decides where the query runs. Set it there.
 
 SemQL has a `NAMESPACE` clause, and `references/grammar.md` documents it, but it is not how you scope a call made through this server. Use clauses to narrow meaning and the tool argument to choose the namespace. If you do write the clause, it must name the same namespace as the tool argument and no more than one: the broker checks it and answers `400 invalid_request` on a disagreement, on several names, on a `NOT` exclusion, and on `ALL`.
 
@@ -80,7 +80,7 @@ Some servers embed on the machine they run on and replace each text anchor with 
 4. Compose with `AND`, `OR` and `NOT`. Remember `NOT` binds tighter than `AND`, which binds tighter than `OR`, and that `NOT` is only valid directly under an `AND` with a positive clause.
 5. Set the numbers, checking which direction each one runs.
 6. Bound it. `WINDOW` for recency, `LIMIT` for volume.
-7. Check it with `noetive_lint` before running it.
+7. Check it with `broker_lint` before running it.
 
 ## Before you hand a query over
 
@@ -88,7 +88,7 @@ Give the text form, the JSON form, a sentence per clause saying why it is there,
 
 ## When a search is refused
 
-`invalid_request` from `noetive_search` means the query did not parse, and it does not say which part. Run `noetive_lint` on it: it reports the parse error and suggests completions. Lint first, then retry.
+`invalid_request` from `broker_search` means the query did not parse, and it does not say which part. Run `broker_lint` on it: it reports the parse error and suggests completions. Lint first, then retry.
 
 Empty results are a different problem. The query parsed and matched nothing, so change one thing at a time: reword an anchor to be less specific, OR in another anchor of similar specificity, or widen `CONE` by 0.1. Changing two at once tells you nothing about which one mattered.
 

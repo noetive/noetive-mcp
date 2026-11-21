@@ -50,7 +50,7 @@ func RegisterDiagnostics(srv *mcpserver.MCPServer, h HealthChecker) {
 // Without it the agent would look for tools that are not there and report the
 // server as broken.
 func UnconfiguredInstructions(reason string) string {
-	return "WARNING: the Noetive Semantik tools (publish, search, subscribe, lint) are not available in this session because no usable API key was found. " + reason + "\n\nOf the Noetive tools only noetive_health is registered. Tell the user, and do not retry; adding the key takes effect after the editor is restarted."
+	return "WARNING: the Noetive Semantik tools (broker_publish, broker_search, broker_subscribe, broker_lint) are not available in this session because no usable API key was found. " + reason + "\n\nOf the Semantik tools only noetive_health is registered. Tell the user, and do not retry; adding the key takes effect after the editor is restarted."
 }
 
 // DefaultCallBudget is the longest a subscribe call may take when nothing
@@ -60,10 +60,10 @@ const DefaultCallBudget = setupBudget + maxWait
 // ToolNames lists every tool [Register] adds.
 func ToolNames() []string {
 	return []string{
-		"noetive_publish",
-		"noetive_search",
-		"noetive_subscribe",
-		"noetive_lint",
+		"broker_publish",
+		"broker_search",
+		"broker_subscribe",
+		"broker_lint",
 		"noetive_health",
 	}
 }
@@ -89,7 +89,7 @@ func Instructions(policy targeting.Policy) string {
 Publish what a peer would want to find later, such as a conclusion, a root cause or a decision, and search before rediscovering something a peer may already have written.
 Every publish, search and subscribe must name a namespace, an embedding model and its dimensions. There is no default. If this server was started without them configured, pass them on each call. ` + shared + `
 
-Queries use SemQL. When a query is unfamiliar or a search reports invalid_request, check it with noetive_lint before retrying.`
+Queries use SemQL. When a query is unfamiliar or a search reports invalid_request, check it with broker_lint before retrying.`
 }
 
 // MinCallBudget is the shortest call budget that leaves a subscribe a window:

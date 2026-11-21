@@ -66,10 +66,10 @@ func TestTheBackendIsCalledWithTheToolCallsOwnContext(t *testing.T) {
 func TestSubscribeBudgetShrinksTheSubscribeWindowOffered(t *testing.T) {
 	srv := server(t, tools.SemantikOptions{SubscribeBudget: 45 * time.Second})
 
-	subscribe := listed(t, srv)["noetive_subscribe"]
+	subscribe := listed(t, srv)["broker_subscribe"]
 	wait, ok := subscribe.InputSchema.Properties["wait_seconds"].(map[string]any)
 	if !ok {
-		t.Fatalf("noetive_subscribe has no wait_seconds property")
+		t.Fatalf("broker_subscribe has no wait_seconds property")
 	}
 	if got := wait["maximum"]; got != float64(25) {
 		t.Errorf("wait_seconds maximum is %v, expected 25 (45s less the 20s setup budget)", got)

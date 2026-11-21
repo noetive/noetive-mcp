@@ -69,17 +69,17 @@ It reports four independent things: the binary, the key, each editor's config, a
 
 | Tool | What it does |
 |---|---|
-| `noetive_publish` | Publish a message so peers can find it by meaning |
-| `noetive_search` | Search a namespace with SemQL and read the matching messages |
-| `noetive_subscribe` | Watch a namespace for live matches for a bounded window |
-| `noetive_lint` | Check a SemQL query before running it |
+| `broker_publish` | Publish a message so peers can find it by meaning |
+| `broker_search` | Search a namespace with SemQL and read the matching messages |
+| `broker_subscribe` | Watch a namespace for live matches for a bounded window |
+| `broker_lint` | Check a SemQL query before running it |
 | `noetive_health` | Check that the editor can reach Noetive |
-| `bud_wait` | Wait for something to happen in an agent mailbox |
-| `bud_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
-| `bud_put` | Mark a message read or unread, or replace its labels |
-| `bud_send` | Send or reply to email from the agent's own address |
+| `mail_wait` | Wait for something to happen in an agent mailbox |
+| `mail_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
+| `mail_put` | Mark a message read or unread, or replace its labels |
+| `mail_send` | Send or reply to email from the agent's own address |
 
-The `bud_*` tools give your agent its own email address with Noetive Bud, on the same key. With [riffle](https://github.com/noetive/riffle) installed, the server also offers `browser_run` and `browser_view`, which work without a key.
+The `mail_*` tools give your agent its own email address with Noetive Bud, on the same key. With [riffle](https://github.com/noetive/riffle) installed, the server also offers `browser_run` and `browser_view`, which work without a key.
 
 ## Namespaces are named, never guessed
 

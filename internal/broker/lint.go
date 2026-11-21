@@ -27,7 +27,7 @@ type linted struct {
 	Valid       bool                      `json:"valid"`
 }
 
-// LintTool builds the noetive_lint tool and its handler.
+// LintTool builds the broker_lint tool and its handler.
 //
 // Lint carries no routing triple: the server parses SemQL without touching a
 // namespace, so this is the one broker tool an agent can call before it knows
@@ -36,7 +36,7 @@ type linted struct {
 //	tool, handler := broker.LintTool(client)
 //	srv.AddTool(tool, handler)
 func LintTool(l Linter) (mcp.Tool, mcpserver.ToolHandlerFunc) {
-	tool := mcp.NewTool("noetive_lint",
+	tool := mcp.NewTool("broker_lint",
 		mcp.WithDescription("Check a SemQL query for errors and get completion suggestions before running it. Use this when a query is unfamiliar or a search returned an invalid_request error."),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -52,12 +52,12 @@ func LintTool(l Linter) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query, err := request.RequireString("query")
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_lint: invalid arguments", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_lint: invalid arguments", err), nil
 		}
 
 		cursor := request.GetInt("cursor", 0)
 		if cursor < 0 || cursor > len(query) {
-			return mcp.NewToolResultErrorf("noetive_lint: cursor must be between 0 and %d, got %d", len(query), cursor), nil
+			return mcp.NewToolResultErrorf("broker_lint: cursor must be between 0 and %d, got %d", len(query), cursor), nil
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, probeTimeout)
@@ -65,7 +65,7 @@ func LintTool(l Linter) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 
 		resp, err := l.Lint(ctx, semantik.LintRequest{Query: query, Cursor: cursor})
 		if err != nil {
-			return failure("noetive_lint", probeTimeout, err), nil
+			return failure("broker_lint", probeTimeout, err), nil
 		}
 
 		result := linted{

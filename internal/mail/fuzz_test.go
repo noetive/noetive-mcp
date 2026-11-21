@@ -10,7 +10,7 @@ import (
 	"go.noetive.io/noetive-mcp/internal/mail"
 )
 
-// FuzzReadRoutesOnlyByAPrefixItNames covers bud_read's routing over any id an
+// FuzzReadRoutesOnlyByAPrefixItNames covers mail_read's routing over any id an
 // agent might send, including ones copied out of a message: it never panics, and
 // it reaches an operation only for an id whose prefix names that operation's
 // kind. Anything else is refused before a request is sent.

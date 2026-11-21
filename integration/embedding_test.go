@@ -107,7 +107,7 @@ func TestLocallyEmbeddedPublishIsFoundByALocallyEmbeddedSearch(t *testing.T) {
 	// the only readable thing the message will have.
 	marker := fmt.Sprintf("noetive-mcp local embedding marker %d", time.Now().UnixNano())
 
-	published := s.call("noetive_publish", map[string]any{
+	published := s.call("broker_publish", map[string]any{
 		"text":            marker,
 		"metadata":        map[string]any{"source": "noetive-mcp-integration-local"},
 		"idempotency_key": marker,
@@ -124,7 +124,7 @@ func TestLocallyEmbeddedPublishIsFoundByALocallyEmbeddedSearch(t *testing.T) {
 		t.Fatalf("publish failed: %s", message)
 	}
 
-	found := s.call("noetive_search", map[string]any{
+	found := s.call("broker_search", map[string]any{
 		"query": fmt.Sprintf(`MATCH DISTANCE(%q) LIMIT 20`, marker),
 	})
 	if found.IsError {
@@ -160,7 +160,7 @@ func TestALocallyEmbeddedQueryFindsABrokerEmbeddedMessage(t *testing.T) {
 
 	marker := fmt.Sprintf("noetive-mcp cross embedder marker %d", time.Now().UnixNano())
 
-	published := remote.call("noetive_publish", map[string]any{
+	published := remote.call("broker_publish", map[string]any{
 		"text":            marker,
 		"metadata":        map[string]any{"source": "noetive-mcp-integration-cross"},
 		"idempotency_key": marker,
@@ -170,7 +170,7 @@ func TestALocallyEmbeddedQueryFindsABrokerEmbeddedMessage(t *testing.T) {
 		t.Fatalf("publish failed: %s", remote.text(published))
 	}
 
-	found := local.call("noetive_search", map[string]any{
+	found := local.call("broker_search", map[string]any{
 		"query": fmt.Sprintf(`MATCH DISTANCE(%q) LIMIT 20`, marker),
 	})
 	if found.IsError {
@@ -236,7 +236,7 @@ func TestALocallyEmbeddedQueryParsesOnTheServer(t *testing.T) {
 		`MATCH CONTRAST(ATTRACT ["enterprise"], REPEL ["free tier"]) LIMIT 5`,
 		`{"match":{"distance":{"anchor":"deployment rollback"}},"limit":5}`,
 	} {
-		result := s.call("noetive_search", map[string]any{"query": query})
+		result := s.call("broker_search", map[string]any{"query": query})
 		if !result.IsError {
 			continue
 		}
@@ -251,7 +251,7 @@ func TestALocallyEmbeddedQueryParsesOnTheServer(t *testing.T) {
 func TestABlankedLintStillChecksTheQuery(t *testing.T) {
 	s := newLocalSession(t)
 
-	valid := s.call("noetive_lint", map[string]any{
+	valid := s.call("broker_lint", map[string]any{
 		"query": `MATCH DISTANCE("payroll incident")`,
 	})
 	if valid.IsError {
@@ -264,7 +264,7 @@ func TestABlankedLintStillChecksTheQuery(t *testing.T) {
 	// A query the server refuses in a way blanking cannot hide must still come
 	// back wrong; otherwise blanking would be laundering real mistakes. WITHIN
 	// is refused outright because the server sets each clause's relevance floor.
-	broken := s.call("noetive_lint", map[string]any{
+	broken := s.call("broker_lint", map[string]any{
 		"query": `MATCH DISTANCE("payroll incident") WITHIN 0.5`,
 	})
 	if broken.IsError {

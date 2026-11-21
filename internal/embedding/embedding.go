@@ -100,7 +100,7 @@ type precomputed struct {
 //
 // Both, not one. The vector is what the message is indexed by, PublishItem
 // documents that a supplied vector takes precedence and the server does not
-// embed the text, and the text is what noetive_search gives back when someone
+// embed the text, and the text is what broker_search gives back when someone
 // finds it later. Sending the vector alone would keep the message text off the
 // network, but it would also leave every hit contentless, which is most of what
 // makes search worth calling.

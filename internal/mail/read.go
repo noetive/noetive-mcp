@@ -22,9 +22,9 @@ const (
 
 // accepted is what an unroutable id is told, so the refusal names the fix.
 const accepted = "an id is me, catalog, addressbook, or starts with " + bud.PrefixAgent + ", " + bud.PrefixMessage + " or " + bud.PrefixThread +
-	"; bud_read id=me names the mailboxes you can read"
+	"; mail_read id=me names the mailboxes you can read"
 
-// ReadTool builds the bud_read tool and its handler.
+// ReadTool builds the mail_read tool and its handler.
 //
 // One tool for every read, routed by the identifier's prefix:
 //
@@ -39,7 +39,7 @@ const accepted = "an id is me, catalog, addressbook, or starts with " + bud.Pref
 //	tool, handler := mail.ReadTool(client)
 //	srv.AddTool(tool, handler)
 func ReadTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
-	tool := mcp.NewTool("bud_read",
+	tool := mcp.NewTool("mail_read",
 		mcp.WithDescription("Read whatever an id names. me: who you are and the mailboxes you can read; start here. "+
 			"catalog: every operation the service serves. "+
 			"addressbook: every agent in your workspace and the addresses that reach it, to write to a colleague; q narrows by name or address; needs the book scope. "+
@@ -78,14 +78,14 @@ func ReadTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := request.RequireString("id")
 		if err != nil {
-			return invalid("bud_read", "%v; %s", err, accepted), nil
+			return invalid("mail_read", "%v; %s", err, accepted), nil
 		}
 		id = strings.TrimSpace(id)
 		if err := takes(id, request.GetArguments()); err != nil {
 			if errors.Is(err, errUnroutable) {
-				return invalid("bud_read", "cannot read %s: %s", shown(id), accepted), nil
+				return invalid("mail_read", "cannot read %s: %s", shown(id), accepted), nil
 			}
-			return invalid("bud_read", "%v", err), nil
+			return invalid("mail_read", "%v", err), nil
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, callTimeout)
@@ -95,9 +95,9 @@ func ReadTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 			catalog, err := m.DescribeCatalog(ctx)
 			switch {
 			case err != nil:
-				return failed("bud_read", err, "Reading is safe to repeat."), nil
+				return failed("mail_read", err, "Reading is safe to repeat."), nil
 			case catalog.Error != nil:
-				return refused("bud_read", catalog.Error), nil
+				return refused("mail_read", catalog.Error), nil
 			}
 			return answered(catalog, catalogText(catalog)), nil
 		}
@@ -105,9 +105,9 @@ func ReadTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		out, err := route(ctx, m, id, request)
 		switch {
 		case err != nil:
-			return failed("bud_read", err, "Reading is safe to repeat."), nil
+			return failed("mail_read", err, "Reading is safe to repeat."), nil
 		case out.Error != nil:
-			return refused("bud_read", out.Error), nil
+			return refused("mail_read", out.Error), nil
 		}
 		return answered(out, readText(out)), nil
 	}

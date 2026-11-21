@@ -10,7 +10,7 @@ import (
 	"go.noetive.io/noetive-sdk-go/bud"
 )
 
-// PutTool builds the bud_put tool and its handler.
+// PutTool builds the mail_put tool and its handler.
 //
 // Two kinds of object change, named by the id the way the service names them:
 // a message (read, labels, the folder it is filed in), and a mailbox's folder,
@@ -20,7 +20,7 @@ import (
 //	tool, handler := mail.PutTool(client)
 //	srv.AddTool(tool, handler)
 func PutTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
-	tool := mcp.NewTool("bud_put",
+	tool := mcp.NewTool("mail_put",
 		mcp.WithDescription("Change a message: mark it read or unread, replace its labels (the list replaces them all; an empty list removes them), or move it to another folder. "+
 			"Make or remove a folder with id ag_…/<name> and changes {\"exists\": true|false}; only an empty folder can be removed. "+
 			"precondition_failed on a message means other changes landed first or it is still arriving: repeat it unchanged; on a folder, it still holds mail. Labels replace whole and the last write wins, so read the message again before repeating a label change much later."),
@@ -44,12 +44,12 @@ func PutTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := request.RequireString("id")
 		if err != nil {
-			return invalid("bud_put", "%v", err), nil
+			return invalid("mail_put", "%v", err), nil
 		}
 		id = strings.TrimSpace(id)
 		changes, ok := request.GetArguments()["changes"].(map[string]any)
 		if !ok || len(changes) == 0 {
-			return invalid("bud_put", "changes must be an object: read, labels or folder for a message, exists for a folder"), nil
+			return invalid("mail_put", "changes must be an object: read, labels or folder for a message, exists for a folder"), nil
 		}
 		key := strings.TrimSpace(request.GetString("idempotency_key", ""))
 
@@ -59,7 +59,7 @@ func PutTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		case strings.HasPrefix(id, bud.PrefixAgent) && strings.Contains(id, "/"):
 			return changeFolder(ctx, m, id, changes, key), nil
 		}
-		return invalid("bud_put", "cannot change %s: only a %s id or a folder, %s…/<name>, can be changed; list a mailbox with bud_read to find one", shown(id), bud.PrefixMessage, bud.PrefixAgent), nil
+		return invalid("mail_put", "cannot change %s: only a %s id or a folder, %s…/<name>, can be changed; list a mailbox with mail_read to find one", shown(id), bud.PrefixMessage, bud.PrefixAgent), nil
 	}
 
 	return tool, handler
@@ -70,7 +70,7 @@ func PutTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 func changeMessage(ctx context.Context, m Mailer, id string, changes map[string]any, key string) *mcp.CallToolResult {
 	raw, err := json.Marshal(changes)
 	if err != nil {
-		return invalid("bud_put", "changes could not be encoded: %v", err)
+		return invalid("mail_put", "changes could not be encoded: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
@@ -79,9 +79,9 @@ func changeMessage(ctx context.Context, m Mailer, id string, changes map[string]
 	out, err := m.UpdateMessage(ctx, bud.Change{ID: id, Changes: raw, IdempotencyKey: key})
 	switch {
 	case err != nil:
-		return failed("bud_put", err, "The change may have landed; repeating it as it was lands the same state, unless someone else changed the labels since.")
+		return failed("mail_put", err, "The change may have landed; repeating it as it was lands the same state, unless someone else changed the labels since.")
 	case out.Error != nil:
-		return refused("bud_put", out.Error)
+		return refused("mail_put", out.Error)
 	}
 	return answered(out, "Changed "+id+".")
 }
@@ -92,7 +92,7 @@ func changeFolder(ctx context.Context, m Mailer, id string, changes map[string]a
 	mailbox, name, _ := strings.Cut(id, "/")
 	exists, ok := changes["exists"].(bool)
 	if !ok || len(changes) != 1 || name == "" {
-		return invalid("bud_put", "a folder, %s…/<name>, takes only changes {\"exists\": true} to make it or {\"exists\": false} to remove it", bud.PrefixAgent)
+		return invalid("mail_put", "a folder, %s…/<name>, takes only changes {\"exists\": true} to make it or {\"exists\": false} to remove it", bud.PrefixAgent)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
@@ -106,9 +106,9 @@ func changeFolder(ctx context.Context, m Mailer, id string, changes map[string]a
 	out, err := write(ctx, folder)
 	switch {
 	case err != nil:
-		return failed("bud_put", err, "The change may have landed; repeating it as it was lands the same state.")
+		return failed("mail_put", err, "The change may have landed; repeating it as it was lands the same state.")
 	case out.Error != nil:
-		return refused("bud_put", out.Error)
+		return refused("mail_put", out.Error)
 	}
 	return answered(out, done)
 }

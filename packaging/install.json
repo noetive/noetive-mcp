@@ -49,19 +49,19 @@
   "serverKey": "noetive",
   "tools": [
     {
-      "name": "noetive_publish",
+      "name": "broker_publish",
       "summary": "Publish a message so peers can find it by meaning"
     },
     {
-      "name": "noetive_search",
+      "name": "broker_search",
       "summary": "Search a namespace with SemQL and read the matching messages"
     },
     {
-      "name": "noetive_subscribe",
+      "name": "broker_subscribe",
       "summary": "Watch a namespace for live matches for a bounded window"
     },
     {
-      "name": "noetive_lint",
+      "name": "broker_lint",
       "summary": "Check a SemQL query before running it"
     },
     {
@@ -69,19 +69,19 @@
       "summary": "Check that the editor can reach Noetive"
     },
     {
-      "name": "bud_wait",
+      "name": "mail_wait",
       "summary": "Wait for something to happen in an agent mailbox"
     },
     {
-      "name": "bud_read",
+      "name": "mail_read",
       "summary": "Read a mailbox, folder, message, part, thread or the workspace addressbook by its id"
     },
     {
-      "name": "bud_put",
+      "name": "mail_put",
       "summary": "Mark a message read or unread, replace its labels, move it between folders, or make or remove a folder"
     },
     {
-      "name": "bud_send",
+      "name": "mail_send",
       "summary": "Send or reply to email from the agent's own address"
     }
   ]

@@ -112,7 +112,7 @@ type streamMatch struct {
 	Score     float32  `json:"score"`
 }
 
-// SubscribeTool builds the noetive_subscribe tool and its handler.
+// SubscribeTool builds the broker_subscribe tool and its handler.
 //
 // The tool opens a subscription, gathers matches until the requested count or
 // the requested wait elapses, then closes it. Nothing survives the call: this
@@ -147,7 +147,7 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 	options := []mcp.ToolOption{
 		mcp.WithDescription(
 			"Watch a Noetive Semantik namespace for live messages matching a SemQL query, for up to " + spokenWindow(maxWait) + ", then report what arrived. " +
-				"Matches come back as message ids and scores only: the server does not send message content on a live match, so use noetive_search to read what a message says. " +
+				"Matches come back as message ids and scores only: the server does not send message content on a live match, so use broker_search to read what a message says. " +
 				"The subscription is closed when the call returns; it does not keep running.",
 		),
 		mcp.WithString("query",
@@ -174,21 +174,21 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 	}
 	options = append(options, targetingOptions(policy)...)
 
-	tool := mcp.NewTool("noetive_subscribe", options...)
+	tool := mcp.NewTool("broker_subscribe", options...)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query, err := request.RequireString("query")
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_subscribe: invalid arguments", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_subscribe: invalid arguments", err), nil
 		}
 
 		requested, err := requestedTarget(request)
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_subscribe: invalid arguments", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_subscribe: invalid arguments", err), nil
 		}
 		target, err := policy.Resolve(requested)
 		if err != nil {
-			return mcp.NewToolResultErrorFromErr("noetive_subscribe", err), nil
+			return mcp.NewToolResultErrorFromErr("broker_subscribe", err), nil
 		}
 
 		// The SDK checks the name before any request is sent, so a bad one comes
@@ -229,21 +229,21 @@ func SubscribeToolWithin(s Subscriber, policy targeting.Policy, callBudget time.
 			if err == nil {
 				_ = sub.Close()
 			}
-			return failure("noetive_subscribe (setup)", setupBudget, fmt.Errorf("the subscription was not ready within %s: %w", setupBudget, context.DeadlineExceeded)), nil
+			return failure("broker_subscribe (setup)", setupBudget, fmt.Errorf("the subscription was not ready within %s: %w", setupBudget, context.DeadlineExceeded)), nil
 		}
 		if err != nil {
 			var setup *semantik.SubscribeSetupError
 			if errors.As(err, &setup) {
 				// Parenthesised rather than written as a sentence, because failure
 				// appends " failed" to whatever it is given. A phrase here read as
-				// "noetive_subscribe could not start the subscription failed: ...".
+				// "broker_subscribe could not start the subscription failed: ...".
 				//
 				// The tool name stays the first whole token, as it is in every
 				// other message this package renders, so what an agent reads to
 				// decide what to retry is in the same place either way.
-				return failure("noetive_subscribe (setup)", setupBudget+wait, err), nil
+				return failure("broker_subscribe (setup)", setupBudget+wait, err), nil
 			}
-			return failure("noetive_subscribe", setupBudget+wait, err), nil
+			return failure("broker_subscribe", setupBudget+wait, err), nil
 		}
 		// Ignored deliberately: the collect window is over either way, and a
 		// close error tells the agent nothing it can act on.

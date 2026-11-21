@@ -33,16 +33,16 @@ func newMailSession(t *testing.T) *session {
 	return open(t, mcpserver.New("integration", client, shared, mcpserver.WithBud(mailer)))
 }
 
-// TestTheMailToolsReadTheLiveMailbox drives bud_read through the assembled
+// TestTheMailToolsReadTheLiveMailbox drives mail_read through the assembled
 // server against the live service: me names a mailbox, and that mailbox reads.
 // It catches the tool and the service disagreeing about a route or a field,
 // which no stub can.
 func TestTheMailToolsReadTheLiveMailbox(t *testing.T) {
 	s := newMailSession(t)
 
-	me := s.call("bud_read", map[string]any{"id": "me"})
+	me := s.call("mail_read", map[string]any{"id": "me"})
 	if me.IsError {
-		t.Fatalf("bud_read me refused: %s", s.text(me))
+		t.Fatalf("mail_read me refused: %s", s.text(me))
 	}
 	var who struct {
 		Content struct {
@@ -60,12 +60,12 @@ func TestTheMailToolsReadTheLiveMailbox(t *testing.T) {
 	if mailbox == "" {
 		mailbox = who.Content.Agent
 	}
-	described := s.call("bud_read", map[string]any{"id": mailbox})
+	described := s.call("mail_read", map[string]any{"id": mailbox})
 	if described.IsError {
-		t.Fatalf("bud_read %s refused: %s", mailbox, s.text(described))
+		t.Fatalf("mail_read %s refused: %s", mailbox, s.text(described))
 	}
 	if !strings.Contains(s.text(described), mailbox) && described.StructuredContent == nil {
-		t.Errorf("bud_read %s returned neither its id nor structured content", mailbox)
+		t.Errorf("mail_read %s returned neither its id nor structured content", mailbox)
 	}
 }
 
@@ -74,8 +74,8 @@ func TestTheMailToolsReadTheLiveMailbox(t *testing.T) {
 func TestAnUnknownIdIsRefusedWithoutAskingTheService(t *testing.T) {
 	s := newMailSession(t)
 
-	result := s.call("bud_read", map[string]any{"id": "journal_01x"})
-	if !result.IsError || !strings.Contains(s.text(result), "bud_read id=me") {
+	result := s.call("mail_read", map[string]any{"id": "journal_01x"})
+	if !result.IsError || !strings.Contains(s.text(result), "mail_read id=me") {
 		t.Errorf("an unknown id came back as %s", s.text(result))
 	}
 }

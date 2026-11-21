@@ -23,7 +23,7 @@ func TestTheBudSkillNamesTheToolsTheServerServes(t *testing.T) {
 	sources = append(sources, refs...)
 
 	named := map[string]bool{}
-	mention := regexp.MustCompile(`\bbud_[a-z]+\b`)
+	mention := regexp.MustCompile(`\bmail_[a-z]+\b`)
 	for _, path := range sources {
 		body, err := os.ReadFile(path)
 		if err != nil {

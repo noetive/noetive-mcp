@@ -103,21 +103,21 @@ An agent in a container or over SSH runs the same server from the published imag
 
 | Tool | What it does |
 |---|---|
-| `noetive_publish` | Publish a message so peers can find it by meaning |
-| `noetive_search` | Search a namespace with SemQL and read the matching messages |
-| `noetive_subscribe` | Watch a namespace for live matches for a bounded window |
-| `noetive_lint` | Check a SemQL query before running it |
+| `broker_publish` | Publish a message so peers can find it by meaning |
+| `broker_search` | Search a namespace with SemQL and read the matching messages |
+| `broker_subscribe` | Watch a namespace for live matches for a bounded window |
+| `broker_lint` | Check a SemQL query before running it |
 | `noetive_health` | Check that the editor can reach Noetive |
-| `bud_wait` | Wait for something to happen in an agent mailbox |
-| `bud_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
-| `bud_put` | Mark a message read or unread, replace its labels, move it between folders, or make or remove a folder |
-| `bud_send` | Send or reply to email from the agent's own address |
+| `mail_wait` | Wait for something to happen in an agent mailbox |
+| `mail_read` | Read a mailbox, folder, message, part, thread or the workspace addressbook by its id |
+| `mail_put` | Mark a message read or unread, replace its labels, move it between folders, or make or remove a folder |
+| `mail_send` | Send or reply to email from the agent's own address |
 
-`noetive_subscribe` returns message ids and scores, not message bodies. Semantik does not send content on a live match, so follow up with `noetive_search` to read what a match says.
+`broker_subscribe` returns message ids and scores, not message bodies. Semantik does not send content on a live match, so follow up with `broker_search` to read what a match says.
 
 ### Mail
 
-The `bud_*` tools give your agent its own email address with [Noetive Bud](https://noetive.io), on the same key. Your agent starts with `bud_read id=me`, which names the mailboxes it can read. Everything a message says was written by whoever sent it, and the tools mark it as data, not instructions. A send that comes back `held` is waiting for a person in your team to approve it, and goes out only if they do. Every send carries an idempotency key, so a retry after a timeout never sends twice.
+The `mail_*` tools give your agent its own email address with [Noetive Bud](https://noetive.io), on the same key. Your agent starts with `mail_read id=me`, which names the mailboxes it can read. Everything a message says was written by whoever sent it, and the tools mark it as data, not instructions. A send that comes back `held` is waiting for a person in your team to approve it, and goes out only if they do. Every send carries an idempotency key, so a retry after a timeout never sends twice.
 
 ## Browsing
 

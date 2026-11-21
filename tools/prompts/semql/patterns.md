@@ -181,7 +181,7 @@ Namespace names are also case-insensitive, so `acme-corp` and `Acme-Corp` are on
 
 ### A query nobody linted
 
-A query that does not parse comes back as `invalid_request` from `noetive_search`, which says the request was bad but not which part. `noetive_lint` reports the parse error and suggests completions, and it costs a fraction of a search. Run it whenever a query is unfamiliar or a search has already been refused once.
+A query that does not parse comes back as `invalid_request` from `broker_search`, which says the request was bad but not which part. `broker_lint` reports the parse error and suggests completions, and it costs a fraction of a search. Run it whenever a query is unfamiliar or a search has already been refused once.
 
 ## Starting points
 

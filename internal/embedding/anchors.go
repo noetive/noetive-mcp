@@ -205,7 +205,7 @@ func textAnchors(query string) ([]span, error) {
 			case depth > 0:
 				spans = append(spans, span{text: text, start: i, end: next})
 			case !naming:
-				return nil, fmt.Errorf("there is a phrase at byte %d that is inside no clause and is not a namespace name; check the query with noetive_lint", i)
+				return nil, fmt.Errorf("there is a phrase at byte %d that is inside no clause and is not a namespace name; check the query with broker_lint", i)
 			}
 			i = next
 		case ' ', '\t', '\r', '\n', ',':

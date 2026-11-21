@@ -2,7 +2,7 @@
 
 The complete language. Read this before writing or reviewing a query.
 
-Both formats are equivalent and convert losslessly. `noetive_search`, `noetive_subscribe` and `noetive_lint` accept either in their `query` argument.
+Both formats are equivalent and convert losslessly. `broker_search`, `broker_subscribe` and `broker_lint` accept either in their `query` argument.
 
 ## Grammar
 
@@ -44,7 +44,7 @@ JSON keys are lowercase, always.
 
 ## No threshold, and WITHIN is refused
 
-The SemQL language has a `WITHIN` clause on DISTANCE and CONTRAST (text and JSON `within`), but Semantik does not accept it: any query that sets it is answered `400 invalid_request` on search and subscribe, and `noetive_lint` reports it as an error. Do not write it from general SemQL knowledge.
+The SemQL language has a `WITHIN` clause on DISTANCE and CONTRAST (text and JSON `within`), but Semantik does not accept it: any query that sets it is answered `400 invalid_request` on search and subscribe, and `broker_lint` reports it as an error. Do not write it from general SemQL knowledge.
 
 There is no threshold to set. `A AND B` matches only when each clause matches on its own; a strong match on one does not make up for the other. To match less, make the anchor text more specific. To match more, OR in another anchor of similar specificity. Broad anchors match less readily than narrow ones, so do not OR a much broader anchor in with narrow ones: it can drop their marginal matches.
 
@@ -178,7 +178,7 @@ LIMIT 20
 }
 ```
 
-On `noetive_search` the `limit` tool argument overrides a `LIMIT` in the query.
+On `broker_search` the `limit` tool argument overrides a `LIMIT` in the query.
 
 ## Full query object
 

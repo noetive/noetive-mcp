@@ -135,7 +135,7 @@ func TestHealthAgainstProduction(t *testing.T) {
 func TestLintAgainstProduction(t *testing.T) {
 	s := newSession(t)
 
-	result := s.call("noetive_lint", map[string]any{
+	result := s.call("broker_lint", map[string]any{
 		"query": `MATCH DISTANCE("machine learning") LIMIT 5`,
 	})
 
@@ -226,7 +226,7 @@ func TestPublishThenSearchAgainstProduction(t *testing.T) {
 	// idempotency key is genuinely new on every run.
 	marker := fmt.Sprintf("noetive-mcp integration marker %d", time.Now().UnixNano())
 
-	published := s.call("noetive_publish", map[string]any{
+	published := s.call("broker_publish", map[string]any{
 		"text":            marker,
 		"metadata":        map[string]any{"source": "noetive-mcp-integration"},
 		"idempotency_key": marker,
@@ -250,7 +250,7 @@ func TestPublishThenSearchAgainstProduction(t *testing.T) {
 		t.Error("expected structured content carrying the message id")
 	}
 
-	found := s.call("noetive_search", map[string]any{
+	found := s.call("broker_search", map[string]any{
 		"query": fmt.Sprintf(`MATCH DISTANCE(%q) LIMIT 20`, marker),
 	})
 	if found.IsError {
@@ -273,7 +273,7 @@ func TestIdempotentPublishAgainstProduction(t *testing.T) {
 	key := fmt.Sprintf("noetive-mcp-idempotency-%d", time.Now().UnixNano())
 	args := map[string]any{"text": "idempotency probe", "idempotency_key": key}
 
-	first := s.call("noetive_publish", args)
+	first := s.call("broker_publish", args)
 	if first.IsError {
 		// The probe text is constant so a warm production cache should spare it
 		// the embedder, but that is an assumption about a system this repository
@@ -284,7 +284,7 @@ func TestIdempotentPublishAgainstProduction(t *testing.T) {
 		t.Fatalf("first publish failed: %s", s.text(first))
 	}
 
-	second := s.call("noetive_publish", args)
+	second := s.call("broker_publish", args)
 	if second.IsError {
 		skipInconclusive(t, s.text(second))
 		t.Fatalf("second publish failed: %s", s.text(second))
@@ -307,7 +307,7 @@ func TestIdempotentPublishAgainstProduction(t *testing.T) {
 func TestSubscribeSetupAgainstProduction(t *testing.T) {
 	s := newSession(t)
 
-	result := s.call("noetive_subscribe", map[string]any{
+	result := s.call("broker_subscribe", map[string]any{
 		"query":        `MATCH DISTANCE("integration probe")`,
 		"max_matches":  float64(1),
 		"wait_seconds": float64(5),
@@ -328,7 +328,7 @@ func TestSubscribeSetupAgainstProduction(t *testing.T) {
 func TestServerRejectionCarriesItsRequestID(t *testing.T) {
 	s := newSession(t)
 
-	result := s.call("noetive_search", map[string]any{"query": "THIS IS NOT SEMQL"})
+	result := s.call("broker_search", map[string]any{"query": "THIS IS NOT SEMQL"})
 
 	if !result.IsError {
 		t.Skip("the server accepted a query expected to be invalid; the grammar may have changed")

@@ -118,7 +118,7 @@ func Start(ctx context.Context, path string, extraEnv []string, args ...string) 
 	}
 
 	// Only the browser_ namespace is relayed. AddTool replaces by name, so a tool
-	// the process called noetive_publish would otherwise take the place of the
+	// the process called broker_publish would otherwise take the place of the
 	// real one and receive what the agent publishes.
 	var offered []mcp.Tool
 	for _, tool := range listed.Tools {

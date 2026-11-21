@@ -22,11 +22,11 @@ func TestAnUnconfiguredServerOffersNoMailTools(t *testing.T) {
 	srv := mcpserver.New("test", mcpserver.Unconfigured("no key"), targeting.Policy{}, mcpserver.WithBud(stubMailer{}))
 
 	for _, name := range toolNamesOf(t, srv) {
-		if strings.HasPrefix(name, "bud_") {
+		if strings.HasPrefix(name, "mail_") {
 			t.Errorf("an unconfigured server registers %s", name)
 		}
 	}
-	if got := instructionsOf(t, srv); !strings.Contains(got, "bud_read") {
+	if got := instructionsOf(t, srv); !strings.Contains(got, "mail_read") {
 		t.Errorf("the instructions do not say the mail tools are absent: %s", got)
 	}
 }
@@ -38,21 +38,21 @@ func TestAKeyedServerOffersTheMailToolsItWasGiven(t *testing.T) {
 	with := mcpserver.New("test", &stubBroker{}, targeting.Policy{}, mcpserver.WithBud(stubMailer{}))
 	var mail []string
 	for _, name := range toolNamesOf(t, with) {
-		if strings.HasPrefix(name, "bud_") {
+		if strings.HasPrefix(name, "mail_") {
 			mail = append(mail, name)
 		}
 	}
 	slices.Sort(mail)
-	if want := []string{"bud_put", "bud_read", "bud_send", "bud_wait"}; !slices.Equal(mail, want) {
+	if want := []string{"mail_put", "mail_read", "mail_send", "mail_wait"}; !slices.Equal(mail, want) {
 		t.Errorf("mail tools %v, want %v", mail, want)
 	}
-	if got := instructionsOf(t, with); !strings.Contains(got, "bud_read id=me") {
+	if got := instructionsOf(t, with); !strings.Contains(got, "mail_read id=me") {
 		t.Errorf("the instructions do not say where to start: %s", got)
 	}
 
 	without := mcpserver.New("test", &stubBroker{}, targeting.Policy{})
 	for _, name := range toolNamesOf(t, without) {
-		if strings.HasPrefix(name, "bud_") {
+		if strings.HasPrefix(name, "mail_") {
 			t.Errorf("a server given no mailer registers %s", name)
 		}
 	}

@@ -11,7 +11,7 @@ import (
 	"go.noetive.io/noetive-sdk-go/bud"
 )
 
-// SendTool builds the bud_send tool and its handler.
+// SendTool builds the mail_send tool and its handler.
 //
 // The only call here that reaches outside the workspace, and the one whose
 // mistake cannot be taken back: a second copy of a message. So the
@@ -29,7 +29,7 @@ func SendTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		return mcp.WithArray(name, mcp.WithStringItems(), mcp.Description(what))
 	}
 
-	tool := mcp.NewTool("bud_send",
+	tool := mcp.NewTool("mail_send",
 		mcp.WithDescription("Send a message, or reply with in_reply_to. Subject to your mailbox's limits and its workspace's policy. "+
 			"Give each message a fresh idempotency_key and reuse it only to retry that same message: it then goes out once. "+
 			"A held result is waiting for a person to approve it. It is not an error, and sending again sends a second copy."),
@@ -55,14 +55,14 @@ func SendTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		key, err := request.RequireString("idempotency_key")
 		if err != nil || strings.TrimSpace(key) == "" {
-			return invalid("bud_send", "idempotency_key is required: a send without one that times out and is retried goes out twice"), nil
+			return invalid("mail_send", "idempotency_key is required: a send without one that times out and is retried goes out twice"), nil
 		}
 
 		var recipients [3][]string
 		for i, name := range []string{"to", "cc", "bcc"} {
 			list, err := addressesOf(request.GetArguments()[name])
 			if err != nil {
-				return invalid("bud_send", "%s: %v", name, err), nil
+				return invalid("mail_send", "%s: %v", name, err), nil
 			}
 			recipients[i] = list
 		}
@@ -83,11 +83,11 @@ func SendTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		if agent, ok := request.GetArguments()["agent"]; ok && agent != nil {
 			part, ok := agent.(map[string]any)
 			if !ok {
-				return invalid("bud_send", "agent must be a JSON object"), nil
+				return invalid("mail_send", "agent must be a JSON object"), nil
 			}
 			raw, err := json.Marshal(part)
 			if err != nil {
-				return invalid("bud_send", "agent could not be encoded: %v", err), nil
+				return invalid("mail_send", "agent could not be encoded: %v", err), nil
 			}
 			in.Agent = raw
 		}
@@ -98,10 +98,10 @@ func SendTool(m Mailer) (mcp.Tool, mcpserver.ToolHandlerFunc) {
 		out, err := m.Send(ctx, in)
 		switch {
 		case err != nil:
-			return failed("bud_send", err, "It may have been sent. Retry with the same idempotency_key, which cannot send it twice; "+
+			return failed("mail_send", err, "It may have been sent. Retry with the same idempotency_key, which cannot send it twice; "+
 				"if that is refused as rate_limited, the first attempt is still running, so wait retry_after and repeat with the same key, never a new one."), nil
 		case out.Error != nil:
-			return refused("bud_send", out.Error), nil
+			return refused("mail_send", out.Error), nil
 		}
 		return answered(out, sendText(out)), nil
 	}
